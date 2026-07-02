@@ -23,6 +23,15 @@ const CAMERA_OPTS = [
   { value: 'canon',  label: 'Canon (EOS Utility)'  },
 ]
 
+// Shared style for the PB action bar (Open Folder / Admin / Sync) — equal touch targets
+const pbActionBtn: React.CSSProperties = {
+  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+  minHeight: 42, padding: '9px 10px', borderRadius: 'var(--radius-glass)',
+  border: '1px solid var(--border-dialog)', background: 'rgba(255,255,255,0.07)',
+  color: 'rgba(255,255,255,0.8)', fontSize: 'var(--text-xs)', fontFamily: 'var(--font-ui)',
+  cursor: 'pointer', whiteSpace: 'nowrap', transition: 'background 0.2s',
+}
+
 type PbStatus = 'idle' | 'checking' | 'connected' | 'offline'
 
 // Secret input mask: strip separators, uppercase, regroup into 4-char blocks (0000-0000-0000-0000).
@@ -136,6 +145,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   // Track live pause duration within this panel session — resets on resume
   const pauseStartRef = useRef<number | null>(null)
   const [fetchStatus,     setFetchStatus]     = useState<'idle'|'fetching'|'ok'|'err'>('idle')
+  const [fetchSummary,    setFetchSummary]    = useState<string | null>(null)
   const [engineStatus,    setEngineStatus]    = useState<PbStatus>('idle')
   const [cameraStatus,    setCameraStatus]    = useState<PbStatus>('idle')
   const [pbCreds,         setPbCreds]         = useState<{ email: string; password: string } | null>(null)
@@ -289,13 +299,25 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
 
   const handleFetchTemplates = async () => {
     setFetchStatus('fetching')
+    setFetchSummary(null)
     try {
-      // 1. Sync folder put-template-here/ → PocketBase (tambah baru, hapus yang sudah tidak ada)
+      // 1. Sync folder put-template-here/ → PocketBase (crop 2:3, tambah baru, hapus yang sudah tidak ada)
       const syncRes = await fetch('/api/sync-templates', { method: 'POST' })
       if (!syncRes.ok) { setFetchStatus('err'); setTimeout(() => setFetchStatus('idle'), 2500); return }
+      const d = await syncRes.json() as {
+        added: number; cropped: number; deleted: number
+        detectDown: boolean; skipped: { name: string; reason: string }[]
+      }
       // 2. Fetch hasil terbaru dari PocketBase → kiosk (0 template = valid, bukan error)
       const results = await fetchPocketBaseTemplates(pbUrl)
       onRefreshTemplates?.(results)
+      // 3. Ringkas hasil biar gak sukses-palsu (dulu "fetched" walau semua ke-skip)
+      const parts = [`${d.added} masuk`]
+      if (d.cropped) parts.push(`${d.cropped} di-crop`)
+      if (d.deleted) parts.push(`${d.deleted} dihapus`)
+      if (d.skipped.length) parts.push(`${d.skipped.length} di-skip`)
+      if (d.detectDown) parts.push('face_server mati (crop pakai center)')
+      setFetchSummary(parts.join(' · '))
       setFetchStatus('ok')
     } catch {
       setFetchStatus('err')
@@ -732,50 +754,47 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                 <Row label={t('set_pb_url') as string}>
                   <TextInput value={pbUrl} onChange={setPbUrl} placeholder="http://localhost:8090" mono />
                 </Row>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                  <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{t('set_status') as string}</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ padding: '13px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                  {/* Status line — matches the Row pattern used elsewhere */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{t('set_status') as string}</span>
                     <StatusBadge status={pbStatus} t={t} />
-                    <button
-                      onClick={() => fetch('/api/open-folder', { method: 'POST' })}
-                      style={{
-                        padding: '5px 12px', borderRadius: 'var(--radius-glass)', border: '1px solid var(--border-dialog)',
-                        background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.8)',
-                        fontSize: 'var(--text-xs)', fontFamily: 'var(--font-ui)', cursor: 'pointer',
-                      }}
-                    >
+                  </div>
+
+                  {/* Action bar — 3 equal-width touch targets */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginTop: 12 }}>
+                    <button onClick={() => fetch('/api/open-folder', { method: 'POST' })} style={pbActionBtn}>
                       {t('set_open_folder') as string}
                     </button>
-                    <a
-                      href={`${pbUrl}/_/`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{
-                        padding: '5px 12px', borderRadius: 'var(--radius-glass)', border: '1px solid var(--border-dialog)',
-                        background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.8)',
-                        fontSize: 'var(--text-xs)', fontFamily: 'var(--font-ui)', textDecoration: 'none',
-                      }}
-                    >
+                    <a href={`${pbUrl}/_/`} target="_blank" rel="noopener noreferrer" style={{ ...pbActionBtn, textDecoration: 'none' }}>
                       ↗ Admin
                     </a>
                     <button
                       onClick={handleFetchTemplates}
                       disabled={fetchStatus === 'fetching'}
                       style={{
-                        padding: '5px 12px', borderRadius: 'var(--radius-glass)', border: '1px solid var(--border-dialog)',
-                        background: fetchStatus === 'ok' ? 'rgba(163,190,140,0.2)' : fetchStatus === 'err' ? 'rgba(255,107,107,0.2)' : 'rgba(255,255,255,0.07)',
-                        color: fetchStatus === 'ok' ? '#a3be8c' : fetchStatus === 'err' ? '#ff6b6b' : 'rgba(255,255,255,0.8)',
-                        fontSize: 'var(--text-xs)', fontFamily: 'var(--font-ui)', cursor: fetchStatus === 'fetching' ? 'default' : 'pointer',
-                        transition: 'background 0.2s',
+                        ...pbActionBtn,
+                        background: fetchStatus === 'ok' ? 'rgba(163,190,140,0.2)' : fetchStatus === 'err' ? 'rgba(255,107,107,0.2)' : pbActionBtn.background,
+                        color: fetchStatus === 'ok' ? '#a3be8c' : fetchStatus === 'err' ? '#ff6b6b' : pbActionBtn.color,
+                        cursor: fetchStatus === 'fetching' ? 'default' : 'pointer',
                       }}
                     >
                       {fetchStatus === 'fetching' ? t('set_fetch_loading') as string : fetchStatus === 'ok' ? t('set_fetch_ok') as string : fetchStatus === 'err' ? t('set_fetch_failed') as string : t('set_fetch_idle') as string}
                     </button>
                   </div>
+
+                  {/* PB admin login helper — clearly a labeled key/value, not an accident */}
                   {pbCreds && (pbCreds.email || pbCreds.password) && (
-                    <div style={{ marginTop: 6, padding: '6px 8px', borderRadius: 'var(--radius-chip)', background: 'rgba(255,255,255,0.04)', fontSize: 'var(--text-2xs)', fontFamily: 'var(--font-ui)', color: 'rgba(255,255,255,0.35)', lineHeight: 1.6 }}>
-                      <span style={{ color: 'rgba(255,255,255,0.2)' }}>user </span>{pbCreds.email}<br />
-                      <span style={{ color: 'rgba(255,255,255,0.2)' }}>pass </span>{pbCreds.password}
+                    <div style={{
+                      marginTop: 10, padding: '10px 12px', borderRadius: 'var(--radius-glass)',
+                      background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)',
+                      display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '5px 14px', alignItems: 'baseline',
+                      fontFamily: 'var(--font-ui)', fontSize: 'var(--text-2xs)',
+                    }}>
+                      <span style={{ color: 'rgba(255,255,255,0.4)' }}>user</span>
+                      <span style={{ color: 'rgba(255,255,255,0.7)', wordBreak: 'break-all' }}>{pbCreds.email}</span>
+                      <span style={{ color: 'rgba(255,255,255,0.4)' }}>pass</span>
+                      <span style={{ color: 'rgba(255,255,255,0.7)', wordBreak: 'break-all' }}>{pbCreds.password}</span>
                     </div>
                   )}
                 </div>
@@ -786,6 +805,11 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                   <p style={{ fontSize: 'var(--text-2xs)', fontFamily: 'var(--font-ui)', color: 'rgba(255,255,255,0.18)', margin: '4px 0 0', wordBreak: 'break-all' }}>
                     kiosk/face_server/put-template-here/
                   </p>
+                  {fetchSummary && (
+                    <p style={{ fontSize: 'var(--text-2xs)', fontFamily: 'var(--font-ui)', color: 'rgba(255,255,255,0.5)', margin: '8px 0 0' }}>
+                      {fetchSummary}
+                    </p>
+                  )}
                 </div>
               </>
             )}

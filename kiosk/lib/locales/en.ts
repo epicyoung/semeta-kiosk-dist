@@ -2,8 +2,8 @@ import type { Translations } from './types'
 
 const en: Translations = {
   // ── IdleScreen ──────────────────────────────────────────────────────────────
-  idle_title: 'Semeta Suites',
-  idle_subtitle: "A bold experience built for those\nwho dare to fly higher.",
+  idle_title: 'The Oracle Sees You',
+  idle_subtitle: "Gaze into the glass, let the world fade away.\nTouch the light, and claim a truth that dares to stay.",
   idle_next: 'Next →',
 
   // ── CategoryScreen ───────────────────────────────────────────────────────────

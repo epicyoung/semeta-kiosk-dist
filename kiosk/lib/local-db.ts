@@ -47,6 +47,10 @@ function writeJson(file: string, data: unknown): void {
 export const localDb = {
   getTemplates: (): Template[]          => readJson('templates.json', []),
   saveTemplates: (t: Template[]): void  => writeJson('templates.json', t),
+
+  // Cache template spindonesia (dari cloud) buat offline. Kepisah dari templates.json (PB lokal).
+  getSpindonesiaTemplates: (): Template[]         => readJson('spindonesia.json', []),
+  saveSpindonesiaTemplates: (t: Template[]): void => writeJson('spindonesia.json', t),
   getSettings: (): Partial<KioskConfig> => readJson('settings.json', {}),
   saveSettings: (s: unknown): void      => writeJson('settings.json', s),
 

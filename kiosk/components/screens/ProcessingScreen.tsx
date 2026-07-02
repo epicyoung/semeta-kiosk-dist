@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, type Dispatch } from 'react'
 import { TouchButton } from '@/components/ui/TouchButton'
 import { openComfySocket } from '@/lib/comfy'
+import { proxied } from '@/lib/facedetect'
 import type { GenerationSource, KioskAction, KioskState } from '@/lib/types'
 import { uploadAsset } from '@/lib/upload'
 import { burnWatermark } from '@/lib/watermark-canvas'
@@ -66,7 +67,7 @@ async function toBlob(url: string): Promise<Blob> {
     for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i)
     return new Blob([arr], { type: mime })
   }
-  const res = await fetch(url)
+  const res = await fetch(proxied(url)) // cross-origin (R2 template) → proxy same-origin, bypass CORS
   return res.blob()
 }
 
@@ -169,7 +170,7 @@ function RenderCosmetics({ src, pct }: { src: string; pct: number }) {
     const im = new Image()
     im.crossOrigin = 'anonymous'
     im.onload = () => setImgEl(im)
-    im.src = src
+    im.src = proxied(src) // cross-origin (R2 template) → proxy same-origin biar canvas ga tainted
     return () => setImgEl(null)
   }, [src])
 

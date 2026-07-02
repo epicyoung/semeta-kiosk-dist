@@ -404,6 +404,60 @@ h1, .h1-glow { letter-spacing: -0.02em; }
   .denoise-sweep { animation: none !important; opacity: 0 !important; }
 }
 
+/* Preview shine — anamorphic glint: core tajam + haze, satu whip per 6s.
+   Sparkle nyala berurutan pas kena sapuan. */
+@keyframes shine-sweep {
+  0%        { transform: translateX(-250%) rotate(16deg); }
+  15%, 100% { transform: translateX(550%)  rotate(16deg); }
+}
+@keyframes spark-pop {
+  0%, 12%, 100% { transform: scale(0) rotate(-40deg); opacity: 0; }
+  3.5% { transform: scale(1.2)  rotate(0deg);  opacity: 1; }
+  6%   { transform: scale(0.85) rotate(15deg); opacity: 0.9; }
+}
+
+.preview-shine {
+  position: absolute; inset: 0; z-index: 30;
+  pointer-events: none; overflow: hidden; border-radius: inherit;
+}
+
+.shine-haze, .shine-core {
+  position: absolute; top: -30%; left: 0; width: 28%; height: 160%;
+  mix-blend-mode: screen; will-change: transform;
+  animation: shine-sweep 6s cubic-bezier(0.65, 0, 0.25, 1) infinite;
+}
+.shine-haze {
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,0.14) 50%, transparent);
+  filter: blur(14px);
+}
+/* core sempit + fringe cyan dua sisi — ini yang bikin "specular" */
+.shine-core {
+  background: linear-gradient(100deg,
+    transparent 42%,
+    rgba(0,245,212,0.45) 47%,
+    rgba(255,255,255,0.95) 50%,
+    rgba(0,245,212,0.45) 53%,
+    transparent 58%);
+  filter: blur(1px);
+}
+
+.spark {
+  position: absolute; opacity: 0; transform: scale(0);
+  will-change: transform, opacity;
+  animation: spark-pop 6s ease-out infinite;
+}
+.spark::before, .spark::after {
+  content: ""; position: absolute; inset: 0; margin: auto;
+  background: #fff; border-radius: 2px;
+  box-shadow: 0 0 6px rgba(255,255,255,0.9), 0 0 16px rgba(0,245,212,0.8);
+}
+.spark::before { height: 2px; }
+.spark::after  { width: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .shine-haze, .shine-core, .spark { animation: none; opacity: 0; }
+}
+
 @keyframes slide-up {
   from { transform: translateY(100%); opacity: 0; }
   to   { transform: translateY(0);    opacity: 1; }

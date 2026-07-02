@@ -4,7 +4,7 @@ import { TouchButton } from '@/components/ui/TouchButton'
 import { PinBadge } from '@/components/ui/PinBadge'
 import type { KioskAction, KioskState, Template } from '@/lib/types'
 import { useT } from '@/lib/i18n'
-import { EPICPIN_ID } from '@/lib/epicpin'
+import { SPINDONESIA_CATEGORY } from '@/lib/spindonesia-category'
 
 const DUMMY_TEMPLATES: Template[] = Array.from({ length: 20 }, (_, i) => ({
   id: `d${i + 1}`, name: `Template ${i + 1}`, category: 'faceswap', token_cost: 1, thumbnail_url: null,
@@ -60,7 +60,7 @@ export function TemplateScreen({ state, dispatch, templates }: Props) {
                       ? <img src={tmpl.thumbnail_url} alt={tmpl.name} className="absolute inset-0 w-full h-full object-cover" />
                       : <span style={{ fontSize: 'var(--text-2xs)', color: 'var(--fg-muted)', letterSpacing: '0.15em', textTransform: 'uppercase' }}>{tmpl.name}</span>
                     }
-                    {tmpl.id === EPICPIN_ID && (
+                    {tmpl.category === SPINDONESIA_CATEGORY && (
                       <div style={{ position: 'absolute', top: 6, right: 6, zIndex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: '50%', background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(2px)' }}>
                         <PinBadge size={13} color="#fff" />
                       </div>

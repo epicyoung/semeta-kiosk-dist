@@ -4,32 +4,32 @@ cd /d "%~dp0"
 set "ROOT=%~dp0"
 if "%ROOT:~-1%"=="\" set "ROOT=%ROOT:~0,-1%"
 
-powershell -NoProfile -Command "$e=[char]27;$p=$e+'[38;2;255;64;153m';$r=$e+'[0m';$d=$e+'[90m';cls;Write-Host '';Write-Host ($p+'██████ █████  ████  █████ ██   ██  █████  ██   ██ ██   ██  █████'+$r);Write-Host ($p+'██     ██  ██  ██  ██    ██   ██ ██   ██ ██   ██ ███  ██ ██    '+$r);Write-Host ($p+'████   █████   ██  ██     █████  ██   ██ ██   ██ ██ █ ██ ██  ███'+$r);Write-Host ($p+'██     ██      ██  ██      ██    ██   ██ ██   ██ ██  ███ ██   ██'+$r);Write-Host ($p+'██████ ██     ████  █████   ██    █████   █████  ██   ██  ██████'+$r);Write-Host '';Write-Host ($d+'  Starting Semeta by Spindonesia x Epicyoung AI Pro Booth...'+$r);Write-Host ''"
+powershell -NoProfile -Command "$e=[char]27;$p=$e+'[38;2;255;64;153m';$r=$e+'[0m';$d=$e+'[90m';cls;Write-Host '';Write-Host ($p+'###### #####  ####  #####  ##  ##  #####  ##   ## ##   ##  #####'+$r);Write-Host ($p+'##     ##  ##  ##  ##     ##  ## ##   ## ##   ## ###  ## ##    '+$r);Write-Host ($p+'####   #####   ##  ##     #####  ##   ## ##   ## ## # ## ## ###'+$r);Write-Host ($p+'##     ##      ##  ##      ##    ##   ## ##   ## ##  ### ##   ##'+$r);Write-Host ($p+'###### ##     ####  #####   ##    #####   #####  ##   ##  #####'+$r);Write-Host '';Write-Host ($d+'  Starting Semeta by Spindonesia x Epicyoung AI Pro Booth...'+$r);Write-Host ''"
 
 REM PocketBase
 if exist "%ROOT%\pb\pocketbase.exe" (
   start /min "PocketBase" cmd /k ""%ROOT%\pb\pocketbase.exe" serve --dir "%ROOT%\pb\pb_data""
-  echo [OK] PocketBase started (port 8090)
+  echo [OK] PocketBase — port 8090
   echo      Admin: http://localhost:8090/_/
 ) else (
-  echo [!] pb\pocketbase.exe ga ada - jalanin setup.bat dulu
+  echo [--] PocketBase skip — jalanin setup.bat dulu
 )
 
 REM Face server
 if exist "%ROOT%\kiosk\face_server\venv\Scripts\python.exe" (
   if exist "%ROOT%\kiosk\face_server\inswapper_128.onnx" (
     start /min "FaceServer" cmd /k "cd /d "%ROOT%\kiosk\face_server" && venv\Scripts\python face_server.py"
-    echo [OK] Face server started (port 8000)
+    echo [OK] Face server — port 8000
   ) else (
-    echo [!] inswapper_128.onnx ga ada - jalanin setup.bat dulu
+    echo [--] Face server skip — inswapper_128.onnx belum ada
   )
 ) else (
-  echo [!] face_server\venv belum ada - jalanin setup.bat dulu
+  echo [--] Face server skip — jalanin setup.bat dulu
 )
 
 REM Kiosk UI
 start /min "Kiosk" cmd /k "cd /d "%ROOT%\kiosk" && npm run dev"
-echo [OK] Kiosk started (port 3000)
+echo [OK] Kiosk — port 3000
 
 REM Tunggu Next.js ready baru buka browser
 timeout /t 5 /nobreak >nul
@@ -50,10 +50,10 @@ if not defined BROWSER if exist "C:\Program Files (x86)\Microsoft\Edge\Applicati
 if not defined BROWSER if exist "C:\Program Files\Microsoft\Edge\Application\msedge.exe" set "BROWSER=C:\Program Files\Microsoft\Edge\Application\msedge.exe"
 if defined BROWSER (
   start "" "%BROWSER%" %BFLAGS% http://localhost:3000
-  echo [OK] Browser opened fullscreen + silent print
+  echo [OK] Browser fullscreen + silent print
 ) else (
   start "" http://localhost:3000
-  echo [!] Chrome/Edge ga ada - buka default browser ^(print dialog mungkin muncul^)
+  echo [--] Chrome/Edge ga ada — buka default browser
 )
 
 echo.

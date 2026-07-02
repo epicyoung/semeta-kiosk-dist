@@ -1,5 +1,5 @@
 // Thumbtack / pushpin (📌) — inline biar ga nambah dependency buat 1 icon.
-// Penanda visual slot developer-pinned (EPICPIN). Lihat lib/epicpin.ts.
+// Penanda visual template kurasi super-admin (kategori Spindonesia.com). Lihat lib/spindonesia.ts.
 export function PinBadge({ size = 16, color = '#fff', style }: { size?: number; color?: string; style?: React.CSSProperties }) {
   return (
     <svg

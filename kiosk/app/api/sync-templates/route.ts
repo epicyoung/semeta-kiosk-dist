@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
+import sharp from 'sharp'
+import { computeTargetHeight, computeTargetWidth, computeCropTop, computeCropLeft, HEADROOM_RATIO } from '@/lib/crop'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -10,6 +12,10 @@ const EMAIL = process.env.POCKETBASE_EMAIL ?? ''
 const PASSWORD = process.env.POCKETBASE_PASSWORD ?? ''
 const EXTS = ['.jpg', '.jpeg', '.png']
 const DEFAULT_CATEGORY = 'Semeta'
+const FACE_SERVER_URL = process.env.FACE_SERVER_URL ?? 'http://localhost:8000'
+const DETECT_TIMEOUT_MS = 10_000
+
+type Face = { x: number; y: number; w: number; h: number }
 
 // ── image helpers (port dari manage-templates.js) ────────────────────────────
 
@@ -38,11 +44,59 @@ function getImageDimensions(fp: string): { w: number; h: number } | null {
   return null
 }
 
-function isValidRatio(w: number, h: number): boolean {
-  return Math.abs((w / h) - (2 / 3)) / (2 / 3) < 0.01
+type FolderFile = { name: string; category: string; fp: string }
+
+// Ask face_server for face boxes. Returns:
+//   faceY = topmost face top (smallest y) → protects the highest head (vertical crop headroom)
+//   faceCenterX = center X of that same topmost face → keeps it centered (horizontal crop)
+// Never throws — on any failure returns detectDown:true and nulls (caller center-crops).
+async function detectFace(fp: string): Promise<{ faceY: number | null; faceCenterX: number | null; detectDown: boolean }> {
+  try {
+    const buf = fs.readFileSync(fp)
+    const mime = path.extname(fp).toLowerCase() === '.png' ? 'image/png' : 'image/jpeg'
+    const fd = new FormData()
+    fd.append('image', new Blob([new Uint8Array(buf)], { type: mime }), path.basename(fp))
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), DETECT_TIMEOUT_MS)
+    const r = await fetch(`${FACE_SERVER_URL}/detect`, { method: 'POST', body: fd, signal: ctrl.signal })
+    clearTimeout(timer)
+    if (!r.ok) return { faceY: null, faceCenterX: null, detectDown: true }
+    const body = await r.json() as { faces?: Face[] }
+    const faces = body.faces ?? []
+    if (faces.length === 0) return { faceY: null, faceCenterX: null, detectDown: false } // no face ≠ down
+    // topmost face (smallest y); center X of THAT face
+    const top = faces.reduce((a, b) => (b.y < a.y ? b : a))
+    return { faceY: top.y, faceCenterX: top.x + top.w / 2, detectDown: false }
+  } catch {
+    return { faceY: null, faceCenterX: null, detectDown: true }
+  }
 }
 
-type FolderFile = { name: string; category: string; fp: string }
+// Produce a 2:3 buffer for upload. Already-2:3 → original bytes (no re-encode).
+// TALLER than 2:3 (ratio < 2/3) → vertical crop, face-aware headroom 10% above topmost head.
+// WIDER than 2:3 (ratio > 2/3, e.g. 896x1280) → horizontal crop, topmost face centered X.
+async function cropTo23(fp: string, w: number, h: number):
+  Promise<{ buf: Buffer; mime: string; cropped: boolean; detectDown: boolean }> {
+  const mime = path.extname(fp).toLowerCase() === '.png' ? 'image/png' : 'image/jpeg'
+  const ratio = w / h
+  if (Math.abs(ratio - (2 / 3)) / (2 / 3) < 0.01) {
+    return { buf: fs.readFileSync(fp), mime, cropped: false, detectDown: false }
+  }
+  const { faceY, faceCenterX, detectDown } = await detectFace(fp)
+  if (ratio < 2 / 3) {
+    // taller than 2:3 → trim top/bottom, keep full width
+    const targetH = computeTargetHeight(w)
+    const headroom = Math.round(targetH * HEADROOM_RATIO)
+    const top = computeCropTop(h, targetH, faceY, headroom)
+    const buf = await sharp(fp).extract({ top, left: 0, width: w, height: targetH }).toBuffer()
+    return { buf, mime, cropped: true, detectDown }
+  }
+  // wider than 2:3 → trim left/right, keep full height, center on face X
+  const targetW = computeTargetWidth(h)
+  const left = computeCropLeft(w, targetW, faceCenterX)
+  const buf = await sharp(fp).extract({ top: 0, left, width: targetW, height: h }).toBuffer()
+  return { buf, mime, cropped: true, detectDown }
+}
 
 function scanFolder(inbox: string): FolderFile[] {
   if (!fs.existsSync(inbox)) return []
@@ -82,9 +136,7 @@ async function listTemplates(token: string): Promise<PbTemplate[]> {
   return body.items ?? []
 }
 
-async function uploadTemplate(token: string, f: FolderFile): Promise<boolean> {
-  const buf = fs.readFileSync(f.fp)
-  const mime = path.extname(f.fp).toLowerCase() === '.png' ? 'image/png' : 'image/jpeg'
+async function uploadTemplate(token: string, f: FolderFile, buf: Buffer, mime: string): Promise<boolean> {
   const fd = new FormData()
   fd.append('name', f.name)
   fd.append('category', f.category)
@@ -132,21 +184,26 @@ export async function POST() {
     // Empty folder → skip semua delete. Buat clear total pakai CLI: manage-templates.js delete --all
     const toDelete = folderFiles.length === 0 ? [] : pbTemplates.filter(t => !folderKeys.has(key(t.category, t.name)))
 
-    // Validasi rasio 2:3 untuk kandidat baru
-    const valid: FolderFile[] = []
-    const skipped: string[] = []
+    // Crop tiap kandidat ke 2:3 (face-aware) lalu upload. Non-2:3 di-crop, bukan di-reject.
+    let added = 0, cropped = 0, deleted = 0, anyDetectDown = false
+    const skipped: { name: string; reason: string }[] = []
+
     for (const f of toAdd) {
       const dims = getImageDimensions(f.fp)
-      if (!dims) { skipped.push(`${f.category}/${f.name} (tidak bisa baca dimensi)`); continue }
-      if (!isValidRatio(dims.w, dims.h)) { skipped.push(`${f.category}/${f.name} (rasio ${dims.w}×${dims.h}, butuh 2:3)`); continue }
-      valid.push(f)
+      if (!dims) { skipped.push({ name: `${f.category}/${f.name}`, reason: 'tidak bisa baca dimensi' }); continue }
+      try {
+        const out = await cropTo23(f.fp, dims.w, dims.h)
+        if (out.detectDown) anyDetectDown = true
+        const ok = await uploadTemplate(token, f, out.buf, out.mime)
+        if (ok) { added++; if (out.cropped) cropped++ }
+        else skipped.push({ name: `${f.category}/${f.name}`, reason: 'upload gagal' })
+      } catch {
+        skipped.push({ name: `${f.category}/${f.name}`, reason: 'crop/encode gagal (file rusak?)' })
+      }
     }
-
-    let added = 0, deleted = 0
-    for (const f of valid) if (await uploadTemplate(token, f)) added++
     for (const t of toDelete) if (await deleteTemplate(token, t.id)) deleted++
 
-    return NextResponse.json({ ok: true, added, deleted, skipped })
+    return NextResponse.json({ ok: true, added, cropped, deleted, detectDown: anyDetectDown, skipped })
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Sync gagal'
     return NextResponse.json({ ok: false, error: message }, { status: 500 })

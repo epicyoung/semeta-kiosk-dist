@@ -16,9 +16,7 @@ import { PreviewScreen } from '@/components/screens/PreviewScreen'
 import { ExpiredScreen } from '@/components/screens/ExpiredScreen'
 import { ConsentScreen } from '@/components/screens/ConsentScreen'
 import type { KioskConfig, KioskState } from '@/lib/types'
-import { EPICPIN_TEMPLATE } from '@/lib/epicpin'
-
-const withPin = (list: KioskConfig['templates']) => [EPICPIN_TEMPLATE, ...list]
+import { SPINDONESIA_CATEGORY } from '@/lib/spindonesia-category'
 
 const SCREEN_ORDER: KioskState['screen'][] = [
   'idle', 'consent', 'liveview', 'category', 'template', 'faceassign', 'processing', 'preview',
@@ -60,7 +58,12 @@ const licensingEnabled = (cfg: KioskConfig) =>
 
 export function KioskApp({ config }: { config: KioskConfig }) {
   const [state, dispatch] = useReducer(kioskReducer, undefined, getInitialState)
-  const [templates, setTemplates] = useState(withPin(config.templates))
+  // config.templates sudah di-prepend spindonesia (cloud, pinned) di fetchKioskConfig.
+  // Simpan subset spindonesia biar pas Settings re-fetch (PB lokal only) tetep di-prepend.
+  const spindonesiaPinned = useRef(config.templates.filter(t => t.category === SPINDONESIA_CATEGORY))
+  const withPin = (list: KioskConfig['templates']) =>
+    [...spindonesiaPinned.current, ...list.filter(t => t.category !== SPINDONESIA_CATEGORY)]
+  const [templates, setTemplates] = useState(config.templates)
   const direction = useRef<'forward' | 'backward'>('forward')
 
   const { isExpired, pause, resume, refill } = useCountdown(config.remaining_sec ?? 0)

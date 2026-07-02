@@ -190,6 +190,17 @@ export function PreviewScreen({ state, dispatch, frames, config, onAction }: Pro
 
 
 
+          {/* Light sweep + sparkle glint every 6s — glosses over both AI & Original */}
+          {activeTab === 'photo' && (
+            <div className="preview-shine" aria-hidden="true">
+              <span className="shine-haze" />
+              <span className="shine-core" />
+              <i className="spark" style={{ top: '20%', left: '24%', width: 26, height: 26, animationDelay: '0.25s' }} />
+              <i className="spark" style={{ top: '60%', left: '55%', width: 16, height: 16, animationDelay: '0.4s' }} />
+              <i className="spark" style={{ top: '38%', left: '78%', width: 20, height: 20, animationDelay: '0.5s' }} />
+            </div>
+          )}
+
           {/* QR — top right corner, only when shareable URL ready */}
           {qrValue && (
             <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 40, padding: 6, borderRadius: 10, background: 'white', boxShadow: '0 4px 20px rgba(0,0,0,0.5)' }}>

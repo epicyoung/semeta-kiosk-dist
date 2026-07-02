@@ -1,6 +1,7 @@
 import type { KioskConfig } from './types'
 import { localDb } from './local-db'
 import { fetchPocketBaseFrames, fetchPocketBaseTemplates } from './pocketbase'
+import { fetchSpindonesiaTemplates } from './spindonesia'
 import { reasonForStatus, withinGrace, offlineLicensedFresh, type LockReason } from './license'
 
 export type LicenseGate =
@@ -92,7 +93,11 @@ export async function fetchKioskConfig(): Promise<KioskConfig> {
   // JSON cache fallback
   if (templates.length === 0) templates = localDb.getTemplates()
 
-  if (hasLocalSettings || templates.length > 0) {
+  // Spindonesia (cloud-managed, pinned) di-prepend — selalu di depan, tenant gak bisa hapus.
+  // Offline → cache terakhir; belum pernah online → []. Gak nge-block template lokal tenant.
+  const spindonesia = await fetchSpindonesiaTemplates()
+
+  if (hasLocalSettings || templates.length > 0 || spindonesia.length > 0) {
     const engineMode = localSettings.engine_mode as string | undefined
     // Always derive generation_source from engine_mode — never trust stale stored value
     const generation_source = engineMode?.endsWith('_local') ? 'LOCAL' : 'fal'
@@ -100,7 +105,7 @@ export async function fetchKioskConfig(): Promise<KioskConfig> {
       ...FALLBACK,
       ...localSettings,
       generation_source,
-      templates,
+      templates: [...spindonesia, ...templates],
       frames: pbFrames,
       template_local: localDb.getTemplateLocal(),
     }

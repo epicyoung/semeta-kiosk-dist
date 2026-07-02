@@ -4,6 +4,19 @@ import { browserDetect } from './browser-face-detect'
 type BBox = { x: number; y: number; w: number; h: number }
 type Provider = 'insightface' | 'comfy' | 'browser'
 
+// Gambar cross-origin (template R2 custom-domain) kena CORS di browser → route lewat
+// /api/img-proxy (server sedot, same-origin serve). data:/blob:/same-origin dibiarin.
+export function proxied(url: string): string {
+  if (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('/')) return url
+  try {
+    const u = new URL(url, window.location.origin)
+    if (u.origin === window.location.origin) return url // same-origin, no proxy
+    return `/api/img-proxy?url=${encodeURIComponent(url)}`
+  } catch {
+    return url
+  }
+}
+
 // ponytail: no cache — ping is 500ms max, stale provider state is worse than 1s overhead
 async function resolveProvider(): Promise<Provider> {
   try {
@@ -59,20 +72,22 @@ async function comfyDetect(imageName: string): Promise<BBox[]> {
 
 async function detectBboxes(imageUrl: string): Promise<BBox[]> {
   const provider = await resolveProvider()
-  if (provider === 'browser') return browserDetect(imageUrl)
+  const src = proxied(imageUrl) // cross-origin (R2 template) → lewat proxy same-origin
+  if (provider === 'browser') return browserDetect(src)
   try {
-    const blob = await fetch(imageUrl).then(r => r.blob())
+    const blob = await fetch(src).then(r => r.blob())
     if (provider === 'insightface') return insightDetect(blob)
     const name = await uploadToComfy(blob)
     return comfyDetect(name)
   } catch {
-    // ponytail: fall through to browser if blob fetch fails (e.g. CORS on template URL)
-    return browserDetect(imageUrl)
+    // ponytail: fall through to browser if blob fetch fails
+    return browserDetect(src)
   }
 }
 
 export function cropImage(imageUrl: string, bbox: { x: number; y: number; w: number; h: number }): Promise<string> {
   return new Promise((resolve, reject) => {
+    const src = proxied(imageUrl) // cross-origin → proxy same-origin biar canvas ga tainted
     const img = new Image()
     img.crossOrigin = 'anonymous'
     img.onload = () => {
@@ -84,7 +99,7 @@ export function cropImage(imageUrl: string, bbox: { x: number; y: number; w: num
       resolve(canvas.toDataURL('image/jpeg', 0.85))
     }
     img.onerror = () => reject(new Error(`Failed to load image: ${imageUrl}`))
-    img.src = imageUrl
+    img.src = src
   })
 }
 

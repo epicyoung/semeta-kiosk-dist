@@ -23,12 +23,14 @@ if errorlevel 1 (
 for /f "tokens=*" %%v in ('python --version') do echo [OK] %%v
 echo.
 
-REM --- 2. Copy buffalo_l ke home dir (model + source udah di tempatnya dari bundle) ---
+REM --- 2. Copy buffalo_l ke home dir ---
+REM Source dari git clone; model + pb dari bundle 'semeta-kiosk-MODELS' (di-copy ke folder ini).
 REM Cuma buffalo_l yang perlu dipindah: InsightFace hardcoded nyari di ~\.insightface\models\,
-REM bukan di folder app. inswapper/codeformer/source udah di kiosk\face_server\ dari bundle.
+REM bukan di folder app. inswapper/codeformer udah di kiosk\face_server\ dari bundle.
 if not exist "pb\pocketbase.exe" (
   echo [X] pb\pocketbase.exe GA ADA
-  echo.
+  echo     Copy pb\ dari bundle 'semeta-kiosk-MODELS' ke folder ini dulu. Setup dihentikan.
+  goto :fail
 ) else (
   echo [OK] PocketBase binary ada
 )
@@ -40,10 +42,18 @@ if exist "buffalo_l\" if not exist "%USERPROFILE%\.insightface\models\buffalo_l"
 )
 echo.
 
-REM --- 3. Verifikasi model AI ada ---
+REM --- 3. Verifikasi model AI ada (HARD STOP kalau yang wajib hilang) ---
+REM inswapper = model inti faceswap. Tanpa ini kiosk jalan tapi faceswap ERROR pas dipakai.
+REM Stop di sini biar Budi gak kejebak kiosk yang keliatan OK tapi rusak pas event.
 if not exist "kiosk\face_server\inswapper_128.onnx" (
-  echo [X] inswapper_128.onnx GA ADA - pastiin models\ ada di folder bundle. Faceswap bakal error.
+  echo [X] inswapper_128.onnx GA ADA di kiosk\face_server\
   echo.
+  echo     Source udah ke-clone, tapi MODEL AI belum dipasang.
+  echo     Copy isi bundle 'semeta-kiosk-MODELS' ^(dari admin^) ke folder ini dulu:
+  echo       - kiosk\face_server\inswapper_128.onnx
+  echo       - buffalo_l\  +  pb\
+  echo     Lihat README.md buat detail. Setup dihentikan.
+  goto :fail
 ) else (
   echo [OK] inswapper_128.onnx ada
 )

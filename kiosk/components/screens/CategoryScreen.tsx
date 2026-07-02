@@ -4,7 +4,7 @@ import { TouchButton } from '@/components/ui/TouchButton'
 import { PinBadge } from '@/components/ui/PinBadge'
 import type { KioskAction, KioskState, Template } from '@/lib/types'
 import { useT } from '@/lib/i18n'
-import { EPICPIN_TEMPLATE } from '@/lib/epicpin'
+import { SPINDONESIA_CATEGORY } from '@/lib/spindonesia-category'
 
 type Props = {
   state: Extract<KioskState, { screen: 'category' }>
@@ -52,7 +52,7 @@ export function CategoryScreen({ state, dispatch, templates }: Props) {
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                   }}
                 >
-                  {cat === EPICPIN_TEMPLATE.category && <PinBadge size={14} color="currentColor" style={{ flexShrink: 0 }} />}
+                  {cat === SPINDONESIA_CATEGORY && <PinBadge size={14} color="currentColor" style={{ flexShrink: 0 }} />}
                   {cat}
                 </button>
               ))}

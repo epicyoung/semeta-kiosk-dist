@@ -18,11 +18,9 @@ export function FaceAssignScreen({ state, dispatch }: Props) {
   const { template, faces, templateSlots } = state
   const [assignments, setAssignments] = useState<Record<string, string>>({})
   const [expanded, setExpanded] = useState(true)
-  const [cardH, setCardH] = useState<number>()
   const [face, setFace] = useState(80)
   const [slotCrops, setSlotCrops] = useState<Record<string, string>>({})
   const [detecting, setDetecting] = useState(faces.length === 0 && templateSlots.length === 0)
-  const cardRef = useRef<HTMLDivElement>(null)
   const rowRef = useRef<HTMLDivElement>(null)
 
   // Detect faces on mount when state is empty (real flow, not dev nav)
@@ -51,10 +49,6 @@ export function FaceAssignScreen({ state, dispatch }: Props) {
 
     detect()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  useLayoutEffect(() => {
-    if (expanded && cardRef.current) setCardH(cardRef.current.offsetHeight)
-  }, [expanded])
 
   useLayoutEffect(() => {
     const el = rowRef.current
@@ -101,9 +95,8 @@ export function FaceAssignScreen({ state, dispatch }: Props) {
         <div className="flex-1 flex items-center gap-4 px-5 min-h-0 overflow-hidden">
           {/* Left: template card */}
           <div
-            ref={cardRef}
             onClick={() => setExpanded(!expanded)}
-            style={{ flexShrink: 0, width: expanded ? '40%' : 36, aspectRatio: expanded ? '2/3' : undefined, height: expanded ? undefined : cardH, maxHeight: '80%', borderRadius: 'var(--radius-btn)', border: 'none', boxShadow: 'inset 1px 1px 0 rgba(255,255,255,0.3), inset -1px -1px 0 rgba(0,0,0,0.2)', background: 'rgba(255,255,255,0.08)', overflow: 'hidden', cursor: 'pointer', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            style={{ flexShrink: 0, width: expanded ? '40%' : 36, aspectRatio: expanded ? '2/3' : undefined, height: expanded ? undefined : '80%', maxHeight: '80%', borderRadius: 'var(--radius-btn)', border: 'none', boxShadow: 'inset 1px 1px 0 rgba(255,255,255,0.3), inset -1px -1px 0 rgba(0,0,0,0.2)', background: 'rgba(255,255,255,0.08)', overflow: 'hidden', cursor: 'pointer', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           >
             {expanded ? (
               <>
