@@ -1,0 +1,56 @@
+{
+    "prompt": {
+        "1": {
+            "inputs": {
+                "image": "",
+                "upload": "image"
+            },
+            "class_type": "LoadImage",
+            "_meta": {
+                "title": "Load Image"
+            }
+        },
+        "2": {
+            "inputs": {
+                "padding": 0,
+                "padding_percent": 0,
+                "index": -1,
+                "analysis_models": [
+                    "3",
+                    0
+                ],
+                "image": [
+                    "1",
+                    0
+                ]
+            },
+            "class_type": "FaceBoundingBox",
+            "_meta": {
+                "title": "Face Bounding Box"
+            }
+        },
+        "3": {
+            "inputs": {
+                "library": "insightface",
+                "provider": "CPU"
+            },
+            "class_type": "FaceAnalysisModels",
+            "_meta": {
+                "title": "Face Analysis Models"
+            }
+        },
+        "4": {
+            "inputs": {
+                "filename_prefix": "faces_",
+                "images": [
+                    "2",
+                    0
+                ]
+            },
+            "class_type": "SaveImage",
+            "_meta": {
+                "title": "Save Image"
+            }
+        }
+    }
+}

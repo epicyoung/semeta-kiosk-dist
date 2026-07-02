@@ -1,0 +1,7 @@
+{
+  "name": "Kiosk Dummy",
+  "brand_color": "#7c3aed",
+  "engine_mode": "faceswap_local",
+  "camera_source": "webcam",
+  "api_model": "nanobanana2"
+}

@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+python-multipart
+insightface
+onnxruntime
+opencv-python-headless
+numpy
+# GPU (optional — auto-detected, comment out if no CUDA):
+# onnxruntime-gpu
