@@ -180,7 +180,7 @@ export function KioskApp({ config }: { config: KioskConfig }) {
       case 'template':    return <TemplateScreen state={state} dispatch={wrappedDispatch} templates={templates} />
       case 'faceassign':  return <FaceAssignScreen state={state} dispatch={wrappedDispatch} />
       case 'processing':  return <ProcessingScreen state={state} dispatch={wrappedDispatch} generationSource={config.generation_source} eventName={config.event_name} licensed={config.licensed ?? false} />
-      case 'preview':     return <PreviewScreen state={state} dispatch={wrappedDispatch} frames={config.frames} config={config} onAction={(a) => log('VISITOR_ACTION', { action: a })} />
+      case 'preview':     return <PreviewScreen state={state} dispatch={wrappedDispatch} frames={config.frames} config={config} licensed={config.licensed ?? false} onAction={(a) => log('VISITOR_ACTION', { action: a })} />
     }
   })()
 

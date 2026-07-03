@@ -11,6 +11,7 @@ type Props = {
   dispatch: Dispatch<KioskAction>
   frames: Frame[]
   config: Pick<KioskConfig, 'enable_email' | 'enable_print' | 'enable_video'>
+  licensed: boolean
   onAction?: (action: 'printed' | 'emailed' | 'shared') => void
 }
 
@@ -45,7 +46,7 @@ function TabSwitcher({ activeTab, videoUrl, videoLoading, onSwitch }: {
 
 const VIDEO_QR_URL = process.env.NEXT_PUBLIC_KIOSK_URL ? `${process.env.NEXT_PUBLIC_KIOSK_URL}/#liveview-video` : '/#liveview-video'
 
-export function PreviewScreen({ state, dispatch, frames, config, onAction }: Props) {
+export function PreviewScreen({ state, dispatch, frames, config, licensed, onAction }: Props) {
   const t = useT()
   const [showOriginal, setShowOriginal] = useState(false)
   const [printing, setPrinting] = useState(false)
@@ -201,12 +202,25 @@ export function PreviewScreen({ state, dispatch, frames, config, onAction }: Pro
             </div>
           )}
 
-          {/* QR — top right corner, only when shareable URL ready */}
-          {qrValue && (
+          {/* QR — top right. Real bila licensed + URL siap; decoy "nonaktif" bila freeware
+              (QR = fitur berbayar). Decoy diutamakan biar licensed yg lagi upload ga keliatan mati. */}
+          {!licensed ? (
+            <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 40, padding: 6, borderRadius: 10, background: 'white', boxShadow: '0 4px 20px rgba(0,0,0,0.5)' }}>
+              <div style={{ position: 'relative', width: 80, height: 80 }}>
+                {/* QR boongan — pola asli ketutup label, keliatan "ada tapi mati" */}
+                <QRCodeSVG value="https://spindonesia.id" size={80} bgColor="white" fgColor="#090135" />
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.86)', borderRadius: 4, padding: 3 }}>
+                  <span style={{ fontSize: 7, lineHeight: 1.3, fontWeight: 600, color: '#090135', textAlign: 'center' }}>
+                    QR fitur nonaktif — hub admin
+                  </span>
+                </div>
+              </div>
+            </div>
+          ) : qrValue ? (
             <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 40, padding: 6, borderRadius: 10, background: 'white', boxShadow: '0 4px 20px rgba(0,0,0,0.5)' }}>
               <QRCodeSVG value={qrValue} size={80} bgColor="white" fgColor="#090135" />
             </div>
-          )}
+          ) : null}
 
           {/* AI/Original badge — top left */}
           <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 40, fontSize: 'var(--text-2xs)', letterSpacing: '0.2em', textTransform: 'uppercase', background: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.8)', padding: '4px 10px', borderRadius: 'var(--radius-chip)', backdropFilter: 'blur(8px)' }}>

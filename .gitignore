@@ -2,4 +2,3 @@ pb/pb_data/
 kiosk/.env.local
 kiosk/node_modules/
 kiosk/.next/
-pb/pb_data/
