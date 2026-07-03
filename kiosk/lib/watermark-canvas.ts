@@ -11,12 +11,12 @@
 // a watermark (the two-canvas bug).
 
 // Tile logo spin.png — SAMA seperti watermark R2 (worker/src/watermark.ts). Konstanta
-// dicocokin ke sana biar desktop & QR-copy identik: 20% lebar, opacity 0.25, gap 60%.
+// dicocokin ke sana biar desktop & QR-copy identik: 25% lebar, opacity 0.55, gap 30%.
 const WM_LOGO_SRC = "/spin.png"
 const WM_ANGLE = -35 * (Math.PI / 180)
-const WM_TILE_SCALE = 0.20   // lebar 1 tile logo = 20% lebar foto (match WATERMARK_TILE_SCALE)
-const WM_OPACITY = 0.25       // match WATERMARK_OPACITY
-const WM_GAP_RATIO = 0.6      // jarak antar-tile = 60% lebar tile (match WATERMARK_GAP_RATIO)
+const WM_TILE_SCALE = 0.25   // lebar 1 tile logo = 25% lebar foto (match WATERMARK_TILE_SCALE)
+const WM_OPACITY = 0.55       // match WATERMARK_OPACITY
+const WM_GAP_RATIO = 0.3      // jarak antar-tile = 30% lebar tile (match WATERMARK_GAP_RATIO)
 
 /**
  * Returns a new JPEG dataURL with the watermark tiled over `dataUrl`.

@@ -9,10 +9,12 @@ import { burnWatermark } from '@/lib/watermark-canvas'
 import { useT } from '@/lib/i18n'
 
 // Write one full-res photo to disk (server route owns fs + naming convention)
-async function saveLocal(eventName: string, seq: string, kind: 'original' | 'ai', variant: 'A' | 'B', imageUrl: string) {
+// Local print files are always full-res. Web-sized copies only exist in R2 (Original + AI,
+// both resized on upload, keyed _A/_B — a separate naming contract with the microsite).
+async function saveLocal(eventName: string, seq: string, kind: 'original' | 'ai', imageUrl: string) {
   await fetch('/api/save-local', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ event_name: eventName, seq, kind, variant, image_base64: imageUrl }),
+    body: JSON.stringify({ event_name: eventName, seq, kind, image_base64: imageUrl }),
   })
 }
 
@@ -27,6 +29,7 @@ async function finalizeSession(
   localOriginalUrl: string, localAiUrl: string,
   licensed: boolean,
   dispatch: Dispatch<KioskAction>,
+  processingDurationSec?: number,
 ) {
   const res = await fetch('/api/next-seq', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -35,19 +38,31 @@ async function finalizeSession(
   const { paddedSeq, eventFolder } = await res.json()
   const base = `${eventFolder}-${paddedSeq}`
 
-  // A = full-res, LOCAL ONLY (print) — burned copy so no clean file lands on disk
+  // Full-res, LOCAL ONLY (print) — burned copy so no clean file lands on disk.
+  // Original + AI both saved for printing.
   await Promise.all([
-    saveLocal(eventName, paddedSeq, 'original', 'A', localOriginalUrl),
-    saveLocal(eventName, paddedSeq, 'ai', 'A', localAiUrl),
+    saveLocal(eventName, paddedSeq, 'original', localOriginalUrl),
+    saveLocal(eventName, paddedSeq, 'ai', localAiUrl),
   ])
   // ponytail: no active session = no upload, no QR. QR = sinyal sesi berbayar.
   if (!licensed) return
-  // A = original to R2, B = AI result to R2 — RAW; worker watermarks per session
+  // R2 upload — both web-sized (resized on upload). type _A = Original, _B = AI.
+  // This _A/_B convention is a CONTRACT: microsite /s?b= derives the Original key by
+  // swapping _B→_A (see microsite/functions/s/index.ts). Don't rename without updating it.
+  // RAW images sent here; worker watermarks per session.
+  // event_name + duration piggyback ke log (B only cukup — admin baca 1 log per foto)
+  const meta = { eventName, durationSec: processingDurationSec }
+  // Tag upload-stage failures with the file id so the UPLOAD_FAILED log can tell
+  // upload apart from the rest of finalize (next-seq/save-local).
+  const tagUpload = (p: Promise<{ url: string; key: string }>, file: string) =>
+    p.catch((err) => {
+      throw Object.assign(err instanceof Error ? err : new Error(String(err)), { uploadFile: file })
+    })
   const [resA, resB] = await Promise.all([
-    uploadAsset(rawOriginalUrl, 'A', base),
-    uploadAsset(rawAiUrl, 'B', base),
+    tagUpload(uploadAsset(rawOriginalUrl, 'A', base, meta), `${base}_A`),
+    tagUpload(uploadAsset(rawAiUrl, 'B', base, meta), `${base}_B`),
   ])
-  // QR points to microsite with keyB so user sees both A+B
+  // QR points to microsite with keyB so user sees both Original (_A) + AI (_B)
   const shareUrl = `https://semeta-microsite.pages.dev/s?b=${encodeURIComponent(resB.key)}`
   dispatch({ type: 'SET_R2_URLS', r2OriginalUrl: resA.url, r2AiUrl: shareUrl })
 }
@@ -246,9 +261,10 @@ type Props = {
   generationSource: GenerationSource
   eventName: string
   licensed: boolean
+  onUploadFailed?: (metadata: Record<string, unknown>) => void
 }
 
-export function ProcessingScreen({ state, dispatch, generationSource, eventName, licensed }: Props) {
+export function ProcessingScreen({ state, dispatch, generationSource, eventName, licensed, onUploadFailed }: Props) {
   const t = useT()
   const copy = t('processing_copy') as string[]
   const wsRef = useRef<WebSocket | null>(null)
@@ -263,9 +279,23 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
 
+  // Upload/finalize failure = QR nunjuk ke kosong tanpa admin tahu. Kirim UPLOAD_FAILED
+  // ke Worker via analytics helper — fire-and-forget, must NEVER throw into the flow.
+  const reportUploadFailure = (err: unknown) => {
+    try {
+      const file = (err as { uploadFile?: string } | null)?.uploadFile
+      onUploadFailed?.({
+        stage: file ? 'upload' : 'finalize',
+        error: String(err).slice(0, 300),
+        ...(file !== undefined && { filename: file }),
+      })
+    } catch { /* analytics ga boleh matiin kiosk */ }
+  }
+
   useEffect(() => {
     if (timedOut) return // #error preview — jangan generate
     const interval = setInterval(() => setCopyIndex(i => (i + 1) % copy.length), 4_000)
+    const genStart = performance.now() // processing duration for the log (performance.now = clock-safe)
 
     if (MOCK) {
       const t0 = performance.now()
@@ -294,8 +324,8 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
           dispatch({ type: 'SET_PROGRESS', progress: 100 })
           await new Promise(r => setTimeout(r, REVEAL_DWELL_MS)) // let the crisp reveal paint before we leave
           dispatch({ type: 'SHOW_PREVIEW', aiUrl: local.ai, originalUrl: local.original, sourceUrl: state.imageUrl })
-          finalizeSession(eventName, state.imageUrl, aiUrl, local.original, local.ai, licensed, dispatch)
-            .catch(err => console.error('finalize session failed:', err))
+          finalizeSession(eventName, state.imageUrl, aiUrl, local.original, local.ai, licensed, dispatch, Math.round((performance.now() - genStart) / 1000))
+            .catch(err => { console.error('finalize session failed:', err); reportUploadFailure(err) })
         })
         .catch(() => { if (!controller.signal.aborted) setTimedOut(true) })
         .finally(() => clearTimeout(timeout))
@@ -325,8 +355,8 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
         await new Promise(r => setTimeout(r, REVEAL_DWELL_MS)) // let the crisp reveal paint before we leave
         dispatch({ type: 'SHOW_PREVIEW', aiUrl: local.ai, originalUrl: local.original, sourceUrl: state.imageUrl })
         if (!MOCK) {
-          finalizeSession(eventName, state.imageUrl, url, local.original, local.ai, licensed, dispatch)
-            .catch(err => console.error('finalize session failed:', err))
+          finalizeSession(eventName, state.imageUrl, url, local.original, local.ai, licensed, dispatch, Math.round((performance.now() - genStart) / 1000))
+            .catch(err => { console.error('finalize session failed:', err); reportUploadFailure(err) })
         }
       })
       .catch((err) => { if (err.name !== 'AbortError') setTimedOut(true) })

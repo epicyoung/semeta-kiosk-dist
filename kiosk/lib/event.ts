@@ -13,14 +13,16 @@ export function padSeq(n: number): string {
   return String(n).padStart(3, '0')
 }
 
-/** fun-run-20260625-001-B-original-semeta.jpg */
-export function originalFilename(eventName: string, seq: string, variant: 'A' | 'B', date = new Date()): string {
-  return `${sessionBase(eventName, date)}-${seq}-${variant}-ori-semeta.jpg`
+// Local print files: always full-res. ponytail: no variant param — web-sized only lives
+// in R2 (with its own _A/_B keys, a separate naming contract with the microsite).
+/** fun-run-20260625-001-full-ori-semeta.jpg */
+export function originalFilename(eventName: string, seq: string, date = new Date()): string {
+  return `${sessionBase(eventName, date)}-${seq}-full-ori-semeta.jpg`
 }
 
-/** fun-run-20260625-001-B-ai-semeta.jpg */
-export function aiFilename(eventName: string, seq: string, variant: 'A' | 'B', date = new Date()): string {
-  return `${sessionBase(eventName, date)}-${seq}-${variant}-ai-semeta.jpg`
+/** fun-run-20260625-001-full-ai-semeta.jpg */
+export function aiFilename(eventName: string, seq: string, date = new Date()): string {
+  return `${sessionBase(eventName, date)}-${seq}-full-ai-semeta.jpg`
 }
 
 function sessionBase(eventName: string, date: Date): string {

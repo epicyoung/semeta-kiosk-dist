@@ -104,8 +104,16 @@ export function GlassShell({ screenKey, direction, children, config, onLogoClick
     }, 360) // ponytail: 10ms buffer over --dur-screen (350ms)
   }, [screenKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ponytail: RTL = set document dir for Arabic. Text reads correctly; if the fixed
+  // .screen-split columns look mirrored-wrong in ar, per-screen RTL layout is a backlog item.
+  const locale = localConfig.locale ?? 'en'
+  useEffect(() => {
+    document.documentElement.dir = locale === 'ar' ? 'rtl' : 'ltr'
+    document.documentElement.lang = locale.replace('myth-', '')
+  }, [locale])
+
   return (
-    <LocaleProvider locale={localConfig.locale ?? 'en'}>
+    <LocaleProvider locale={locale}>
       <svg width="0" height="0" style={{ position: 'absolute' }}>
         <filter id="noise">
           <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves={3} stitchTiles="stitch" />

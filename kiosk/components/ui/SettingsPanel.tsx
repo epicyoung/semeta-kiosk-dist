@@ -794,6 +794,11 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                   options={[
                     { value: 'en', label: 'English' },
                     { value: 'id', label: 'Bahasa Indonesia' },
+                    { value: 'ko', label: '한국어' },
+                    { value: 'ja', label: '日本語' },
+                    { value: 'nl', label: 'Nederlands' },
+                    { value: 'zh', label: '简体中文' },
+                    { value: 'ar', label: 'العربية' },
                     { value: 'myth-en', label: 'Dark Myth (EN)' },
                     { value: 'myth-id', label: 'Dark Myth (ID)' },
                   ]}
