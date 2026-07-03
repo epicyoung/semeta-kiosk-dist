@@ -25,6 +25,7 @@ async function finalizeSession(
   eventName: string,
   rawOriginalUrl: string, rawAiUrl: string,
   localOriginalUrl: string, localAiUrl: string,
+  licensed: boolean,
   dispatch: Dispatch<KioskAction>,
 ) {
   const res = await fetch('/api/next-seq', {
@@ -39,6 +40,8 @@ async function finalizeSession(
     saveLocal(eventName, paddedSeq, 'original', 'A', localOriginalUrl),
     saveLocal(eventName, paddedSeq, 'ai', 'A', localAiUrl),
   ])
+  // ponytail: no active session = no upload, no QR. QR = sinyal sesi berbayar.
+  if (!licensed) return
   // A = original to R2, B = AI result to R2 — RAW; worker watermarks per session
   const [resA, resB] = await Promise.all([
     uploadAsset(rawOriginalUrl, 'A', base),
@@ -291,7 +294,7 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
           dispatch({ type: 'SET_PROGRESS', progress: 100 })
           await new Promise(r => setTimeout(r, REVEAL_DWELL_MS)) // let the crisp reveal paint before we leave
           dispatch({ type: 'SHOW_PREVIEW', aiUrl: local.ai, originalUrl: local.original, sourceUrl: state.imageUrl })
-          finalizeSession(eventName, state.imageUrl, aiUrl, local.original, local.ai, dispatch)
+          finalizeSession(eventName, state.imageUrl, aiUrl, local.original, local.ai, licensed, dispatch)
             .catch(err => console.error('finalize session failed:', err))
         })
         .catch(() => { if (!controller.signal.aborted) setTimedOut(true) })
@@ -322,7 +325,7 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
         await new Promise(r => setTimeout(r, REVEAL_DWELL_MS)) // let the crisp reveal paint before we leave
         dispatch({ type: 'SHOW_PREVIEW', aiUrl: local.ai, originalUrl: local.original, sourceUrl: state.imageUrl })
         if (!MOCK) {
-          finalizeSession(eventName, state.imageUrl, url, local.original, local.ai, dispatch)
+          finalizeSession(eventName, state.imageUrl, url, local.original, local.ai, licensed, dispatch)
             .catch(err => console.error('finalize session failed:', err))
         }
       })

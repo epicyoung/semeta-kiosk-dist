@@ -11,6 +11,13 @@ export async function POST(req: NextRequest) {
     },
     body: JSON.stringify(body),
   })
-  const data = await res.json()
+  let data: unknown
+  const ct = res.headers.get('content-type') ?? ''
+  if (ct.includes('application/json')) {
+    data = await res.json()
+  } else {
+    const text = await res.text()
+    data = { error: text || `Worker error ${res.status}` }
+  }
   return NextResponse.json(data, { status: res.status })
 }

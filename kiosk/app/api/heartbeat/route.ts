@@ -20,7 +20,15 @@ export async function POST(req: NextRequest) {
     // 404 = no active session → freeware (jalan + watermark, bukan lock).
     // 401/402/403 = invalid secret / expired / disabled → tetap lock.
     if (!res.ok) {
-      if (res.status === 404) return NextResponse.json({ remaining_sec: 0, licensed: false, freeware: true })
+      if (res.status === 404) {
+        // Freeware: teruskan force_lock supaya admin bisa takeover kiosk tanpa sewa aktif.
+        const fw = await res.json().catch(() => ({} as Record<string, unknown>))
+        return NextResponse.json({
+          remaining_sec: 0, licensed: false, freeware: true,
+          force_locked: fw.force_locked === true,
+          lock_message: fw.lock_message ?? null,
+        })
+      }
       return NextResponse.json({ reason: reasonForStatus(res.status) }, { status: res.status })
     }
     const data = await res.json()

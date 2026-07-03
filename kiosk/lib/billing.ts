@@ -31,8 +31,13 @@ export function useHeartbeat(
         const data = await res.json()
         // ponytail: bypassed = dev mode, skip refill
         if (data.status === 'bypassed' || data.bypassed) return
-        // freeware = 404 upstream (no active session) → jalan + watermark, bukan lock
-        if (data.freeware) { onResultRef.current(0, false, undefined); return }
+        // freeware = 404 upstream (no active session) → jalan + watermark, bukan lock.
+        // Kecuali admin force-lock: takeover menang walau tanpa sewa.
+        if (data.freeware) {
+          const lockMsg = data.force_locked === true ? (data.lock_message as string | undefined) : undefined
+          onResultRef.current(0, data.force_locked === true, undefined, lockMsg)
+          return
+        }
         if (typeof data.remaining_sec === 'number') {
           const lockMsg = data.force_locked === true ? (data.lock_message as string | undefined) : undefined
           onResultRef.current(data.remaining_sec, data.force_locked === true, undefined, lockMsg)

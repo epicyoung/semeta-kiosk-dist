@@ -26,7 +26,13 @@ export async function checkLicenseGate(): Promise<LicenseGate> {
     })
     // 404 = no active session → freeware (jalan + watermark). 401/402/403 = hard lock.
     if (!res.ok) {
-      if (res.status === 404) return { ok: true, remaining_sec: 0, licensed: false }
+      if (res.status === 404) {
+        // Freeware body bawa identity + force_lock (worker no-session branch).
+        const fw = await res.json().catch(() => ({} as Record<string, unknown>))
+        // Admin bisa takeover kiosk freeware → force_lock menang walau belum ada sewa.
+        if (fw.force_locked === true) return { ok: false, reason: 'force_locked', message: (fw.lock_message as string) ?? undefined }
+        return { ok: true, remaining_sec: 0, licensed: false, kiosk_name: fw.kiosk_name as string | undefined, kiosk_no: fw.kiosk_no as number | undefined }
+      }
       return { ok: false, reason: reasonForStatus(res.status) }
     }
 
