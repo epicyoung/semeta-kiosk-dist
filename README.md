@@ -14,9 +14,10 @@ Repo ini cuma **source code** (~beberapa MB). Model AI dikirim terpisah dari adm
 | `inswapper_128.onnx` | `kiosk/face_server/` | 529 MB | Minta bundle ke admin |
 | `codeformer.onnx` | `kiosk/face_server/` | 360 MB | Minta bundle ke admin |
 | `buffalo_l/` | otomatis | 326 MB | **Auto-download** saat pertama jalan (butuh internet) |
-| `pb/` (PocketBase + data) | `pb/` | ~50 MB | Minta bundle ke admin |
+| `pb/pocketbase.exe` | `pb/` | 32 MB | ✅ Sudah ikut `git clone` |
 
-> **buffalo_l tidak perlu di-copy manual** — `setup.bat` dan face_server otomatis download saat pertama kali dijalankan selama ada koneksi internet.
+> **buffalo_l tidak perlu di-copy manual** — face_server otomatis download saat pertama kali dijalankan selama ada koneksi internet.
+> **pb_data** (template + frame sample) dikirim terpisah lewat bundle dari admin — tidak ikut git supaya data lapangan tidak ke-overwrite saat update.
 
 ---
 
