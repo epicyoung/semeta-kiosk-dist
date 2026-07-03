@@ -23,7 +23,10 @@ Tanpa model ini, faceswap error. Minta bundle `semeta-kiosk-FULL` ke admin.
 ## Install pertama
 
 1. Install **Git** (git-scm.com/download/win) — wajib buat clone + tombol Update
-2. Install **Node.js LTS** (nodejs.org) + **Python 3.11** (python.org, centang "Add to PATH")
+2. Install **Node.js LTS** (nodejs.org) + **Python 3.11**:
+   - Windows 64-bit: https://www.python.org/ftp/python/3.11.0/python-3.11.0-amd64.exe
+   - Windows 32-bit: https://www.python.org/ftp/python/3.11.0/python-3.11.0.exe
+   - ⚠️ Centang **"Add Python to PATH"** saat install
 3. Buka **Command Prompt**, jalanin:
    ```
    git clone https://github.com/epicyoung/semeta-kiosk-dist.git semeta-kiosk
