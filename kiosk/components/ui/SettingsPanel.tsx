@@ -146,6 +146,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   const pauseStartRef = useRef<number | null>(null)
   const [fetchStatus,     setFetchStatus]     = useState<'idle'|'fetching'|'ok'|'err'>('idle')
   const [fetchSummary,    setFetchSummary]    = useState<string | null>(null)
+  const [fetchSkipped,    setFetchSkipped]    = useState<{ name: string; reason: string }[]>([])
   const [engineStatus,    setEngineStatus]    = useState<PbStatus>('idle')
   const [cameraStatus,    setCameraStatus]    = useState<PbStatus>('idle')
   const [pbCreds,         setPbCreds]         = useState<{ email: string; password: string } | null>(null)
@@ -153,6 +154,11 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   const [updateState,     setUpdateState]     = useState<'idle'|'checking'|'available'|'uptodate'|'pulling'|'ok'|'err'>('idle')
   const [version,         setVersion]         = useState<{ current: string | null; isGit: boolean }>({ current: null, isGit: true })
   const isApi = engine.endsWith('_api')
+  // Unlimited = god key (bypassed) ATAU sentinel 365d dari Worker (admin toggle unlimited).
+  // ponytail: >300d = unlimited — rental nyata max jam/hari. Ceiling: kalau nanti ada rental >300d
+  // beneran, kirim flag `unlimited` eksplisit dari Worker handshake, jangan naikin angka ini.
+  const UNLIMITED_SEC = 86400 * 300
+  const isUnlimited = (config.bypassed ?? false) || remainSec >= UNLIMITED_SEC || pauseQuotaSec >= UNLIMITED_SEC
 
   // Language dropdown = instant preview: push locale up so LocaleProvider re-renders the panel
   // in the new language right away. Save still persists it to disk in handleDone.
@@ -266,6 +272,44 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
     setFrames(prev => prev.filter(f => f.id !== id))
   }
 
+  // Drag-to-reorder (mouse only — native HTML5 DnD doesn't fire on touch).
+  const dragIndex = useRef<number | null>(null)
+  const dragSnapshot = useRef<typeof frames | null>(null) // pre-drag order, for rollback on PATCH failure
+  const [dragging, setDragging] = useState<number | null>(null)
+
+  // Reorder locally while dragging over a new slot; PATCH sort_order on drop.
+  const reorderFrame = (from: number, to: number) => {
+    if (from === to) return
+    setFrames(prev => {
+      const next = [...prev]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      return next
+    })
+    dragIndex.current = to
+    setDragging(to)
+  }
+
+  // Persist final order: PATCH each frame's sort_order to match its slot (1-based).
+  // On any failure, restore the pre-drag order so PB and UI stay consistent.
+  // `order` is passed in from the drop handler — reading `frames` here would be a stale closure.
+  // ponytail: PATCH each moved frame individually — batch endpoint if the list ever grows past ~50
+  const persistOrder = async (order: typeof frames, snapshot: typeof frames) => {
+    try {
+      await Promise.all(
+        order.map((f, i) =>
+          fetch(`${pbUrl}/api/collections/frames/records/${f.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sort_order: i + 1 }),
+          }).then(r => { if (!r.ok) throw new Error('patch failed') })
+        )
+      )
+    } catch {
+      setFrames(snapshot)
+    }
+  }
+
   // Ping PocketBase when panel opens or URL changes
   useEffect(() => {
     if (!open || templateSource !== 'pocketbase') return
@@ -300,6 +344,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   const handleFetchTemplates = async () => {
     setFetchStatus('fetching')
     setFetchSummary(null)
+    setFetchSkipped([])
     try {
       // 1. Sync folder put-template-here/ → PocketBase (crop 2:3, tambah baru, hapus yang sudah tidak ada)
       const syncRes = await fetch('/api/sync-templates', { method: 'POST' })
@@ -318,6 +363,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
       if (d.skipped.length) parts.push(`${d.skipped.length} di-skip`)
       if (d.detectDown) parts.push('face_server mati (crop pakai center)')
       setFetchSummary(parts.join(' · '))
+      setFetchSkipped(d.skipped)
       setFetchStatus('ok')
     } catch {
       setFetchStatus('err')
@@ -500,9 +546,19 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                     {config.has_secret ? t('set_secret_installed') as string : t('set_secret_empty_hint') as string}
                   </p>
                 </div>
-                <span style={{ fontSize: 'var(--text-xs)', fontFamily: 'var(--font-ui)', color: config.bypassed ? '#f0c040' : config.licensed ? '#a3be8c' : config.has_secret ? '#f0c040' : 'rgba(255,255,255,0.3)' }}>
-                  {config.bypassed ? t('set_secret_state_godmode') as string : config.licensed ? t('set_secret_state_active') as string : config.has_secret ? t('set_secret_state_expired') as string : '—'}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  {/* Refresh: licensed & remaining_sec cuma dibaca pas page load (checkLicenseGate server).
+                      Reload = re-handshake ke Worker → status admin kepick instan tanpa restart manual. */}
+                  <button
+                    onClick={() => window.location.reload()}
+                    aria-label="Refresh license from server"
+                    title="Re-check rental & license"
+                    style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 'var(--radius-glass)', color: 'rgba(255,255,255,0.65)', cursor: 'pointer', fontSize: 'var(--text-sm)', lineHeight: 1, padding: '5px 9px' }}
+                  >↻</button>
+                  <span style={{ fontSize: 'var(--text-xs)', fontWeight: isUnlimited ? 700 : 400, letterSpacing: isUnlimited ? '0.06em' : undefined, fontFamily: 'var(--font-ui)', color: isUnlimited ? '#f0c040' : config.licensed ? '#a3be8c' : config.has_secret ? '#f0c040' : 'rgba(255,255,255,0.3)' }}>
+                    {isUnlimited ? '⚡ GODMODE' : config.licensed ? t('set_secret_state_active') as string : config.has_secret ? t('set_secret_state_expired') as string : '—'}
+                  </span>
+                </div>
               </div>
               {!secretEditing ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
@@ -597,14 +653,18 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
             {(pause || resume) && (
               <Row label={t('set_time_remaining') as string}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <span style={{
-                    fontFamily: 'var(--font-ui)', fontSize: 'var(--text-lg)', fontWeight: 600, letterSpacing: '0.05em',
-                    color: remainSec > 600 ? '#a3be8c' : remainSec > 0 ? '#f0c040' : 'rgba(255,255,255,0.25)',
-                  }}>
-                    {String(Math.floor(remainSec / 3600)).padStart(2, '0')}
-                    :{String(Math.floor((remainSec % 3600) / 60)).padStart(2, '0')}
-                    :{String(remainSec % 60).padStart(2, '0')}
-                  </span>
+                  {isUnlimited ? (
+                    <span style={{ fontFamily: 'var(--font-ui)', fontSize: 'calc(var(--text-lg) * 1.3)', fontWeight: 800, lineHeight: 1, color: '#a3be8c' }} title="Unlimited">∞</span>
+                  ) : (
+                    <span style={{
+                      fontFamily: 'var(--font-ui)', fontSize: 'var(--text-lg)', fontWeight: 600, letterSpacing: '0.05em',
+                      color: remainSec > 600 ? '#a3be8c' : remainSec > 0 ? '#f0c040' : 'rgba(255,255,255,0.25)',
+                    }}>
+                      {String(Math.floor(remainSec / 3600)).padStart(2, '0')}
+                      :{String(Math.floor((remainSec % 3600) / 60)).padStart(2, '0')}
+                      :{String(remainSec % 60).padStart(2, '0')}
+                    </span>
+                  )}
                   {sessionPaused ? (
                     <button onClick={handleResume} disabled={!navigator.onLine} style={{
                       padding: '6px 16px', borderRadius: 'var(--radius-glass)', border: 'none', cursor: navigator.onLine ? 'pointer' : 'default',
@@ -656,28 +716,45 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                             {t('set_pause_quota_hint') as string}
                           </p>
                         </div>
-                        <span style={{
-                          fontFamily: 'var(--font-ui)', fontSize: 'var(--text-base)', fontWeight: 600, letterSpacing: '0.04em',
-                          color: isExhausted ? '#ff6b6b' : isLow ? '#f0c040' : 'rgba(255,255,255,0.6)',
-                        }}>
-                          {isExhausted ? t('set_pause_quota_exhausted_badge') as string : `${hh}:${mm}:${ss}`}
-                        </span>
+                        {isUnlimited ? (
+                          <span style={{ fontFamily: 'var(--font-ui)', fontSize: 'calc(var(--text-base) * 1.4)', fontWeight: 800, lineHeight: 1, color: 'rgba(255,255,255,0.75)' }} title="Unlimited">∞</span>
+                        ) : (
+                          <span style={{
+                            fontFamily: 'var(--font-ui)', fontSize: 'var(--text-base)', fontWeight: 600, letterSpacing: '0.04em',
+                            color: isExhausted ? '#ff6b6b' : isLow ? '#f0c040' : 'rgba(255,255,255,0.6)',
+                          }}>
+                            {isExhausted ? t('set_pause_quota_exhausted_badge') as string : `${hh}:${mm}:${ss}`}
+                          </span>
+                        )}
                       </div>
-                      {/* Progress bar */}
+                      {/* Progress bar — unlimited → RGB shimmer penuh, else fill sesuai pct */}
                       <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-                        <div style={{
-                          height: '100%', borderRadius: 2,
-                          width: `${Math.round(pct * 100)}%`,
-                          background: barColor,
-                          transition: 'width 1s linear, background 0.3s',
-                        }} />
+                        {isUnlimited ? (
+                          <>
+                            {/* inline gradient+keyframe — ga gantung ke globals.css yang suka ga hot-reload */}
+                            <style>{`@keyframes rgb-flow{to{background-position:200% 50%}}@media(prefers-reduced-motion:reduce){.rgb-bar{animation:none!important}}`}</style>
+                            <div className="rgb-bar" style={{
+                              height: '100%', width: '100%', borderRadius: 2,
+                              backgroundImage: 'linear-gradient(90deg,#ff5d5d,#f5c542,#7cff6b,#38e0ff,#a97bff,#ff5d5d)',
+                              backgroundSize: '200% 100%',
+                              animation: 'rgb-flow 2.4s linear infinite',
+                            }} />
+                          </>
+                        ) : (
+                          <div style={{
+                            height: '100%', borderRadius: 2,
+                            width: `${Math.round(pct * 100)}%`,
+                            background: barColor,
+                            transition: 'width 1s linear, background 0.3s',
+                          }} />
+                        )}
                       </div>
-                      {isExhausted && (
+                      {!isUnlimited && isExhausted && (
                         <p style={{ fontSize: 'var(--text-2xs)', color: '#ff6b6b', margin: '6px 0 0' }}>
                           {t('set_pause_quota_exhausted_note') as string}
                         </p>
                       )}
-                      {isLow && !isExhausted && (
+                      {!isUnlimited && isLow && !isExhausted && (
                         <p style={{ fontSize: 'var(--text-2xs)', color: '#f0c040', margin: '6px 0 0' }}>
                           {t('set_pause_quota_low_note') as string}
                         </p>
@@ -809,6 +886,15 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                     <p style={{ fontSize: 'var(--text-2xs)', fontFamily: 'var(--font-ui)', color: 'rgba(255,255,255,0.5)', margin: '8px 0 0' }}>
                       {fetchSummary}
                     </p>
+                  )}
+                  {fetchSkipped.length > 0 && (
+                    <ul style={{ margin: '6px 0 0', padding: 0, listStyle: 'none', maxHeight: 120, overflowY: 'auto' }}>
+                      {fetchSkipped.map((s, i) => (
+                        <li key={i} style={{ fontSize: 'var(--text-2xs)', fontFamily: 'var(--font-ui)', color: '#ff8080', wordBreak: 'break-all' }}>
+                          ✗ {s.name} — {s.reason}
+                        </li>
+                      ))}
+                    </ul>
                   )}
                 </div>
               </>
@@ -979,14 +1065,25 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                 <p style={{ fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.2)', margin: 0 }}>{t('set_frames_empty') as string}</p>
               ) : (
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                  {frames.map(f => (
-                    <div key={f.id} style={{ position: 'relative', width: 52, flexShrink: 0 }}>
+                  {frames.map((f, i) => (
+                    <div
+                      key={f.id}
+                      draggable
+                      onDragStart={() => { dragIndex.current = i; setDragging(i); dragSnapshot.current = frames }}
+                      onDragOver={e => { e.preventDefault(); if (dragIndex.current !== null) reorderFrame(dragIndex.current, i) }}
+                      onDragEnd={() => {
+                        const snap = dragSnapshot.current
+                        dragIndex.current = null; setDragging(null); dragSnapshot.current = null
+                        setFrames(cur => { if (snap) persistOrder(cur, snap); return cur })
+                      }}
+                      style={{ position: 'relative', width: 52, flexShrink: 0, cursor: 'grab', opacity: dragging === i ? 0.4 : 1, transition: 'opacity 0.15s' }}
+                    >
                       <div style={{ width: 52, height: 78, borderRadius: 'var(--radius-chip)', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)' }}>
-                        <img src={f.url} alt={f.name ?? 'frame'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <img src={f.url} alt={f.name ?? 'frame'} draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       </div>
                       <button
                         onClick={() => handleFrameDelete(f.id)}
-                        style={{ position: 'absolute', top: -6, right: -6, width: 18, height: 18, borderRadius: '50%', background: 'rgba(255,80,80,0.85)', border: 'none', color: '#fff', fontSize: 'var(--text-2xs)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}
+                        style={{ position: 'absolute', top: -6, right: -6, width: 18, height: 18, borderRadius: '50%', background: 'rgba(255,80,80,0.85)', border: 'none', color: '#fff', fontSize: 'var(--text-2xs)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, pointerEvents: dragging === null ? 'auto' : 'none' }}
                       >✕</button>
                     </div>
                   ))}

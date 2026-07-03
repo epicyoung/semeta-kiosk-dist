@@ -1,6 +1,7 @@
 'use client'
 import { useRef, useState, useLayoutEffect, useEffect, type ReactNode } from 'react'
 import { SettingsPanel } from './SettingsPanel'
+import { SyncProgress, type SyncPhase } from './SyncProgress'
 import { LocaleProvider } from '@/lib/i18n'
 import { EPIC_LOGO } from '@/lib/brand'
 import { fetchPocketBaseTemplates } from '@/lib/pocketbase'
@@ -29,22 +30,43 @@ export function GlassShell({ screenKey, direction, children, config, onLogoClick
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [localConfig, setLocalConfig] = useState(config)
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'ok' | 'err'>('idle')
+  const [syncPhase, setSyncPhase] = useState<SyncPhase | null>(null)
 
   // Sync folder→PB lalu refresh templates ke kiosk. Sama seperti tombol di Settings.
+  // Popup progress via syncPhase; tombol ↻ tetap punya warna via syncStatus.
   const handleQuickSync = async () => {
     if (syncStatus === 'syncing') return
     setSyncStatus('syncing')
+    setSyncPhase({ kind: 'syncing' })
     try {
       const res = await fetch('/api/sync-templates', { method: 'POST' })
-      if (!res.ok) { setSyncStatus('err'); setTimeout(() => setSyncStatus('idle'), 2000); return }
+      const d = await res.json().catch(() => ({})) as {
+        ok?: boolean; error?: string
+        added?: number; cropped?: number; deleted?: number
+        detectDown?: boolean; skipped?: { name: string; reason: string }[]
+      }
+      if (!res.ok || d.ok === false) {
+        setSyncStatus('err')
+        setSyncPhase({ kind: 'error', message: d.error ?? 'Server menolak sync (cek PocketBase & env).' })
+        return
+      }
       const pbUrl = localConfig.pocketbase_url ?? 'http://localhost:8090'
       const results = await fetchPocketBaseTemplates(pbUrl)
-      onRefreshTemplates?.(results)
+      // ponytail: jangan overwrite list dengan [] kalau fetch gagal/timeout — mending keep yang lama
+      if (results.length > 0) onRefreshTemplates?.(results)
       setSyncStatus('ok')
+      setSyncPhase({
+        kind: 'done',
+        result: {
+          added: d.added ?? 0, cropped: d.cropped ?? 0, deleted: d.deleted ?? 0,
+          detectDown: d.detectDown ?? false, skipped: d.skipped ?? [],
+          loaded: results.length,
+        },
+      })
     } catch {
       setSyncStatus('err')
+      setSyncPhase({ kind: 'error', message: 'Tidak bisa terhubung. Pastikan PocketBase menyala.' })
     }
-    setTimeout(() => setSyncStatus('idle'), 2000)
   }
   const showSync = screenKey === 'category' || screenKey === 'template'
 
@@ -186,6 +208,12 @@ export function GlassShell({ screenKey, direction, children, config, onLogoClick
                 <span style={{ display: 'inline-block', animation: syncStatus === 'syncing' ? 'sync-spin 0.8s linear infinite' : 'none' }}>↻</span>
               </button>
             )}
+
+            {/* Sync progress popup — muncul saat quick-sync, informatif hasil */}
+            <SyncProgress
+              phase={syncPhase}
+              onClose={() => { setSyncPhase(null); setSyncStatus('idle') }}
+            />
 
             {/* Settings panel — slide in dari kanan */}
             <SettingsPanel

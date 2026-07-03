@@ -273,7 +273,7 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
       const done = setTimeout(async () => {
         const local = await localCopies(MOCK_AI_URL, state.imageUrl || MOCK_AI_URL, licensed)
         await new Promise(r => setTimeout(r, REVEAL_DWELL_MS)) // let the crisp reveal paint first
-        dispatch({ type: 'SHOW_PREVIEW', aiUrl: local.ai, originalUrl: local.original })
+        dispatch({ type: 'SHOW_PREVIEW', aiUrl: local.ai, originalUrl: local.original, sourceUrl: state.imageUrl || MOCK_AI_URL })
         // MOCK: skip upload — no real image data available
       }, MOCK_MS)
       return () => { clearInterval(tick); clearTimeout(done); clearInterval(interval) }
@@ -290,7 +290,7 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
           const local = await localCopies(state.imageUrl, aiUrl, licensed)
           dispatch({ type: 'SET_PROGRESS', progress: 100 })
           await new Promise(r => setTimeout(r, REVEAL_DWELL_MS)) // let the crisp reveal paint before we leave
-          dispatch({ type: 'SHOW_PREVIEW', aiUrl: local.ai, originalUrl: local.original })
+          dispatch({ type: 'SHOW_PREVIEW', aiUrl: local.ai, originalUrl: local.original, sourceUrl: state.imageUrl })
           finalizeSession(eventName, state.imageUrl, aiUrl, local.original, local.ai, dispatch)
             .catch(err => console.error('finalize session failed:', err))
         })
@@ -320,7 +320,7 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
         const local = await localCopies(state.imageUrl, url, licensed)
         dispatch({ type: 'SET_PROGRESS', progress: 100 })
         await new Promise(r => setTimeout(r, REVEAL_DWELL_MS)) // let the crisp reveal paint before we leave
-        dispatch({ type: 'SHOW_PREVIEW', aiUrl: local.ai, originalUrl: local.original })
+        dispatch({ type: 'SHOW_PREVIEW', aiUrl: local.ai, originalUrl: local.original, sourceUrl: state.imageUrl })
         if (!MOCK) {
           finalizeSession(eventName, state.imageUrl, url, local.original, local.ai, dispatch)
             .catch(err => console.error('finalize session failed:', err))

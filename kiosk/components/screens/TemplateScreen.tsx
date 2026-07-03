@@ -21,7 +21,8 @@ type Props = {
 
 export function TemplateScreen({ state, dispatch, templates }: Props) {
   const t = useT()
-  const allList = templates.length > 0 ? templates : DUMMY_TEMPLATES
+  const hasReal = templates.length > 0
+  const allList = hasReal ? templates : DUMMY_TEMPLATES
   const filtered = allList.filter(t => t.category === state.category)
   const list = filtered.length > 0 ? filtered : allList
 
@@ -36,6 +37,11 @@ export function TemplateScreen({ state, dispatch, templates }: Props) {
         </h1>
         <p style={{ fontSize: 'var(--text-base)', fontWeight: 300, color: 'var(--fg-muted)', lineHeight: 1.618, whiteSpace: 'pre-line' }}>
           {t('template_subtitle') as string}
+        </p>
+        <p style={{ marginTop: 6, fontSize: 'var(--text-2xs)', letterSpacing: '0.15em', textTransform: 'uppercase', color: hasReal ? 'var(--fg-muted)' : 'rgba(255,255,255,0.35)' }}>
+          {hasReal
+            ? `${list.length} template${list.length === 1 ? '' : 's'} loaded`
+            : 'loading templates…'}
         </p>
       </div>
 

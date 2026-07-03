@@ -97,7 +97,8 @@ export type KioskState =
   | { screen: 'template'; selected: Template | null; category: string; imageUrl: string }
   | { screen: 'faceassign'; imageUrl: string; template: Template | null; category: string; faces: Face[]; templateSlots: FaceSlot[]; assignments: FaceAssignments }
   | { screen: 'processing'; progress: number; step: 1 | 2 | 3; imageUrl: string; template: Template; assignments: FaceAssignments }
-  | { screen: 'preview'; aiUrl: string; originalUrl: string; selectedFrame: Frame | null; r2OriginalUrl?: string; r2AiUrl?: string }
+  // sourceUrl = selfie bersih (pre-watermark) buat BACK/re-edit. originalUrl bisa ke-burn watermark (freemium), jangan dipakai sbg sumber re-detect.
+  | { screen: 'preview'; aiUrl: string; originalUrl: string; sourceUrl?: string; selectedFrame: Frame | null; r2OriginalUrl?: string; r2AiUrl?: string }
   | { screen: 'force_locked'; reason?: LockReason; message?: string }
 
 export type KioskAction =
@@ -112,7 +113,7 @@ export type KioskAction =
   | { type: 'UNASSIGN_FACE'; faceId: string }
   | { type: 'START_PROCESSING' }
   | { type: 'SET_PROGRESS'; progress: number }
-  | { type: 'SHOW_PREVIEW'; aiUrl: string; originalUrl: string }
+  | { type: 'SHOW_PREVIEW'; aiUrl: string; originalUrl: string; sourceUrl?: string }
   | { type: 'SELECT_FRAME'; frame: Frame | null }
   | { type: 'BACK' }
   | { type: 'RESET' }

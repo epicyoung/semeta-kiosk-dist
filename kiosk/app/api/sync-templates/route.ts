@@ -25,23 +25,15 @@ function toTitleCase(filename: string): string {
     .replace(/\b\w/g, c => c.toUpperCase())
 }
 
-function getImageDimensions(fp: string): { w: number; h: number } | null {
-  const buf = fs.readFileSync(fp)
-  if (buf[0] === 0x89 && buf[1] === 0x50) {
-    return { w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) }
+// dims via sharp — robust untuk progressive JPEG / EXIF / WebP. Parser byte lama gagal diam-diam
+// di sebagian export foto → file (kadang seluruh kategori) ke-skip "tidak bisa baca dimensi".
+async function readDims(fp: string): Promise<{ w: number; h: number } | null> {
+  try {
+    const m = await sharp(fp).metadata()
+    return m.width && m.height ? { w: m.width, h: m.height } : null
+  } catch {
+    return null
   }
-  if (buf[0] === 0xFF && buf[1] === 0xD8) {
-    let i = 2
-    while (i < buf.length - 8) {
-      if (buf[i] !== 0xFF) break
-      const marker = buf[i + 1]
-      const len = buf.readUInt16BE(i + 2)
-      if (marker >= 0xC0 && marker <= 0xC3)
-        return { w: buf.readUInt16BE(i + 7), h: buf.readUInt16BE(i + 5) }
-      i += 2 + len
-    }
-  }
-  return null
 }
 
 type FolderFile = { name: string; category: string; fp: string }
@@ -72,15 +64,32 @@ async function detectFace(fp: string): Promise<{ faceY: number | null; faceCente
   }
 }
 
-// Produce a 2:3 buffer for upload. Already-2:3 → original bytes (no re-encode).
+// ponytail: semua thumbnail dinormalisasi ke JPEG — PNG auto→JPEG, cap lebar biar ga kegedean.
+// 1400px lebar = 2100px tinggi (2:3), cukup untuk thumbnail print-quality. Naikin kalau kurang tajam.
+const MAX_WIDTH = 1400
+const JPEG_QUALITY = 88
+
+// Finalize: sharp pipeline → cap width → flatten alpha (PNG transparan jadi putih) → JPEG.
+// Selalu keluar image/jpeg apa pun input. withoutEnlargement: gambar kecil ga di-upscale.
+async function normalizeJpeg(pipeline: ReturnType<typeof sharp>): Promise<Buffer> {
+  return pipeline
+    .resize({ width: MAX_WIDTH, withoutEnlargement: true })
+    .flatten({ background: '#ffffff' })
+    .jpeg({ quality: JPEG_QUALITY, mozjpeg: true })
+    .toBuffer()
+}
+
+// Produce a normalized 2:3 JPEG buffer for upload. Always re-encodes to JPEG (PNG→JPEG, size-capped).
+// Already-2:3 → no crop, just normalize. Else face-aware crop THEN normalize.
 // TALLER than 2:3 (ratio < 2/3) → vertical crop, face-aware headroom 10% above topmost head.
 // WIDER than 2:3 (ratio > 2/3, e.g. 896x1280) → horizontal crop, topmost face centered X.
 async function cropTo23(fp: string, w: number, h: number):
   Promise<{ buf: Buffer; mime: string; cropped: boolean; detectDown: boolean }> {
-  const mime = path.extname(fp).toLowerCase() === '.png' ? 'image/png' : 'image/jpeg'
+  const mime = 'image/jpeg' // ponytail: output selalu JPEG, apa pun input
   const ratio = w / h
   if (Math.abs(ratio - (2 / 3)) / (2 / 3) < 0.01) {
-    return { buf: fs.readFileSync(fp), mime, cropped: false, detectDown: false }
+    const buf = await normalizeJpeg(sharp(fp))
+    return { buf, mime, cropped: false, detectDown: false }
   }
   const { faceY, faceCenterX, detectDown } = await detectFace(fp)
   if (ratio < 2 / 3) {
@@ -88,13 +97,13 @@ async function cropTo23(fp: string, w: number, h: number):
     const targetH = computeTargetHeight(w)
     const headroom = Math.round(targetH * HEADROOM_RATIO)
     const top = computeCropTop(h, targetH, faceY, headroom)
-    const buf = await sharp(fp).extract({ top, left: 0, width: w, height: targetH }).toBuffer()
+    const buf = await normalizeJpeg(sharp(fp).extract({ top, left: 0, width: w, height: targetH }))
     return { buf, mime, cropped: true, detectDown }
   }
   // wider than 2:3 → trim left/right, keep full height, center on face X
   const targetW = computeTargetWidth(h)
   const left = computeCropLeft(w, targetW, faceCenterX)
-  const buf = await sharp(fp).extract({ top: 0, left, width: targetW, height: h }).toBuffer()
+  const buf = await normalizeJpeg(sharp(fp).extract({ top: 0, left, width: targetW, height: h }))
   return { buf, mime, cropped: true, detectDown }
 }
 
@@ -129,11 +138,18 @@ async function login(): Promise<string> {
 type PbTemplate = { id: string; name: string; category: string }
 
 async function listTemplates(token: string): Promise<PbTemplate[]> {
-  const r = await fetch(`${PB_URL}/api/collections/templates/records?perPage=500`, {
-    headers: { Authorization: token },
-  })
-  const body = await r.json() as { items?: PbTemplate[] }
-  return body.items ?? []
+  const all: PbTemplate[] = []
+  // Paginate — tanpa ini, >500 template bikin dedup bocor → tiap sync upload ganda.
+  for (let page = 1; ; page++) {
+    const r = await fetch(`${PB_URL}/api/collections/templates/records?perPage=500&page=${page}`, {
+      headers: { Authorization: token },
+    })
+    if (!r.ok) break
+    const body = await r.json() as { items?: PbTemplate[]; page?: number; totalPages?: number }
+    for (const it of body.items ?? []) all.push(it)
+    if (!body.totalPages || (body.page ?? page) >= body.totalPages) break
+  }
+  return all
 }
 
 async function uploadTemplate(token: string, f: FolderFile, buf: Buffer, mime: string): Promise<boolean> {
@@ -144,7 +160,9 @@ async function uploadTemplate(token: string, f: FolderFile, buf: Buffer, mime: s
   fd.append('gender_filter', 'ALL')
   fd.append('token_cost', '1')
   fd.append('is_active', 'true')
-  fd.append('thumbnail', new Blob([new Uint8Array(buf)], { type: mime }), path.basename(f.fp))
+  // ponytail: isi selalu JPEG (normalizeJpeg) → paksa ekstensi .jpg biar filename ga bohong (input .png)
+  const jpgName = path.basename(f.fp, path.extname(f.fp)) + '.jpg'
+  fd.append('thumbnail', new Blob([new Uint8Array(buf)], { type: mime }), jpgName)
   const r = await fetch(`${PB_URL}/api/collections/templates/records`, {
     method: 'POST',
     headers: { Authorization: token },
@@ -189,7 +207,7 @@ export async function POST() {
     const skipped: { name: string; reason: string }[] = []
 
     for (const f of toAdd) {
-      const dims = getImageDimensions(f.fp)
+      const dims = await readDims(f.fp)
       if (!dims) { skipped.push({ name: `${f.category}/${f.name}`, reason: 'tidak bisa baca dimensi' }); continue }
       try {
         const out = await cropTo23(f.fp, dims.w, dims.h)

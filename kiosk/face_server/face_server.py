@@ -123,15 +123,42 @@ async def health():
     return {"status": "ok", "models_loaded": face_swapper is not None, "provider": active_provider}
 
 
+# Filter thresholds — buang "muka" palsu (blur, background, orang lewat) dari hasil detect.
+MIN_DET_SCORE = 0.55   # confidence InsightFace; blur/background biasanya < 0.5
+MIN_AREA_RATIO = 0.12  # muka < 12% area muka terbesar = background face, dibuang
+
+
+def _bbox_area(f):
+    return (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1])
+
+
+def filter_real_faces(faces):
+    """Keep faces yang beneran subjek: skor deteksi cukup + ukuran ga jauh lebih kecil dari yang terbesar.
+    Blur/background face skornya rendah ATAU kecil. Kalau semua ke-filter, balikin 1 skor tertinggi
+    (jangan sampai kosong — mending 1 kandidat daripada nol)."""
+    if not faces:
+        return []
+    max_area = max(_bbox_area(f) for f in faces)
+    kept = [
+        f for f in faces
+        if getattr(f, "det_score", 1.0) >= MIN_DET_SCORE
+        and _bbox_area(f) >= MIN_AREA_RATIO * max_area
+    ]
+    if kept:
+        return kept
+    return [max(faces, key=lambda f: getattr(f, "det_score", 0.0))]
+
+
 @app.post("/detect")
 async def detect_faces(image: UploadFile = File(...)):
-    """Return all detected face bounding boxes (left-to-right), for the FaceAssign UI."""
+    """Return real face bounding boxes (left-to-right), for the FaceAssign UI.
+    Blur/background faces are filtered out — see filter_real_faces."""
     img_bytes = await image.read()
     img = cv2.imdecode(np.frombuffer(img_bytes, np.uint8), cv2.IMREAD_COLOR)
     if img is None:
         return JSONResponse({"error": "Invalid image"}, status_code=400)
 
-    faces = face_analyser.get(img)
+    faces = filter_real_faces(face_analyser.get(img))
     # bbox is [x1, y1, x2, y2] — convert to {x, y, w, h}
     return {
         "faces": [
@@ -140,6 +167,7 @@ async def detect_faces(image: UploadFile = File(...)):
                 "y": int(f.bbox[1]),
                 "w": int(f.bbox[2] - f.bbox[0]),
                 "h": int(f.bbox[3] - f.bbox[1]),
+                "score": round(float(getattr(f, "det_score", 1.0)), 3),
             }
             for f in sorted(faces, key=lambda f: f.bbox[0])
         ]

@@ -10,12 +10,13 @@
 // preview + print + save. Burning per-exit risks a clean paper copy while the screen shows
 // a watermark (the two-canvas bug).
 
-const WM_TEXT = "SEMETA | SPINDONESIA"
+// Tile logo spin.png — SAMA seperti watermark R2 (worker/src/watermark.ts). Konstanta
+// dicocokin ke sana biar desktop & QR-copy identik: 20% lebar, opacity 0.25, gap 60%.
+const WM_LOGO_SRC = "/spin.png"
 const WM_ANGLE = -35 * (Math.PI / 180)
-const WM_FONT_PX_RATIO = 0.028 // font size = 2.8% of image width
-const WM_OPACITY = 0.4
-const WM_STEP_X_RATIO = 0.42   // horizontal tile spacing = 42% of width
-const WM_STEP_Y_RATIO = 0.22
+const WM_TILE_SCALE = 0.20   // lebar 1 tile logo = 20% lebar foto (match WATERMARK_TILE_SCALE)
+const WM_OPACITY = 0.25       // match WATERMARK_OPACITY
+const WM_GAP_RATIO = 0.6      // jarak antar-tile = 60% lebar tile (match WATERMARK_GAP_RATIO)
 
 /**
  * Returns a new JPEG dataURL with the watermark tiled over `dataUrl`.
@@ -32,24 +33,25 @@ export async function burnWatermark(dataUrl: string): Promise<string> {
 
     ctx.drawImage(img, 0, 0)
 
-    const fontPx = Math.max(14, Math.round(canvas.width * WM_FONT_PX_RATIO))
-    ctx.font = `700 ${fontPx}px "DM Sans", system-ui, sans-serif`
-    ctx.fillStyle = `rgba(255,255,255,${WM_OPACITY})`
-    ctx.textAlign = "center"
-    ctx.textBaseline = "middle"
+    // Load logo tile; kalau gagal → kirim foto asli (jangan block delivery on missing asset).
+    const logo = await loadImage(WM_LOGO_SRC)
+    const tileW = Math.round(canvas.width * WM_TILE_SCALE)
+    const tileH = Math.round(tileW * (logo.naturalHeight / logo.naturalWidth))
+    const stepX = Math.round(tileW * (1 + WM_GAP_RATIO))
+    const stepY = Math.round(tileH * (1 + WM_GAP_RATIO))
 
-    const stepX = Math.round(canvas.width * WM_STEP_X_RATIO)
-    const stepY = Math.round(canvas.width * WM_STEP_Y_RATIO)
+    ctx.globalAlpha = WM_OPACITY
     // Rotate the whole context once, then tile across a region big enough to cover corners.
     ctx.save()
     ctx.rotate(WM_ANGLE)
     const diag = Math.ceil(Math.hypot(canvas.width, canvas.height))
     for (let y = -diag; y < diag; y += stepY) {
       for (let x = -diag; x < diag; x += stepX) {
-        ctx.fillText(WM_TEXT, x, y)
+        ctx.drawImage(logo, x, y, tileW, tileH)
       }
     }
     ctx.restore()
+    ctx.globalAlpha = 1
 
     return canvas.toDataURL("image/jpeg", 0.92)
   } catch {

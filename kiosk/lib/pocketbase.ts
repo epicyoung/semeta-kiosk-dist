@@ -1,6 +1,8 @@
 import type { Frame, Template } from './types'
 
 const TIMEOUT_MS = 3000
+// ponytail: fetch template pakai timeout longgar — thumbnail banyak/gede bikin 3s putus di tengah (cuma sebagian kedetek)
+const FETCH_TIMEOUT_MS = 30000
 
 export async function pingPocketBase(pbUrl: string): Promise<boolean> {
   try {
@@ -16,13 +18,20 @@ export async function pingPocketBase(pbUrl: string): Promise<boolean> {
 
 export async function fetchPocketBaseTemplates(pbUrl: string): Promise<Template[]> {
   try {
-    const res = await fetch(
-      `${pbUrl}/api/collections/templates/records?filter=is_active%3Dtrue&perPage=200`, // ponytail: 200 cap; paginate if tenant grows beyond this
-      { signal: AbortSignal.timeout(TIMEOUT_MS), cache: 'no-store' },
-    )
-    if (!res.ok) return []
-    const data = (await res.json()) as { items?: unknown[] }
-    return (data.items ?? []).map(item => mapPbTemplate(pbUrl, item as Record<string, unknown>))
+    const all: Template[] = []
+    // Paginate — perPage 500 (max PB), loop sampai halaman terakhir. Cap statis bikin template
+    // ilang diam-diam begitu tenant nembus batas (347 template kebaca 200 → 3 kategori ilang).
+    for (let page = 1; ; page++) {
+      const res = await fetch(
+        `${pbUrl}/api/collections/templates/records?filter=is_active%3Dtrue&perPage=500&page=${page}`,
+        { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS), cache: 'no-store' },
+      )
+      if (!res.ok) break
+      const data = (await res.json()) as { items?: unknown[]; page?: number; totalPages?: number }
+      for (const item of data.items ?? []) all.push(mapPbTemplate(pbUrl, item as Record<string, unknown>))
+      if (!data.totalPages || (data.page ?? page) >= data.totalPages) break
+    }
+    return all
   } catch {
     return []
   }

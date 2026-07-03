@@ -19,7 +19,13 @@ export function CategoryScreen({ state, dispatch, templates }: Props) {
   const t = useT()
   const [selected, setSelected] = useState<string | null>(null)
 
-  const categories = [...new Set(templates.map(tmpl => tmpl.category))]
+  const counts = templates.reduce<Record<string, number>>((acc, tmpl) => {
+    acc[tmpl.category] = (acc[tmpl.category] ?? 0) + 1
+    return acc
+  }, {})
+  const categories = Object.keys(counts)
+  const total = templates.length
+  const hasReal = total > 0
 
   return (
     <div className="screen-split flex flex-col w-full h-full overflow-hidden">
@@ -29,6 +35,11 @@ export function CategoryScreen({ state, dispatch, templates }: Props) {
         </h1>
         <p style={{ fontSize: 'var(--text-base)', fontWeight: 300, color: 'var(--fg-muted)', lineHeight: 1.618, whiteSpace: 'pre-line' }}>
           {t('category_subtitle') as string}
+        </p>
+        <p style={{ marginTop: 6, fontSize: 'var(--text-2xs)', letterSpacing: '0.15em', textTransform: 'uppercase', color: hasReal ? 'var(--fg-muted)' : 'rgba(255,255,255,0.35)' }}>
+          {hasReal
+            ? `${total} template${total === 1 ? '' : 's'} · ${categories.length} kategori`
+            : 'loading templates…'}
         </p>
       </div>
 
@@ -54,6 +65,7 @@ export function CategoryScreen({ state, dispatch, templates }: Props) {
                 >
                   {cat === SPINDONESIA_CATEGORY && <PinBadge size={14} color="currentColor" style={{ flexShrink: 0 }} />}
                   {cat}
+                  <span style={{ opacity: 0.5, fontSize: 'var(--text-2xs)', fontFamily: 'var(--font-ui)' }}>{counts[cat]}</span>
                 </button>
               ))}
             </div>
