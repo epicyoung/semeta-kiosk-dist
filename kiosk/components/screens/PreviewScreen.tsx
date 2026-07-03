@@ -209,7 +209,7 @@ export function PreviewScreen({ state, dispatch, frames, config, licensed, onAct
               <div style={{ position: 'relative', width: 80, height: 80 }}>
                 {/* QR boongan — pola asli ketutup label, keliatan "ada tapi mati" */}
                 <QRCodeSVG value="https://spindonesia.id" size={80} bgColor="white" fgColor="#090135" />
-                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.86)', borderRadius: 4, padding: 3 }}>
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,1)', borderRadius: 4, padding: 3 }}>
                   <span style={{ fontSize: 7, lineHeight: 1.3, fontWeight: 600, color: '#090135', textAlign: 'center' }}>
                     QR fitur nonaktif — hub admin
                   </span>
