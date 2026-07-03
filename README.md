@@ -22,14 +22,18 @@ Tanpa model ini, faceswap error. Minta bundle `semeta-kiosk-FULL` ke admin.
 
 ## Install pertama
 
-1. Install **Node.js LTS** (nodejs.org) + **Python 3.11** (python.org, centang "Add to PATH")
-2. `git clone https://github.com/epicyoung/semeta-kiosk-dist.git semeta-kiosk`
+1. Install **Git** (git-scm.com/download/win) — wajib buat clone + tombol Update
+2. Install **Node.js LTS** (nodejs.org) + **Python 3.11** (python.org, centang "Add to PATH")
+3. Buka **Command Prompt**, jalanin:
+   ```
+   git clone https://github.com/epicyoung/semeta-kiosk-dist.git semeta-kiosk
+   ```
    (JANGAN download ZIP — tombol Update butuh folder `.git`)
-3. Copy **semua isi** bundle `semeta-kiosk-MODELS` (dari admin) ke dalam
+4. Copy **semua isi** bundle `semeta-kiosk-MODELS` (dari admin) ke dalam
    folder `semeta-kiosk\` hasil clone (model AI + `pb\`). Timpa/gabung.
-4. Di `semeta-kiosk\`: jalanin `setup.bat` (auto-stop kalau model belum di-copy)
-5. Jalanin `LAUNCHER.bat` → buka http://localhost:3000
-6. Isi **KIOSK_SECRET** di Settings → Lisensi (minta ke admin)
+5. Di `semeta-kiosk\`: jalanin `setup.bat` (auto-stop kalau model belum di-copy)
+6. Jalanin `LAUNCHER.bat` → buka http://localhost:3000
+7. Isi **KIOSK_SECRET** di Settings → Lisensi (minta ke admin)
 
 ## Update (mesin yang udah jalan)
 
