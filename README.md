@@ -7,16 +7,16 @@ Source distribution buat kiosk lapangan. Auto-mirror dari monorepo private lewat
 
 ## ⚠️ Butuh model AI terpisah (TIDAK ada di repo ini)
 
-Repo ini cuma **source code** (~beberapa MB). Model AI (~1.2GB) di-gitignore
-karena kegedean buat git — dikirim terpisah lewat bundle (R2 / flashdisk):
+Repo ini cuma **source code** (~beberapa MB). Model AI dikirim terpisah dari admin:
 
-| File | Taruh di | Ukuran |
-|------|----------|--------|
-| `inswapper_128.onnx` | `kiosk/face_server/` | 529 MB |
-| `codeformer.onnx` | `kiosk/face_server/` | 360 MB |
-| `buffalo_l/` pack | `%USERPROFILE%\.insightface\models\` | 326 MB |
+| File | Taruh di | Ukuran | Cara dapat |
+|------|----------|--------|------------|
+| `inswapper_128.onnx` | `kiosk/face_server/` | 529 MB | Minta bundle ke admin |
+| `codeformer.onnx` | `kiosk/face_server/` | 360 MB | Minta bundle ke admin |
+| `buffalo_l/` | otomatis | 326 MB | **Auto-download** saat pertama jalan (butuh internet) |
+| `pb/` (PocketBase + data) | `pb/` | ~50 MB | Minta bundle ke admin |
 
-Tanpa model ini, faceswap error. Minta bundle `semeta-kiosk-FULL` ke admin.
+> **buffalo_l tidak perlu di-copy manual** — `setup.bat` dan face_server otomatis download saat pertama kali dijalankan selama ada koneksi internet.
 
 ---
 
