@@ -3,48 +3,48 @@ import type { Translations } from './types'
 const id: Translations = {
   // ── IdleScreen ──────────────────────────────────────────────────────────────
   idle_title: 'Semeta Suites',
-  idle_subtitle: 'Pengalaman seru untuk kamu\nyang berani terbang lebih tinggi.',
+  idle_subtitle: 'Siap eksis hari ini?\nYuk bikin momen yang pantes masuk feed.',
   idle_next: 'Selanjutnya →',
 
   // ── CategoryScreen ───────────────────────────────────────────────────────────
-  category_title: 'Kategori',
+  category_title: 'Tentukan Vibe',
   category_subtitle: 'Mau gaya apa hari ini?',
   category_empty: 'Belum ada kategori yang dikonfigurasi',
   category_skip: 'Lewati AI',
 
   // ── TemplateScreen ───────────────────────────────────────────────────────────
-  template_title: 'Template',
-  template_subtitle: 'Pilih templatemu',
+  template_title: 'Pilih Gaya',
+  template_subtitle: "Cari yang paling 'kamu banget'.",
 
   // ── Shared navigation buttons ────────────────────────────────────────────────
   nav_back: '← Sebelumnya',
   nav_next: 'Selanjutnya →',
 
   // ── FaceAssignScreen ─────────────────────────────────────────────────────────
-  faceassign_title: 'Atur Wajah',
-  faceassign_subtitle: 'Siapa yang ada di foto ini?',
+  faceassign_title: 'Cocokin Wajah',
+  faceassign_subtitle: 'Siapa aja nih di foto ini?',
   faceassign_detecting: 'Mendeteksi wajah…',
   faceassign_no_faces_in_template: 'Tidak ada wajah terdeteksi di template',
   faceassign_person_label: 'Orang',
 
   // ── LiveViewScreen ───────────────────────────────────────────────────────────
-  liveview_title: 'Bergaya dulu ✦',
-  liveview_subtitle: 'Lihat ke kamera dan senyum —\nbiarkan kami yang urus sisanya.',
+  liveview_title: 'Kasih Gaya Bebas! ✦',
+  liveview_subtitle: 'Tatap kamera, kasih senyum maut —\nsisanya biar AI yang kerja.',
   liveview_loading_camera: 'Memuat kamera…',
   liveview_smile: 'Senyum!',
   liveview_browse: 'Browse',
   liveview_capture: '⊙ Ambil Foto',
-  liveview_error_title: 'Kamera Error',
-  liveview_error_body: 'Kamera nggak bisa diakses.',
+  liveview_error_title: 'Kamera Ngambek',
+  liveview_error_body: 'Akses keputus nih. Panggil kru buat benerin, yuk.',
   liveview_error_browse: 'Browse Foto',
   liveview_error_retry: 'Coba Lagi',
   liveview_rotate_aria: 'Putar kamera',
 
   // ── ProcessingScreen ─────────────────────────────────────────────────────────
-  processing_title: 'Sedang memproses fotomu',
-  processing_subtitle: 'Sebentar lagi selesai...',
-  processing_error_title: 'Oops, ada yang salah',
-  processing_error_subtitle: 'Foto kamu tidak bisa diproses.\nYuk coba sekali lagi.',
+  processing_title: 'Lagi Di-render Nih ✦',
+  processing_subtitle: 'Tahan napas, bentar lagi mateng...',
+  processing_error_title: 'Yah, Nge-bug Dikit',
+  processing_error_subtitle: 'Foto lo gagal diproses nih.\nYuk jepret ulang!',
   processing_start_over: 'Mulai ulang',
   processing_try_again: 'Coba lagi',
   processing_copy: [
@@ -56,8 +56,8 @@ const id: Translations = {
   ],
 
   // ── PreviewScreen ────────────────────────────────────────────────────────────
-  preview_title: 'Bingkai momenmu ✦',
-  preview_subtitle: 'Pilih bingkai — ketuk foto untuk membandingkan AI ↔ Asli',
+  preview_title: 'Bingkai Momenmu ✦',
+  preview_subtitle: 'Pilih frame — tap foto buat bandingin hasil AI ↔ Asli.',
   preview_tap_compare: 'Ketuk untuk bandingkan',
   preview_tap_see_ai: 'Ketuk untuk lihat AI',
   preview_generating: 'Membuat...',
@@ -86,15 +86,15 @@ const id: Translations = {
   preview_btn_rechoose: 'Ganti Pilihan',
   preview_btn_restart: 'Restart',
   preview_btn_next: 'Lanjut →',
-  delivery_title: 'Ini hasilnya! ✨',
-  delivery_subtitle: 'Pindai QR untuk membawanya pulang — atau cetak sekarang',
+  delivery_title: 'Ini Hasilnya! ✨',
+  delivery_subtitle: 'Scan QR buat simpen ke HP — atau langsung cetak sekarang.',
   delivery_qr_uploading: 'Menyiapkan QR…',
   delivery_qr_retry: 'Coba lagi',
 
   // ── ConsentScreen ────────────────────────────────────────────────────────────
-  consent_title: 'Sebelum Kita Mulai ✦',
+  consent_title: 'Sebelum Mulai ✦',
   consent_subtitle:
-    'Fotomu akan diambil dan diproses dengan AI.\nFoto disimpan sementara dan dihapus setelah 30 hari.',
+    'Foto lo bakal diproses pake AI.\nTenang, datanya cuma disimpen sementara dan otomatis kehapus dalam 30 hari.',
   consent_minor: 'Di bawah 18 tahun? Pastikan kamu sudah mendapat izin dari orang tua.',
   consent_back: '← Kembali',
   consent_agree: 'Setuju →',
@@ -160,23 +160,23 @@ const id: Translations = {
   consent_policy_footer: 'epicyoung software',
 
   // ── ExpiredScreen ────────────────────────────────────────────────────────────
-  expired_title: 'Sesi Habis',
-  expired_subtitle: 'Waktu sewa kiosk sudah habis.',
+  expired_title: 'Waktu Habis',
+  expired_subtitle: 'Sesi sewa photobooth ini udah kelar.',
   expired_contact: 'Hubungi Semeta untuk melanjutkan:',
 
   // ── LockScreen ───────────────────────────────────────────────────────────────
-  lock_needs_activation_title: 'Kiosk Belum Aktif',
+  lock_needs_activation_title: 'Mesin Belum Aktif',
   lock_needs_activation_sub:
-    'Kiosk ini belum terdaftar / belum punya lisensi sewa aktif. Hubungi admin untuk aktivasi.',
-  lock_needs_reconfirm_title: 'Perlu Verifikasi Ulang',
+    'Photobooth ini belum didaftarin atau lisensinya belom aktif. Kontak admin buat nyalain.',
+  lock_needs_reconfirm_title: 'Butuh Koneksi Nih',
   lock_needs_reconfirm_sub:
-    'Kiosk sudah lebih dari 12 jam offline. Sambungkan internet untuk verifikasi lisensi, atau hubungi admin.',
-  lock_expired_title: 'Sesi Habis',
-  lock_expired_sub: 'Waktu sewa kiosk sudah habis. Hubungi admin untuk memperpanjang.',
-  lock_disabled_title: 'Kiosk Dinonaktifkan',
-  lock_disabled_sub: 'Kiosk ini sedang dinonaktifkan. Hubungi admin.',
+    'Mesin offline lebih dari 12 jam. Sambungin ke internet buat cek lisensi, atau panggil admin.',
+  lock_expired_title: 'Sesi Kelar',
+  lock_expired_sub: 'Waktu sewa udah abis. Kontak admin kalau mau nambah durasi.',
+  lock_disabled_title: 'Mesin Off',
+  lock_disabled_sub: 'Photobooth ini lagi dinonaktifkan. Langsung cari admin aja.',
   lock_force_locked_title: 'Sesi Dikunci',
-  lock_force_locked_sub: 'Kiosk dikunci oleh admin. Hubungi admin untuk melanjutkan.',
+  lock_force_locked_sub: 'Mesin lagi di-lock sama admin. Kontak mereka buat buka akses.',
   lock_no_secret: 'KIOSK_SECRET belum diisi di konfigurasi.',
 
   // ── SettingsPanel (operator panel) ───────────────────────────────────────────

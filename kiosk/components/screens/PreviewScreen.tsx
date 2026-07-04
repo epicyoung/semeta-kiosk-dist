@@ -189,7 +189,6 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
   async function runUpload(attempts: number) {
     if (!licensed || !state.base) return
     const base = state.base
-    uploadedBase.current = base // kunci guard di sini (bukan di effect) — begitu upload beneran mulai
     const seq = ++uploadSeq.current
     const rawOriginal = state.sourceUrl ?? state.originalUrl
     const rawAi = state.rawAiUrl ?? state.aiUrl
@@ -221,11 +220,17 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
   useEffect(() => {
     if (!isFinal || !licensed || !state.base) return // upload cuma di preview final, frame udah fixed
     if (uploadedBase.current === state.base) return   // udah di-upload buat foto ini — jangan dobel
-    // Guard di-set DI DALAM runUpload (bukan di sini) — kalau debounce ke-cancel (StrictMode
-    // double-mount / re-render), guard belum terkunci, jadi effect berikutnya tetep jalan.
-    // Bug lama: set guard di sini → debounce cancel → runUpload ga jalan → QR kosong (harus pencet manual).
-    const debounce = setTimeout(() => { runUpload(2) }, 600)
-    return () => clearTimeout(debounce)
+    // Kunci guard SEBELUM debounce → effect run kedua (render cepat) ke-skip di baris atas,
+    // ga bisa spawn debounce ke-2 → NOL dobel upload R2. Cleanup buka lagi HANYA kalau debounce
+    // ke-cancel sebelum jalan (StrictMode remount / frame ganti) — yang udah lolos (runUpload
+    // jalan) tetep terkunci. Fix bug lama "guard di runUpload → race 600ms bisa dobel upload".
+    uploadedBase.current = state.base
+    let fired = false
+    const debounce = setTimeout(() => { fired = true; runUpload(2) }, 600)
+    return () => {
+      clearTimeout(debounce)
+      if (!fired) uploadedBase.current = null
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFinal, licensed, state.base])
 

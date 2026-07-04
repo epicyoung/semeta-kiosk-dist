@@ -3,48 +3,48 @@ import type { Translations } from './types'
 const en: Translations = {
   // ── IdleScreen ──────────────────────────────────────────────────────────────
   idle_title: 'Semeta Suites',
-  idle_subtitle: 'A fun experience for you\nwho dare to fly higher.',
+  idle_subtitle: "Ready to steal the show?\nLet's make something feed-worthy.",
   idle_next: 'Next →',
 
   // ── CategoryScreen ───────────────────────────────────────────────────────────
-  category_title: 'Category',
-  category_subtitle: 'What vibe are you going for?',
+  category_title: 'Set the Vibe',
+  category_subtitle: "What's the mood today?",
   category_empty: 'No categories configured',
   category_skip: 'Skip AI',
 
   // ── TemplateScreen ───────────────────────────────────────────────────────────
-  template_title: 'Template',
-  template_subtitle: 'Pick your template',
+  template_title: 'Choose Your Style',
+  template_subtitle: "Pick the one that screams 'you'.",
 
   // ── Shared navigation buttons ────────────────────────────────────────────────
   nav_back: '← Previous',
   nav_next: 'Next →',
 
   // ── FaceAssignScreen ─────────────────────────────────────────────────────────
-  faceassign_title: 'Face Assign',
-  faceassign_subtitle: "Who's who in the photo?",
+  faceassign_title: 'Match the Faces',
+  faceassign_subtitle: "Who's who in this shot?",
   faceassign_detecting: 'Detecting faces…',
   faceassign_no_faces_in_template: 'No faces detected in template',
   faceassign_person_label: 'Person',
 
   // ── LiveViewScreen ───────────────────────────────────────────────────────────
-  liveview_title: 'Strike a pose ✦',
-  liveview_subtitle: 'Look into the camera and smile —\nwe\'ll do the rest.',
+  liveview_title: 'Strike a pose! ✦',
+  liveview_subtitle: 'Eyes on the lens, give us a killer smile —\nwe got the rest.',
   liveview_loading_camera: 'Loading camera…',
   liveview_smile: 'Smile!',
   liveview_browse: 'Browse',
   liveview_capture: '⊙ Capture',
-  liveview_error_title: 'Camera Error',
-  liveview_error_body: 'Camera could not be accessed.',
+  liveview_error_title: "Camera's Throwing a Tantrum",
+  liveview_error_body: 'Connection lost. Grab the crew to sort this out.',
   liveview_error_browse: 'Browse Photo',
   liveview_error_retry: 'Try Again',
   liveview_rotate_aria: 'Rotate camera',
 
   // ── ProcessingScreen ─────────────────────────────────────────────────────────
-  processing_title: 'Crafting your photo',
-  processing_subtitle: 'Hang tight, almost there...',
-  processing_error_title: 'Oops, something went wrong',
-  processing_error_subtitle: "We couldn't process your photo.\nLet's give it another try.",
+  processing_title: 'Rendering Your Masterpiece ✦',
+  processing_subtitle: 'Hold tight, almost done...',
+  processing_error_title: 'Glitch in the Matrix',
+  processing_error_subtitle: "We couldn't process that shot.\nLet's run it back!",
   processing_start_over: 'Start over',
   processing_try_again: 'Try again',
   processing_copy: [
@@ -56,8 +56,8 @@ const en: Translations = {
   ],
 
   // ── PreviewScreen ────────────────────────────────────────────────────────────
-  preview_title: 'Frame your moment ✦',
-  preview_subtitle: 'Pick a frame — tap photo to compare AI ↔ Original',
+  preview_title: 'Frame Your Moment ✦',
+  preview_subtitle: 'Pick a frame — tap the photo to compare AI ↔ Original.',
   preview_tap_compare: 'Tap to compare',
   preview_tap_see_ai: 'Tap to see AI',
   preview_generating: 'Generating...',
@@ -85,14 +85,14 @@ const en: Translations = {
   preview_btn_rechoose: 'Re-choose',
   preview_btn_restart: 'Restart',
   preview_btn_next: 'Next →',
-  delivery_title: "Here's your result! ✨",
-  delivery_subtitle: 'Scan the QR to take it home — or print it right now',
+  delivery_title: "Here's the Result! ✨",
+  delivery_subtitle: 'Scan the QR to save it — or hit print right now.',
   delivery_qr_uploading: 'Preparing your QR…',
   delivery_qr_retry: 'Retry',
 
   // ── ConsentScreen ────────────────────────────────────────────────────────────
-  consent_title: 'Before We Start ✦',
-  consent_subtitle: 'Your photo will be taken and processed with AI.\nPhotos are stored temporarily and deleted after 30 days.',
+  consent_title: 'Before We Roll ✦',
+  consent_subtitle: "Your photo will be AI-processed.\nDon't worry, it's stored temporarily and auto-deleted in 30 days.",
   consent_minor: 'Under 18? Please make sure you have parental consent.',
   consent_back: '← Back',
   consent_agree: 'Agree →',
@@ -158,23 +158,23 @@ const en: Translations = {
   consent_policy_footer: 'epicyoung software',
 
   // ── ExpiredScreen ────────────────────────────────────────────────────────────
-  expired_title: 'Session Expired',
-  expired_subtitle: 'Kiosk rental time has ended.',
+  expired_title: "Time's Up",
+  expired_subtitle: "This booth's rental session has ended.",
   expired_contact: 'Contact Semeta to continue:',
 
   // ── LockScreen ───────────────────────────────────────────────────────────────
-  lock_needs_activation_title: 'Kiosk Not Activated',
+  lock_needs_activation_title: 'Booth Not Activated',
   lock_needs_activation_sub:
-    'This kiosk has not been registered or does not have an active rental licence. Contact admin to activate.',
-  lock_needs_reconfirm_title: 'Re-verification Required',
+    'This booth needs a valid rental license to roll. Hit up the admin to activate.',
+  lock_needs_reconfirm_title: 'Connection Needed',
   lock_needs_reconfirm_sub:
-    'The kiosk has been offline for more than 12 hours. Connect to the internet to verify the licence, or contact admin.',
-  lock_expired_title: 'Session Expired',
-  lock_expired_sub: 'Kiosk rental time has ended. Contact admin to renew.',
-  lock_disabled_title: 'Kiosk Disabled',
-  lock_disabled_sub: 'This kiosk has been disabled. Contact admin.',
+    "Booth's been offline for over 12 hours. Get it online to verify the license, or contact admin.",
+  lock_expired_title: 'Session Ended',
+  lock_expired_sub: 'Rental time is up. Contact admin if you want to extend.',
+  lock_disabled_title: 'Booth Offline',
+  lock_disabled_sub: 'This booth is currently disabled. See the admin.',
   lock_force_locked_title: 'Session Locked',
-  lock_force_locked_sub: 'The kiosk has been locked by admin. Contact admin to continue.',
+  lock_force_locked_sub: 'The admin put a lock on this booth. Contact them to unlock.',
   lock_no_secret: 'KIOSK_SECRET has not been set in configuration.',
 
   // ── SettingsPanel (operator panel) ───────────────────────────────────────────

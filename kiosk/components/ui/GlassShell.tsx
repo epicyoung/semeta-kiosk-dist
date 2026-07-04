@@ -106,7 +106,7 @@ export function GlassShell({ screenKey, direction, children, config, onLogoClick
 
   // ponytail: RTL = set document dir for Arabic. Text reads correctly; if the fixed
   // .screen-split columns look mirrored-wrong in ar, per-screen RTL layout is a backlog item.
-  const locale = localConfig.locale ?? 'en'
+  const locale = localConfig.locale ?? 'myth-en' // default booth = Dark Myth (EN); operator bisa ganti di Settings
   useEffect(() => {
     document.documentElement.dir = locale === 'ar' ? 'rtl' : 'ltr'
     document.documentElement.lang = locale.replace('myth-', '')

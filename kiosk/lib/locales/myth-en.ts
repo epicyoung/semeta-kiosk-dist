@@ -7,8 +7,8 @@ import en from './en'
 const mythEn: Translations = {
   ...en,
 
-  idle_title: 'The Oracle Sees You',
-  idle_subtitle: 'Gaze into the glass, let the world fade away.\nTouch the light, and claim a truth that dares to stay.',
+  idle_title: 'Semeta Suites',
+  idle_subtitle: 'The oracle sees you.\nGaze into the glass, let the world fade away.\nTouch the light, and claim a truth that dares to stay.',
 
   consent_title: "A Mortal's Vow ✦",
   consent_subtitle: 'Offer your visage to the arcane fire.\nFear not — in thirty suns, it shall expire.',

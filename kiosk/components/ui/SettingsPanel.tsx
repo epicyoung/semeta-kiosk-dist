@@ -142,7 +142,7 @@ function StatusBadge({ status, t }: { status: PbStatus; t: TFn }) {
 
 export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, resume, onRefreshTemplates }: Props) {
   const t = useT()
-  const [locale,          setLocale]          = useState<Locale>(config.locale ?? 'en')
+  const [locale,          setLocale]          = useState<Locale>(config.locale ?? 'myth-en')
   const [eventName,       setEventName]       = useState(config.event_name || 'Semeta Event')
   const [outputDir,       setOutputDir]       = useState(config.output_dir || 'C:/semeta')
   const [templateSource,  setTemplateSource]  = useState<TemplateSource>(config.template_source ?? 'pocketbase')
@@ -165,6 +165,9 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   const [secretSaving,    setSecretSaving]    = useState(false)
   const [secretEditing,   setSecretEditing]   = useState(false)
   const [secretRevealed,  setSecretRevealed]  = useState(false)
+  // Auto-verify sesudah simpan secret: re-handshake → hijau/amber/merah, hijau auto-restart.
+  const [verify,          setVerify]          = useState<'idle'|'checking'|'valid'|'expired'|'invalid'|'offline'>('idle')
+  const [restartIn,       setRestartIn]       = useState<number | null>(null)
   const [saving,          setSaving]          = useState(false)
   const [error,           setError]           = useState<string | null>(null)
   const [sessionPaused,   setSessionPaused]   = useState(false)
@@ -421,20 +424,55 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
     }
   }
 
+  // Restart booth ke IDLE — reload biasa nyimpen hash (#preview dll) → balik ke layar kosong.
+  // Clear hash dulu baru reload biar mulai bersih dari idle.
+  const restartToIdle = () => { window.location.hash = ''; window.location.reload() }
+
+  // Verify secret baru dengan re-handshake ke Worker (via /api/heartbeat). Ga perlu refresh manual.
+  const verifySecret = async (): Promise<'valid' | 'expired' | 'invalid' | 'offline'> => {
+    try {
+      const res = await fetch('/api/heartbeat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+      })
+      if (res.ok) {
+        const d = await res.json().catch(() => ({}))
+        return d.freeware ? 'expired' : 'valid' // freeware = kunci valid TAPI sewa belum aktif
+      }
+      if (res.status === 402) return 'expired'
+      if (res.status === 401 || res.status === 403) return 'invalid'
+      return 'offline' // 503 / lainnya = server ga kejangkau
+    } catch {
+      return 'offline'
+    }
+  }
+
   const handleSaveSecret = async () => {
     if (!secret.trim()) return
     setSecretSaving(true)
     setSecretSaved(false)
+    setVerify('idle')
+    setRestartIn(null)
     try {
       const res = await fetch('/api/save-secret', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ secret: secret.trim() }),
       })
-      if (res.ok) {
-        setSecretSaved(true)
-        onConfigSaved?.({ has_secret: true, secret_hint: secret.trim() })
-        setSecret('')
-        setTimeout(() => setSecretSaved(false), 4000)
+      if (!res.ok) return
+      setSecretSaved(true)
+      onConfigSaved?.({ has_secret: true, secret_hint: secret.trim() })
+      setSecret('')
+      // Auto-verify — ga usah pencet refresh manual.
+      setVerify('checking')
+      const verdict = await verifySecret()
+      setVerify(verdict)
+      if (verdict === 'valid') {
+        let n = 3
+        setRestartIn(n)
+        const id = setInterval(() => {
+          n -= 1
+          if (n <= 0) { clearInterval(id); restartToIdle(); return }
+          setRestartIn(n)
+        }, 1000)
       }
     } finally {
       setSecretSaving(false)
@@ -835,9 +873,9 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <button
-                      onClick={() => window.location.reload()}
-                      aria-label="Refresh license from server"
-                      title="Re-check rental & license"
+                      onClick={restartToIdle}
+                      aria-label="Restart booth & re-check license"
+                      title="Restart booth (kembali ke idle) & cek ulang lisensi"
                       style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 'var(--radius-glass)', color: 'rgba(255,255,255,0.65)', cursor: 'pointer', fontSize: 'var(--text-sm)', lineHeight: 1, padding: '5px 9px' }}
                     >↻</button>
                     <span style={{ fontSize: 'var(--text-xs)', fontWeight: isUnlimited ? 700 : 400, letterSpacing: isUnlimited ? '0.06em' : undefined, fontFamily: 'var(--font-ui)', color: isUnlimited ? '#f0c040' : config.licensed ? '#a3be8c' : config.has_secret ? '#f0c040' : 'rgba(255,255,255,0.3)' }}>
@@ -901,21 +939,22 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                         inputMode="text"
                         maxLength={19}
                         style={{
-                          flex: 1, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.13)',
+                          flex: 1, background: 'rgba(255,255,255,0.08)',
+                          border: `1px solid ${verify === 'valid' ? 'rgba(163,190,140,0.7)' : verify === 'invalid' ? 'rgba(255,107,107,0.7)' : verify === 'expired' ? 'rgba(240,192,64,0.6)' : 'rgba(255,255,255,0.13)'}`,
                           borderRadius: 'var(--radius-glass)', color: '#fff', fontSize: 'var(--text-sm)', padding: '9px 12px',
-                          fontFamily: 'var(--font-ui)', letterSpacing: '0.05em', outline: 'none',
+                          fontFamily: 'var(--font-ui)', letterSpacing: '0.05em', outline: 'none', transition: 'border-color 0.2s',
                         }}
                       />
-                      <button onClick={async () => { await handleSaveSecret(); setSecretEditing(false); }} disabled={secretSaving || !secret.trim()} style={{
+                      <button onClick={handleSaveSecret} disabled={secretSaving || verify === 'checking' || verify === 'valid' || !secret.trim()} style={{
                         padding: '0 18px', borderRadius: 'var(--radius-glass)', border: 'none',
-                        background: secretSaved ? 'rgba(163,190,140,0.25)' : 'var(--brand)',
-                        color: secretSaved ? '#a3be8c' : '#fff', fontSize: 'var(--text-sm)', fontWeight: 600,
-                        fontFamily: 'var(--font-ui)', cursor: secretSaving || !secret.trim() ? 'default' : 'pointer',
-                        whiteSpace: 'nowrap',
+                        background: 'var(--brand)',
+                        color: '#fff', fontSize: 'var(--text-sm)', fontWeight: 600,
+                        fontFamily: 'var(--font-ui)', cursor: secretSaving || verify === 'checking' || !secret.trim() ? 'default' : 'pointer',
+                        whiteSpace: 'nowrap', opacity: secretSaving || verify === 'checking' || verify === 'valid' || !secret.trim() ? 0.6 : 1,
                       }}>
-                        {secretSaving ? '…' : secretSaved ? t('set_secret_saved') as string : t('set_secret_save') as string}
+                        {secretSaving ? '…' : verify === 'checking' ? 'Cek…' : t('set_secret_save') as string}
                       </button>
-                      <button onClick={() => setSecretEditing(false)} style={{
+                      <button onClick={() => { setSecretEditing(false); setVerify('idle'); setRestartIn(null) }} style={{
                         padding: '0 12px', borderRadius: 'var(--radius-glass)', border: '1px solid rgba(255,255,255,0.15)',
                         background: 'transparent', color: 'rgba(255,255,255,0.4)', fontSize: 'var(--text-xs)',
                         fontFamily: 'var(--font-ui)', cursor: 'pointer',
@@ -923,9 +962,31 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                         {t('set_secret_cancel') as string}
                       </button>
                     </div>
-                    {secretSaved && (
-                      <p style={{ fontSize: 'var(--text-2xs)', color: '#a3be8c', margin: '8px 0 0' }}>
-                        {t('set_secret_saved_note') as string}
+                    {/* Hasil auto-verify — hijau valid (auto-restart), amber sewa habis, merah salah, abu offline. */}
+                    {verify === 'checking' && (
+                      <p style={{ fontSize: 'var(--text-2xs)', color: '#f0c040', margin: '8px 0 0', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: '50%', border: '2px solid rgba(240,192,64,0.3)', borderTopColor: '#f0c040', animation: 'spin 0.8s linear infinite', display: 'inline-block' }} />
+                        Memverifikasi kunci…
+                      </p>
+                    )}
+                    {verify === 'valid' && (
+                      <p style={{ fontSize: 'var(--text-2xs)', color: '#a3be8c', margin: '8px 0 0', fontWeight: 600 }}>
+                        ✓ Kunci valid — restart dalam {restartIn ?? 3}…
+                      </p>
+                    )}
+                    {verify === 'expired' && (
+                      <p style={{ fontSize: 'var(--text-2xs)', color: '#f0c040', margin: '8px 0 0' }}>
+                        ⏳ Kunci benar, tapi sewa belum/sudah tidak aktif. Hubungi admin.
+                      </p>
+                    )}
+                    {verify === 'invalid' && (
+                      <p style={{ fontSize: 'var(--text-2xs)', color: '#ff6b6b', margin: '8px 0 0', fontWeight: 600 }}>
+                        ✗ Kunci salah / mesin dinonaktifkan. Cek lagi kodenya.
+                      </p>
+                    )}
+                    {verify === 'offline' && (
+                      <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.5)', margin: '8px 0 0' }}>
+                        Butuh internet buat verifikasi — cek koneksi, lalu Simpan lagi.
                       </p>
                     )}
                   </>

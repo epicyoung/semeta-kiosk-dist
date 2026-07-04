@@ -7,8 +7,8 @@ import id from './id'
 const mythId: Translations = {
   ...id,
 
-  idle_title: 'Sang Oracle Melihatmu',
-  idle_subtitle: 'Tatap layarnya, biarkan dunia memudar sejenak.\nSentuh cahayanya, raih kebenaran yang tak lekang.',
+  idle_title: 'Semeta Suites',
+  idle_subtitle: 'Sang oracle melihatmu.\nTatap layarnya, biarkan dunia memudar sejenak.\nSentuh cahayanya, raih kebenaran yang tak lekang.',
 
   consent_title: 'Sumpah Fana ✦',
   consent_subtitle: 'Serahkan wujudmu pada api rahasia.\nTenang — dalam tiga puluh hari, ia binasa.',
