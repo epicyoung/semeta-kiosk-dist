@@ -3,48 +3,48 @@ import type { Translations } from './types'
 const ja: Translations = {
   // ── IdleScreen ──────────────────────────────────────────────────────────────
   idle_title: 'Semeta Suites',
-  idle_subtitle: 'もっと高く飛びたいあなたへ、\nワクワクする体験を。',
+  idle_subtitle: '盛れる準備はOK？\nSNS映えする一枚を撮ろう。',
   idle_next: '次へ →',
 
   // ── CategoryScreen ───────────────────────────────────────────────────────────
-  category_title: 'カテゴリー',
-  category_subtitle: 'どんな雰囲気にしますか？',
+  category_title: '雰囲気を選ぶ',
+  category_subtitle: '今日はどんな気分？',
   category_empty: 'カテゴリーが設定されていません',
   category_skip: 'AIをスキップ',
 
   // ── TemplateScreen ───────────────────────────────────────────────────────────
-  template_title: 'テンプレート',
-  template_subtitle: 'テンプレートを選んでね',
+  template_title: 'スタイルを選ぶ',
+  template_subtitle: '「自分らしさ」で選ぼう。',
 
   // ── Shared navigation buttons ────────────────────────────────────────────────
   nav_back: '← 前へ',
   nav_next: '次へ →',
 
   // ── FaceAssignScreen ─────────────────────────────────────────────────────────
-  faceassign_title: '顔の割り当て',
-  faceassign_subtitle: '写真の中の誰が誰？',
+  faceassign_title: '顔をマッチング',
+  faceassign_subtitle: '写真に写っているのは誰かな？',
   faceassign_detecting: '顔を検出中…',
   faceassign_no_faces_in_template: 'テンプレートから顔を検出できませんでした',
   faceassign_person_label: '人物',
 
   // ── LiveViewScreen ───────────────────────────────────────────────────────────
-  liveview_title: 'ポーズを決めて ✦',
-  liveview_subtitle: 'カメラを見て笑顔でね —\nあとはおまかせ。',
+  liveview_title: 'キメ顔で！ ✦',
+  liveview_subtitle: 'カメラを見てスマイル！\nあとはAIにお任せ。',
   liveview_loading_camera: 'カメラを読み込み中…',
   liveview_smile: 'スマイル！',
   liveview_browse: '写真を選ぶ',
   liveview_capture: '⊙ 撮影',
-  liveview_error_title: 'カメラエラー',
-  liveview_error_body: 'カメラにアクセスできませんでした。',
+  liveview_error_title: 'カメラがご機嫌ナナメ',
+  liveview_error_body: '接続が切れました。スタッフを呼んできてください。',
   liveview_error_browse: '写真を選ぶ',
   liveview_error_retry: 'もう一度試す',
   liveview_rotate_aria: 'カメラを切り替え',
 
   // ── ProcessingScreen ─────────────────────────────────────────────────────────
-  processing_title: 'あなたの写真を作成中',
-  processing_subtitle: 'もう少しお待ちください...',
-  processing_error_title: 'おっと、問題が発生しました',
-  processing_error_subtitle: '写真を処理できませんでした。\nもう一度試してみましょう。',
+  processing_title: 'ただいまレンダリング中 ✦',
+  processing_subtitle: 'もうちょっと待っててね...',
+  processing_error_title: 'あれ、バグったかも',
+  processing_error_subtitle: '処理に失敗しました。\nもう一回撮り直そう！',
   processing_start_over: '最初からやり直す',
   processing_try_again: 'もう一度試す',
   processing_copy: [
@@ -56,8 +56,8 @@ const ja: Translations = {
   ],
 
   // ── PreviewScreen ────────────────────────────────────────────────────────────
-  preview_title: 'フレームを選ぼう ✦',
-  preview_subtitle: 'フレームを選択 — 写真をタップでAI ↔ オリジナル比較',
+  preview_title: 'お気に入りのフレームで ✦',
+  preview_subtitle: 'フレームを選択—写真をタップしてAI ↔ オリジナルを比較。',
   preview_tap_compare: 'タップして比較',
   preview_tap_see_ai: 'タップしてAIを見る',
   preview_generating: '生成中...',
@@ -86,13 +86,13 @@ const ja: Translations = {
   preview_btn_restart: '最初から',
   preview_btn_next: '次へ →',
   delivery_title: '完成しました！ ✨',
-  delivery_subtitle: 'QRをスキャンして持ち帰ろう — その場で印刷もOK',
+  delivery_subtitle: 'QRコードでスマホに保存、または今すぐプリントアウト。',
   delivery_qr_uploading: 'QRを準備中…',
   delivery_qr_retry: '再試行',
 
   // ── ConsentScreen ────────────────────────────────────────────────────────────
-  consent_title: '始める前に ✦',
-  consent_subtitle: 'あなたの写真を撮影し、AIで処理します。\n写真は一時的に保存され、30日後に削除されます。',
+  consent_title: 'はじめる前に ✦',
+  consent_subtitle: '写真はAIで処理されます。\nデータは一時保存され、30日後に自動消去されるのでご安心を。',
   consent_minor: '18歳未満の方は、保護者の同意を得ていることをご確認ください。',
   consent_back: '← 戻る',
   consent_agree: '同意する →',
@@ -158,23 +158,23 @@ const ja: Translations = {
   consent_policy_footer: 'epicyoung software',
 
   // ── ExpiredScreen ────────────────────────────────────────────────────────────
-  expired_title: 'セッションの有効期限が切れました',
-  expired_subtitle: 'キオスクのレンタル時間が終了しました。',
+  expired_title: 'タイムアップ',
+  expired_subtitle: 'レンタル時間が終了しました。',
   expired_contact: '続けるにはSemetaにご連絡ください:',
 
   // ── LockScreen ───────────────────────────────────────────────────────────────
-  lock_needs_activation_title: 'キオスクが有効化されていません',
+  lock_needs_activation_title: 'マシン未有効化',
   lock_needs_activation_sub:
-    'このキオスクは登録されていないか、有効なレンタルライセンスがありません。有効化するには管理者にご連絡ください。',
-  lock_needs_reconfirm_title: '再認証が必要です',
+    'このマシンのライセンスが未登録です。管理者に連絡してください。',
+  lock_needs_reconfirm_title: 'ネット接続が必要です',
   lock_needs_reconfirm_sub:
-    'キオスクが12時間以上オフラインでした。ライセンスを確認するためインターネットに接続するか、管理者にご連絡ください。',
-  lock_expired_title: 'セッションの有効期限が切れました',
-  lock_expired_sub: 'キオスクのレンタル時間が終了しました。更新するには管理者にご連絡ください。',
-  lock_disabled_title: 'キオスクが無効化されています',
-  lock_disabled_sub: 'このキオスクは無効化されています。管理者にご連絡ください。',
-  lock_force_locked_title: 'セッションがロックされています',
-  lock_force_locked_sub: 'キオスクが管理者によってロックされました。続けるには管理者にご連絡ください。',
+    '12時間以上オフラインです。ネットに繋ぐか、管理者を呼んでください。',
+  lock_expired_title: 'セッション終了',
+  lock_expired_sub: 'レンタル期間が終わりました。延長は管理者まで。',
+  lock_disabled_title: '稼働ストップ',
+  lock_disabled_sub: 'このマシンは現在利用できません。管理者に聞いてね。',
+  lock_force_locked_title: 'ロック中',
+  lock_force_locked_sub: '管理者によってロックされています。解除をお願いしてください。',
   lock_no_secret: 'KIOSK_SECRET が設定に登録されていません。',
 
   // ── SettingsPanel (operator panel) ───────────────────────────────────────────

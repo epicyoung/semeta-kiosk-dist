@@ -3,48 +3,48 @@ import type { Translations } from './types'
 const ko: Translations = {
   // ── IdleScreen ──────────────────────────────────────────────────────────────
   idle_title: 'Semeta Suites',
-  idle_subtitle: '더 높이 날아오르려는\n당신을 위한 즐거운 경험.',
+  idle_subtitle: '인생샷 남길 준비 됐어?\n피드 박제할 사진 찍어보자.',
   idle_next: '다음 →',
 
   // ── CategoryScreen ───────────────────────────────────────────────────────────
-  category_title: '카테고리',
-  category_subtitle: '어떤 분위기를 원하세요?',
+  category_title: '무드 고르기',
+  category_subtitle: '오늘은 어떤 바이브?',
   category_empty: '설정된 카테고리가 없습니다',
   category_skip: 'AI 건너뛰기',
 
   // ── TemplateScreen ───────────────────────────────────────────────────────────
-  template_title: '템플릿',
-  template_subtitle: '템플릿을 선택하세요',
+  template_title: '스타일 선택',
+  template_subtitle: "가장 '나'다운 걸로 골라봐.",
 
   // ── Shared navigation buttons ────────────────────────────────────────────────
   nav_back: '← 이전',
   nav_next: '다음 →',
 
   // ── FaceAssignScreen ─────────────────────────────────────────────────────────
-  faceassign_title: '얼굴 지정',
-  faceassign_subtitle: '사진 속 누가 누구인가요?',
+  faceassign_title: '얼굴 매칭',
+  faceassign_subtitle: '이 사진의 주인공은 누구?',
   faceassign_detecting: '얼굴을 인식하는 중…',
   faceassign_no_faces_in_template: '템플릿에서 얼굴을 찾지 못했습니다',
   faceassign_person_label: '인물',
 
   // ── LiveViewScreen ───────────────────────────────────────────────────────────
-  liveview_title: '포즈를 취해보세요 ✦',
-  liveview_subtitle: '카메라를 보고 미소 지어주세요 —\n나머지는 저희가 알아서 할게요.',
+  liveview_title: '포즈 장인 등장! ✦',
+  liveview_subtitle: '렌즈 보고 스마일—\n나머지는 AI가 알아서 할게.',
   liveview_loading_camera: '카메라를 불러오는 중…',
   liveview_smile: '웃으세요!',
   liveview_browse: '찾아보기',
   liveview_capture: '⊙ 촬영',
-  liveview_error_title: '카메라 오류',
-  liveview_error_body: '카메라에 접근할 수 없습니다.',
+  liveview_error_title: '카메라 연결 끊김',
+  liveview_error_body: '카메라가 삐졌나 봐요. 직원에게 도움을 요청해 줘.',
   liveview_error_browse: '사진 찾아보기',
   liveview_error_retry: '다시 시도',
   liveview_rotate_aria: '카메라 전환',
 
   // ── ProcessingScreen ─────────────────────────────────────────────────────────
-  processing_title: '사진을 만드는 중',
-  processing_subtitle: '조금만 기다려주세요, 거의 다 됐어요...',
-  processing_error_title: '이런, 문제가 발생했어요',
-  processing_error_subtitle: '사진을 처리하지 못했습니다.\n다시 한번 시도해볼게요.',
+  processing_title: '렌더링 중 ✦',
+  processing_subtitle: '조금만 기다려, 다 와가...',
+  processing_error_title: '앗, 오류 났어',
+  processing_error_subtitle: '사진 처리 실패!\n다시 한 번 찍어보자.',
   processing_start_over: '처음부터 다시',
   processing_try_again: '다시 시도',
   processing_copy: [
@@ -56,8 +56,8 @@ const ko: Translations = {
   ],
 
   // ── PreviewScreen ────────────────────────────────────────────────────────────
-  preview_title: '순간을 프레임에 담아요 ✦',
-  preview_subtitle: '프레임을 고르세요 — 사진을 탭하면 AI ↔ 원본 비교',
+  preview_title: '나만의 프레임 ✦',
+  preview_subtitle: '프레임 선택 — 사진을 탭해서 AI ↔ 원본 비교해봐.',
   preview_tap_compare: '탭하여 비교하기',
   preview_tap_see_ai: '탭하여 AI 보기',
   preview_generating: '생성하는 중...',
@@ -85,14 +85,14 @@ const ko: Translations = {
   preview_btn_rechoose: '다시 선택',
   preview_btn_restart: '다시 시작',
   preview_btn_next: '다음 →',
-  delivery_title: '결과가 나왔어요! ✨',
-  delivery_subtitle: 'QR을 스캔해 간직하세요 — 지금 바로 인쇄도 가능해요',
+  delivery_title: '짠! 완성 ✨',
+  delivery_subtitle: 'QR 스캔해서 폰에 저장하거나 지금 바로 인쇄해봐.',
   delivery_qr_uploading: 'QR 준비 중…',
   delivery_qr_retry: '다시 시도',
 
   // ── ConsentScreen ────────────────────────────────────────────────────────────
   consent_title: '시작하기 전에 ✦',
-  consent_subtitle: '당신의 사진이 촬영되어 AI로 처리됩니다.\n사진은 임시로 저장되며 30일 후 삭제됩니다.',
+  consent_subtitle: '사진은 AI로 처리돼.\n데이터는 임시 저장 후 30일 뒤에 자동 삭제되니까 안심해!',
   consent_minor: '18세 미만이신가요? 보호자의 동의가 있는지 확인해주세요.',
   consent_back: '← 뒤로',
   consent_agree: '동의 →',
@@ -158,23 +158,23 @@ const ko: Translations = {
   consent_policy_footer: 'epicyoung software',
 
   // ── ExpiredScreen ────────────────────────────────────────────────────────────
-  expired_title: '세션 만료',
-  expired_subtitle: '키오스크 대여 시간이 종료되었습니다.',
+  expired_title: '시간 초과',
+  expired_subtitle: '포토부스 대여 시간이 끝났어.',
   expired_contact: '계속하시려면 Semeta에 문의하세요:',
 
   // ── LockScreen ───────────────────────────────────────────────────────────────
-  lock_needs_activation_title: '키오스크 미활성화',
+  lock_needs_activation_title: '기기 미활성화',
   lock_needs_activation_sub:
-    '이 키오스크는 등록되지 않았거나 활성화된 대여 라이선스가 없습니다. 활성화하려면 관리자에게 문의하세요.',
-  lock_needs_reconfirm_title: '재인증 필요',
+    '라이선스 등록이 안 된 기기야. 관리자에게 문의해 줘.',
+  lock_needs_reconfirm_title: '인터넷 연결 필요',
   lock_needs_reconfirm_sub:
-    '키오스크가 12시간 이상 오프라인 상태였습니다. 라이선스를 확인하려면 인터넷에 연결하거나 관리자에게 문의하세요.',
-  lock_expired_title: '세션 만료',
-  lock_expired_sub: '키오스크 대여 시간이 종료되었습니다. 갱신하려면 관리자에게 문의하세요.',
-  lock_disabled_title: '키오스크 비활성화됨',
-  lock_disabled_sub: '이 키오스크는 비활성화되었습니다. 관리자에게 문의하세요.',
+    '12시간 이상 오프라인 상태야. 인터넷을 연결하거나 관리자를 불러줘.',
+  lock_expired_title: '세션 종료',
+  lock_expired_sub: '대여 시간이 끝났어. 연장하려면 관리자를 찾아줘.',
+  lock_disabled_title: '기기 사용 중지',
+  lock_disabled_sub: '이 기기는 현재 사용할 수 없어. 관리자에게 물어봐 줘.',
   lock_force_locked_title: '세션 잠김',
-  lock_force_locked_sub: '키오스크가 관리자에 의해 잠겼습니다. 계속하려면 관리자에게 문의하세요.',
+  lock_force_locked_sub: '관리자가 기기를 잠갔어. 잠금 해제는 관리자에게 문의해.',
   lock_no_secret: '설정에 KIOSK_SECRET이 지정되지 않았습니다.',
 
   // ── SettingsPanel (operator panel) ───────────────────────────────────────────

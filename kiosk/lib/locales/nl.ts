@@ -3,48 +3,48 @@ import type { Translations } from './types'
 const nl: Translations = {
   // ── IdleScreen ──────────────────────────────────────────────────────────────
   idle_title: 'Semeta Suites',
-  idle_subtitle: 'Een leuke ervaring voor jou\ndie het aandurft om hoger te vliegen.',
+  idle_subtitle: 'Klaar om te shinen?\nLaten we een foto maken die je feed waardig is.',
   idle_next: 'Volgende →',
 
   // ── CategoryScreen ───────────────────────────────────────────────────────────
-  category_title: 'Categorie',
-  category_subtitle: 'Welke vibe zoek je?',
+  category_title: 'Kies de Vibe',
+  category_subtitle: 'In wat voor mood ben je vandaag?',
   category_empty: 'Geen categorieën ingesteld',
   category_skip: 'AI overslaan',
 
   // ── TemplateScreen ───────────────────────────────────────────────────────────
-  template_title: 'Sjabloon',
-  template_subtitle: 'Kies je sjabloon',
+  template_title: 'Jouw Stijl',
+  template_subtitle: "Kies degene die echt 'jij' schreeuwt.",
 
   // ── Shared navigation buttons ────────────────────────────────────────────────
   nav_back: '← Vorige',
   nav_next: 'Volgende →',
 
   // ── FaceAssignScreen ─────────────────────────────────────────────────────────
-  faceassign_title: 'Gezicht toewijzen',
-  faceassign_subtitle: 'Wie is wie op de foto?',
+  faceassign_title: 'Match de Gezichten',
+  faceassign_subtitle: 'Wie is wie op deze foto?',
   faceassign_detecting: 'Gezichten detecteren…',
   faceassign_no_faces_in_template: 'Geen gezichten gevonden in sjabloon',
   faceassign_person_label: 'Persoon',
 
   // ── LiveViewScreen ───────────────────────────────────────────────────────────
-  liveview_title: 'Neem een pose aan ✦',
-  liveview_subtitle: 'Kijk in de camera en lach —\nwij doen de rest.',
+  liveview_title: 'Strike a pose! ✦',
+  liveview_subtitle: 'Kijk in de lens en geef ons je beste lach —\nwij doen de rest.',
   liveview_loading_camera: 'Camera laden…',
   liveview_smile: 'Lachen!',
   liveview_browse: 'Bladeren',
   liveview_capture: '⊙ Vastleggen',
-  liveview_error_title: 'Camerafout',
-  liveview_error_body: 'De camera kon niet worden benaderd.',
+  liveview_error_title: 'Camera stribbelt tegen',
+  liveview_error_body: 'Verbinding verbroken. Haal de crew er even bij.',
   liveview_error_browse: 'Foto bladeren',
   liveview_error_retry: 'Opnieuw proberen',
   liveview_rotate_aria: 'Camera draaien',
 
   // ── ProcessingScreen ─────────────────────────────────────────────────────────
-  processing_title: 'Je foto wordt gemaakt',
-  processing_subtitle: 'Even geduld, bijna klaar...',
-  processing_error_title: 'Oeps, er is iets misgegaan',
-  processing_error_subtitle: 'We konden je foto niet verwerken.\nLaten we het nog eens proberen.',
+  processing_title: 'Masterpiece in de maak ✦',
+  processing_subtitle: 'Hou vol, bijna klaar...',
+  processing_error_title: 'Oeps, kleine glitch',
+  processing_error_subtitle: 'Foto verwerken mislukt.\nLaten we het nog eens proberen!',
   processing_start_over: 'Opnieuw beginnen',
   processing_try_again: 'Opnieuw proberen',
   processing_copy: [
@@ -56,8 +56,8 @@ const nl: Translations = {
   ],
 
   // ── PreviewScreen ────────────────────────────────────────────────────────────
-  preview_title: 'Lijst je moment in ✦',
-  preview_subtitle: 'Kies een lijst — tik op de foto om AI ↔ Origineel te vergelijken',
+  preview_title: 'Frame je moment ✦',
+  preview_subtitle: 'Kies een frame — tap de foto om AI ↔ Origineel te vergelijken.',
   preview_tap_compare: 'Tik om te vergelijken',
   preview_tap_see_ai: 'Tik om AI te zien',
   preview_generating: 'Genereren...',
@@ -85,14 +85,14 @@ const nl: Translations = {
   preview_btn_rechoose: 'Opnieuw kiezen',
   preview_btn_restart: 'Opnieuw starten',
   preview_btn_next: 'Volgende →',
-  delivery_title: 'Hier is je resultaat! ✨',
-  delivery_subtitle: 'Scan de QR om hem mee te nemen — of print hem direct',
+  delivery_title: 'Dit is het resultaat! ✨',
+  delivery_subtitle: "Scan de QR om hem op te slaan — of print 'm meteen uit.",
   delivery_qr_uploading: 'QR wordt voorbereid…',
   delivery_qr_retry: 'Opnieuw',
 
   // ── ConsentScreen ────────────────────────────────────────────────────────────
   consent_title: 'Voordat we beginnen ✦',
-  consent_subtitle: 'Je foto wordt gemaakt en verwerkt met AI.\nFoto\'s worden tijdelijk bewaard en na 30 dagen verwijderd.',
+  consent_subtitle: 'Je foto wordt verwerkt met AI.\nGeen zorgen, hij wordt tijdelijk opgeslagen en na 30 dagen verwijderd.',
   consent_minor: 'Jonger dan 18? Zorg ervoor dat je toestemming van je ouders hebt.',
   consent_back: '← Terug',
   consent_agree: 'Akkoord →',
@@ -158,23 +158,23 @@ const nl: Translations = {
   consent_policy_footer: 'epicyoung software',
 
   // ── ExpiredScreen ────────────────────────────────────────────────────────────
-  expired_title: 'Sessie verlopen',
-  expired_subtitle: 'De huurtijd van de kiosk is afgelopen.',
+  expired_title: 'Tijd is op',
+  expired_subtitle: 'De huurtijd van de booth is voorbij.',
   expired_contact: 'Neem contact op met Semeta om door te gaan:',
 
   // ── LockScreen ───────────────────────────────────────────────────────────────
-  lock_needs_activation_title: 'Kiosk niet geactiveerd',
+  lock_needs_activation_title: 'Booth niet actief',
   lock_needs_activation_sub:
-    'Deze kiosk is niet geregistreerd of heeft geen actieve huurlicentie. Neem contact op met de beheerder om te activeren.',
-  lock_needs_reconfirm_title: 'Herverificatie vereist',
+    'Deze booth heeft geen actieve licentie. Fix het even met de admin.',
+  lock_needs_reconfirm_title: 'Check je connectie',
   lock_needs_reconfirm_sub:
-    'De kiosk is meer dan 12 uur offline geweest. Maak verbinding met het internet om de licentie te verifiëren, of neem contact op met de beheerder.',
+    'Booth is al 12 uur offline. Maak verbinding met internet of haal de admin.',
   lock_expired_title: 'Sessie verlopen',
-  lock_expired_sub: 'De huurtijd van de kiosk is afgelopen. Neem contact op met de beheerder om te verlengen.',
-  lock_disabled_title: 'Kiosk uitgeschakeld',
-  lock_disabled_sub: 'Deze kiosk is uitgeschakeld. Neem contact op met de beheerder.',
-  lock_force_locked_title: 'Sessie vergrendeld',
-  lock_force_locked_sub: 'De kiosk is vergrendeld door de beheerder. Neem contact op met de beheerder om door te gaan.',
+  lock_expired_sub: 'Huurtijd zit erop. Vraag de admin voor een verlenging.',
+  lock_disabled_title: 'Booth staat uit',
+  lock_disabled_sub: 'Deze booth is momenteel gedeactiveerd. Check de admin.',
+  lock_force_locked_title: 'Sessie geblokkeerd',
+  lock_force_locked_sub: 'De admin heeft de booth vergrendeld. Klop even bij ze aan.',
   lock_no_secret: 'KIOSK_SECRET is niet ingesteld in de configuratie.',
 
   // ── SettingsPanel (operator panel) ───────────────────────────────────────────

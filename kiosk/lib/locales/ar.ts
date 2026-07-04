@@ -3,48 +3,48 @@ import type { Translations } from './types'
 const ar: Translations = {
   // ── IdleScreen ──────────────────────────────────────────────────────────────
   idle_title: 'Semeta Suites',
-  idle_subtitle: 'تجربة ممتعة لك\nيا من تجرؤ على التحليق أعلى.',
+  idle_subtitle: 'جاهز تسرق الأضواء؟\nخلنا نصور لقطة تكسر السوشيال ميديا.',
   idle_next: 'التالي ←',
 
   // ── CategoryScreen ───────────────────────────────────────────────────────────
-  category_title: 'الفئة',
-  category_subtitle: 'ما الأجواء التي تبحث عنها؟',
+  category_title: 'حدد الجو',
+  category_subtitle: 'وش المود اليوم؟',
   category_empty: 'لا توجد فئات مُعدّة',
   category_skip: 'تخطّي الذكاء الاصطناعي',
 
   // ── TemplateScreen ───────────────────────────────────────────────────────────
-  template_title: 'القالب',
-  template_subtitle: 'اختر قالبك',
+  template_title: 'اختار الستايل',
+  template_subtitle: 'نقي التصميم اللي يمثلك.',
 
   // ── Shared navigation buttons ────────────────────────────────────────────────
   nav_back: '→ السابق',
   nav_next: 'التالي ←',
 
   // ── FaceAssignScreen ─────────────────────────────────────────────────────────
-  faceassign_title: 'تعيين الوجوه',
-  faceassign_subtitle: 'من هو مَن في الصورة؟',
+  faceassign_title: 'طابق الوجوه',
+  faceassign_subtitle: 'مين معانا بالصورة؟',
   faceassign_detecting: 'جارٍ اكتشاف الوجوه…',
   faceassign_no_faces_in_template: 'لم يُكتشف أي وجه في القالب',
   faceassign_person_label: 'شخص',
 
   // ── LiveViewScreen ───────────────────────────────────────────────────────────
-  liveview_title: 'استعدّ للتصوير ✦',
-  liveview_subtitle: 'انظر إلى الكاميرا وابتسم —\nونحن نتكفّل بالباقي.',
+  liveview_title: 'خذ لك بوز! ✦',
+  liveview_subtitle: 'طالع الكاميرا وابتسم—\nوالباقي علينا.',
   liveview_loading_camera: 'جارٍ تحميل الكاميرا…',
   liveview_smile: 'ابتسم!',
   liveview_browse: 'استعراض',
   liveview_capture: '⊙ التقاط',
-  liveview_error_title: 'خطأ في الكاميرا',
-  liveview_error_body: 'تعذّر الوصول إلى الكاميرا.',
+  liveview_error_title: 'الكاميرا زعلانة',
+  liveview_error_body: 'فقدنا الاتصال. نادي الفريق يضبطها لك.',
   liveview_error_browse: 'استعراض صورة',
   liveview_error_retry: 'حاول مرة أخرى',
   liveview_rotate_aria: 'تدوير الكاميرا',
 
   // ── ProcessingScreen ─────────────────────────────────────────────────────────
-  processing_title: 'جارٍ إنشاء صورتك',
-  processing_subtitle: 'انتظر قليلاً، أوشكنا على الانتهاء...',
-  processing_error_title: 'عذراً، حدث خطأ ما',
-  processing_error_subtitle: 'لم نتمكّن من معالجة صورتك.\nلنحاول مرة أخرى.',
+  processing_title: 'جاري الإبداع ✦',
+  processing_subtitle: 'ثواني بس، وتجهز...',
+  processing_error_title: 'أوبس، صار خطأ',
+  processing_error_subtitle: 'ما قدرنا نعالج الصورة.\nخلنا نعيدها!',
   processing_start_over: 'ابدأ من جديد',
   processing_try_again: 'حاول مرة أخرى',
   processing_copy: [
@@ -56,8 +56,8 @@ const ar: Translations = {
   ],
 
   // ── PreviewScreen ────────────────────────────────────────────────────────────
-  preview_title: 'أطِّر لحظتك ✦',
-  preview_subtitle: 'اختر إطارًا — انقر الصورة للمقارنة بين الذكاء الاصطناعي ↔ الأصل',
+  preview_title: 'بروز لحظتك ✦',
+  preview_subtitle: 'اختار إطار — اضغط على الصورة لتقارن بين الذكاء الاصطناعي ↔ والأصلية.',
   preview_tap_compare: 'انقر للمقارنة',
   preview_tap_see_ai: 'انقر لرؤية نتيجة الذكاء الاصطناعي',
   preview_generating: 'جارٍ الإنشاء...',
@@ -85,14 +85,14 @@ const ar: Translations = {
   preview_btn_rechoose: 'إعادة الاختيار',
   preview_btn_restart: 'إعادة التشغيل',
   preview_btn_next: 'التالي ←',
-  delivery_title: 'ها هي نتيجتك! ✨',
-  delivery_subtitle: 'امسح رمز QR لتأخذها معك — أو اطبعها الآن',
+  delivery_title: 'هذي النتيجة! ✨',
+  delivery_subtitle: 'امسح الكود عشان تحفظها بجوالك — أو اطبعها الحين.',
   delivery_qr_uploading: 'جارٍ تجهيز رمز QR…',
   delivery_qr_retry: 'أعد المحاولة',
 
   // ── ConsentScreen ────────────────────────────────────────────────────────────
-  consent_title: 'قبل أن نبدأ ✦',
-  consent_subtitle: 'ستُلتقط صورتك وتُعالَج بالذكاء الاصطناعي.\nتُخزَّن الصور مؤقتاً وتُحذَف بعد 30 يوماً.',
+  consent_title: 'قبل لا نبدأ ✦',
+  consent_subtitle: 'صورتك بتتعالج بالذكاء الاصطناعي.\nلا تشيل هم، تنحفظ مؤقتاً وتنحذف تلقائياً بعد 30 يوم.',
   consent_minor: 'أقل من 18 عاماً؟ يُرجى التأكد من حصولك على موافقة الوالدين.',
   consent_back: '→ رجوع',
   consent_agree: 'أوافق ←',
@@ -158,23 +158,23 @@ const ar: Translations = {
   consent_policy_footer: 'epicyoung software',
 
   // ── ExpiredScreen ────────────────────────────────────────────────────────────
-  expired_title: 'انتهت الجلسة',
-  expired_subtitle: 'انتهى وقت استئجار الكشك.',
+  expired_title: 'انتهى الوقت',
+  expired_subtitle: 'خلص وقت تأجير الكشك.',
   expired_contact: 'تواصل مع Semeta للمتابعة:',
 
   // ── LockScreen ───────────────────────────────────────────────────────────────
-  lock_needs_activation_title: 'الكشك غير مُفعَّل',
+  lock_needs_activation_title: 'الجهاز مو مفعل',
   lock_needs_activation_sub:
-    'لم يُسجَّل هذا الكشك أو ليس لديه ترخيص استئجار نشط. تواصل مع المسؤول للتفعيل.',
-  lock_needs_reconfirm_title: 'يلزم إعادة التحقق',
+    'هالجهاز مو مسجل أو ما له رخصة فعالة. كلم الإدارة تفعله.',
+  lock_needs_reconfirm_title: 'نحتاج إنترنت',
   lock_needs_reconfirm_sub:
-    'كان الكشك غير متصل بالإنترنت لأكثر من 12 ساعة. اتصل بالإنترنت للتحقق من الترخيص، أو تواصل مع المسؤول.',
+    'الجهاز أوفلاين من 12 ساعة. اشبك النت أو كلم الإدارة.',
   lock_expired_title: 'انتهت الجلسة',
-  lock_expired_sub: 'انتهى وقت استئجار الكشك. تواصل مع المسؤول للتجديد.',
-  lock_disabled_title: 'الكشك مُعطَّل',
-  lock_disabled_sub: 'تم تعطيل هذا الكشك. تواصل مع المسؤول.',
+  lock_expired_sub: 'خلص وقت الإيجار. كلم الإدارة إذا تبي تمدد.',
+  lock_disabled_title: 'الجهاز معطل',
+  lock_disabled_sub: 'هالجهاز موقف حالياً. شوف الإدارة.',
   lock_force_locked_title: 'الجلسة مقفلة',
-  lock_force_locked_sub: 'تم قفل الكشك من قِبل المسؤول. تواصل مع المسؤول للمتابعة.',
+  lock_force_locked_sub: 'الإدارة قفلت الجهاز. كلمهم عشان يفتحونه.',
   lock_no_secret: 'لم يُضبط KIOSK_SECRET في الإعدادات.',
 
   // ── SettingsPanel (operator panel) ───────────────────────────────────────────

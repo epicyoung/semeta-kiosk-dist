@@ -3,48 +3,48 @@ import type { Translations } from './types'
 const zh: Translations = {
   // ── IdleScreen ──────────────────────────────────────────────────────────────
   idle_title: 'Semeta Suites',
-  idle_subtitle: '专属于你的欢乐体验\n敢于飞得更高。',
+  idle_subtitle: '准备好闪耀了吗？\n来拍张刷爆朋友圈的神仙大片吧。',
   idle_next: '开始 →',
 
   // ── CategoryScreen ───────────────────────────────────────────────────────────
-  category_title: '风格分类',
-  category_subtitle: '你想要什么样的感觉？',
+  category_title: '定制风格',
+  category_subtitle: '今天想走什么路线？',
   category_empty: '暂无可选分类',
   category_skip: '跳过 AI',
 
   // ── TemplateScreen ───────────────────────────────────────────────────────────
-  template_title: '模板',
-  template_subtitle: '选择你的模板',
+  template_title: '挑选模版',
+  template_subtitle: '选个最懂你的。',
 
   // ── Shared navigation buttons ────────────────────────────────────────────────
   nav_back: '← 上一步',
   nav_next: '下一步 →',
 
   // ── FaceAssignScreen ─────────────────────────────────────────────────────────
-  faceassign_title: '人脸分配',
-  faceassign_subtitle: '照片里谁是谁？',
+  faceassign_title: '锁定主角',
+  faceassign_subtitle: '看看镜头里都有谁？',
   faceassign_detecting: '正在检测人脸…',
   faceassign_no_faces_in_template: '模板中未检测到人脸',
   faceassign_person_label: '人物',
 
   // ── LiveViewScreen ───────────────────────────────────────────────────────────
-  liveview_title: '摆好姿势 ✦',
-  liveview_subtitle: '看向镜头，笑一个——\n剩下的交给我们。',
+  liveview_title: '尽情摆拍！✦',
+  liveview_subtitle: '盯住镜头，给出完美笑容——\n剩下的交给我。',
   liveview_loading_camera: '正在加载摄像头…',
   liveview_smile: '笑一个！',
   liveview_browse: '浏览',
   liveview_capture: '⊙ 拍照',
-  liveview_error_title: '摄像头错误',
-  liveview_error_body: '无法访问摄像头。',
+  liveview_error_title: '相机罢工了',
+  liveview_error_body: '连线断开。快呼叫工作人员来救场。',
   liveview_error_browse: '浏览照片',
   liveview_error_retry: '重试',
   liveview_rotate_aria: '旋转摄像头',
 
   // ── ProcessingScreen ─────────────────────────────────────────────────────────
-  processing_title: '正在生成你的照片',
-  processing_subtitle: '请稍候，马上就好…',
-  processing_error_title: '哎呀，出了点问题',
-  processing_error_subtitle: '我们无法处理你的照片。\n再试一次吧。',
+  processing_title: '魔法生成中 ✦',
+  processing_subtitle: '屏住呼吸，马上就好...',
+  processing_error_title: '哎呀，卡壳了',
+  processing_error_subtitle: '照片生成失败，\n咱们再来一次吧！',
   processing_start_over: '重新开始',
   processing_try_again: '重试',
   processing_copy: [
@@ -56,8 +56,8 @@ const zh: Translations = {
   ],
 
   // ── PreviewScreen ────────────────────────────────────────────────────────────
-  preview_title: '给这一刻加个相框 ✦',
-  preview_subtitle: '选择相框 — 点击照片对比 AI ↔ 原图',
+  preview_title: '定格瞬间 ✦',
+  preview_subtitle: '选个相框——点击照片对比 AI ↔ 原图。',
   preview_tap_compare: '点击对比',
   preview_tap_see_ai: '点击查看 AI',
   preview_generating: '生成中…',
@@ -85,14 +85,14 @@ const zh: Translations = {
   preview_btn_rechoose: '重新选择',
   preview_btn_restart: '重新开始',
   preview_btn_next: '下一步 →',
-  delivery_title: '这就是你的成果！✨',
-  delivery_subtitle: '扫描二维码带走它 — 也可以立即打印',
+  delivery_title: '惊艳登场！✨',
+  delivery_subtitle: '扫码保存到手机，或者直接打印。',
   delivery_qr_uploading: '正在生成二维码…',
   delivery_qr_retry: '重试',
 
   // ── ConsentScreen ────────────────────────────────────────────────────────────
-  consent_title: '开始之前 ✦',
-  consent_subtitle: '我们将为你拍照并用 AI 进行处理。\n照片将临时存储，并在 30 天后删除。',
+  consent_title: '拍摄须知 ✦',
+  consent_subtitle: '照片将通过 AI 处理。\n别担心，数据仅临时保存，30天后自动销毁。',
   consent_minor: '未满 18 岁？请确保已获得监护人同意。',
   consent_back: '← 返回',
   consent_agree: '同意 →',
@@ -158,23 +158,23 @@ const zh: Translations = {
   consent_policy_footer: 'epicyoung software',
 
   // ── ExpiredScreen ────────────────────────────────────────────────────────────
-  expired_title: '会话已过期',
-  expired_subtitle: '拍照亭租用时间已结束。',
+  expired_title: '时间到了',
+  expired_subtitle: '本机租用时间已结束。',
   expired_contact: '联系 Semeta 以继续：',
 
   // ── LockScreen ───────────────────────────────────────────────────────────────
-  lock_needs_activation_title: '拍照亭未激活',
+  lock_needs_activation_title: '设备未激活',
   lock_needs_activation_sub:
-    '此拍照亭尚未注册，或没有有效的租用许可。请联系管理员激活。',
-  lock_needs_reconfirm_title: '需要重新验证',
+    '机器还未注册或授权。请联系管理员激活。',
+  lock_needs_reconfirm_title: '需要联网',
   lock_needs_reconfirm_sub:
-    '拍照亭已离线超过 12 小时。请连接互联网以验证许可，或联系管理员。',
-  lock_expired_title: '会话已过期',
-  lock_expired_sub: '拍照亭租用时间已结束。请联系管理员续期。',
-  lock_disabled_title: '拍照亭已停用',
-  lock_disabled_sub: '此拍照亭已被停用。请联系管理员。',
+    '设备已离线超过12小时。请连网验证，或联系管理员。',
+  lock_expired_title: '会话结束',
+  lock_expired_sub: '租用时间已用完，想加时请找管理员。',
+  lock_disabled_title: '设备已停用',
+  lock_disabled_sub: '本机正在休息中，请联系管理员。',
   lock_force_locked_title: '会话已锁定',
-  lock_force_locked_sub: '拍照亭已被管理员锁定。请联系管理员以继续。',
+  lock_force_locked_sub: '设备已被管理员锁定。请联系他们解锁。',
   lock_no_secret: '配置中尚未设置 KIOSK_SECRET。',
 
   // ── SettingsPanel (operator panel) ───────────────────────────────────────────
