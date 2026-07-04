@@ -13,6 +13,12 @@ taskkill /F /IM python3.exe     >nul 2>&1
 taskkill /F /IM pythonw.exe     >nul 2>&1
 taskkill /F /IM uvicorn.exe     >nul 2>&1
 
+REM Kill Chrome kiosk — WAJIB. Flag command-line (--kiosk-printing, --start-fullscreen,
+REM izin kamera) CUMA kebaca kalau chrome.exe bener-bener MATI TOTAL pas LAUNCHER jalan.
+REM Chrome yang masih nyangkut = LAUNCHER cuma buka tab baru, SEMUA flag ke-drop diam-diam
+REM (gejala: dialog print ga muncul / kamera gantung / ga fullscreen). taskkill semua chrome.
+taskkill /F /IM chrome.exe      >nul 2>&1
+
 REM Kill node on port 3000
 for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":3000 " ^| findstr "LISTENING"') do taskkill /F /PID %%p >nul 2>&1
 REM Kill anything on port 8000
