@@ -6,6 +6,7 @@ import type { KioskAction, KioskState, KioskConfig } from '@/lib/types'
 import { findLandscapePair, loadImageDims, orientationOf, type OrientedFrame } from '@/lib/frames'
 import { printPhoto } from '@/lib/print'
 import { compositeFrame } from '@/lib/frame-composite'
+import { uploadAsset } from '@/lib/upload'
 import { useT } from '@/lib/i18n'
 
 type Props = {
@@ -14,6 +15,7 @@ type Props = {
   frames: OrientedFrame[]
   config: Pick<KioskConfig, 'enable_email' | 'enable_print' | 'enable_video'>
   licensed: boolean
+  eventName: string
   onAction?: (action: 'printed' | 'emailed' | 'shared') => void
 }
 
@@ -48,9 +50,12 @@ function TabSwitcher({ activeTab, videoUrl, videoLoading, onSwitch }: {
 
 const VIDEO_QR_URL = process.env.NEXT_PUBLIC_KIOSK_URL ? `${process.env.NEXT_PUBLIC_KIOSK_URL}/#liveview-video` : '/#liveview-video'
 
-export function PreviewScreen({ state, dispatch, frames, config, licensed, onAction }: Props) {
+export function PreviewScreen({ state, dispatch, frames, config, licensed, eventName, onAction }: Props) {
   const t = useT()
   const [showOriginal, setShowOriginal] = useState(false)
+  const [shareUrl, setShareUrl] = useState<string | null>(null)
+  const [qrStatus, setQrStatus] = useState<'idle' | 'uploading' | 'failed'>('idle')
+  const uploadSeq = useRef(0)
   const [printing, setPrinting] = useState(false)
   const [frameIdx, setFrameIdx] = useState<number | null>(
     frames.some(f => f.orientation === 'portrait') ? 1 : null)
@@ -159,9 +164,53 @@ export function PreviewScreen({ state, dispatch, frames, config, licensed, onAct
     return () => { clearInterval(interval); clearTimeout(done) }
   }, [videoLoading])
 
-  // ponytail: r2 URLs pindah ke delivery state (Task 8) — QR di layar ini mati sementara,
-  // dibongkar total di task berikutnya.
-  const qrValue = activeTab === 'video' ? VIDEO_QR_URL : null
+  // R2 upload + QR — frame di-burn dulu ke foto (branding ikut ke share), lalu A+B naik.
+  // Ganti frame = re-upload key R2 yang SAMA (overwrite) → URL QR stabil, QR ga kedip.
+  // RAW (sourceUrl/rawAiUrl) yang dikirim: worker yang mutusin watermark server-side.
+  // Unlicensed: no upload — QR = sinyal sesi berbayar (decoy di JSX bawah).
+  const frameForOriginal = mismatch ? pairedLandscape : currentFrame
+  // Upload A(Original)+B(AI) ke R2, dua-duanya frame kepilih di-burn dulu → QR ke microsite.
+  // attempts: auto-retry (effect) 2x; manual (tombol Ulangi QR) 1x. Guard uploadSeq = frame
+  // paling baru yang menang, QR ga ketimpa hasil upload lama.
+  async function runUpload(attempts: number) {
+    if (!licensed || !state.base) return
+    const base = state.base
+    const seq = ++uploadSeq.current
+    const rawOriginal = state.sourceUrl ?? state.originalUrl
+    const rawAi = state.rawAiUrl ?? state.aiUrl
+    const meta = { eventName, durationSec: state.processingSec }
+    setQrStatus('uploading')
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      try {
+        const [framedA, framedB] = await Promise.all([
+          compositeFrame(rawOriginal, frameForOriginal?.url ?? null, 1200),
+          compositeFrame(rawAi, currentFrame?.url ?? null, 1200),
+        ])
+        const [, resB] = await Promise.all([
+          uploadAsset(framedA, 'A', base, meta),
+          uploadAsset(framedB, 'B', base, meta),
+        ])
+        if (uploadSeq.current === seq) {
+          setShareUrl(`https://semeta-microsite.pages.dev/s?b=${encodeURIComponent(resB.key)}`)
+          setQrStatus('idle')
+        }
+        return
+      } catch (err) {
+        console.error(`[preview] upload R2 gagal (attempt ${attempt + 1}):`, err)
+        if (attempt < attempts - 1) await new Promise(r => setTimeout(r, 3000))
+      }
+    }
+    if (uploadSeq.current === seq) setQrStatus('failed')
+  }
+
+  useEffect(() => {
+    if (!licensed || !state.base) return
+    const debounce = setTimeout(() => { runUpload(2) }, 600) // debounce cycling frame — jangan upload tiap tap panah
+    return () => clearTimeout(debounce)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [licensed, state.base, currentFrame?.url, frameForOriginal?.url])
+
+  const qrValue = activeTab === 'video' ? VIDEO_QR_URL : shareUrl
 
   return (
     <div className="screen-split screen-split--center flex flex-col w-full h-full" style={{ overflow: 'clip' }}>
@@ -253,6 +302,25 @@ export function PreviewScreen({ state, dispatch, frames, config, licensed, onAct
             <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 40, padding: 6, borderRadius: 10, background: 'white', boxShadow: '0 4px 20px rgba(0,0,0,0.5)' }}>
               <QRCodeSVG value={qrValue} size={80} bgColor="white" fgColor="#090135" />
             </div>
+          ) : activeTab === 'photo' && (qrStatus === 'uploading' || qrStatus === 'failed') ? (
+            // Upload R2 belum kelar / gagal (offline). Operator bisa tap buat re-upload manual.
+            <button
+              onClick={() => { if (qrStatus !== 'uploading') runUpload(1) }}
+              disabled={qrStatus === 'uploading'}
+              style={{ position: 'absolute', top: 12, right: 12, zIndex: 40, width: 92, height: 92, padding: 6, borderRadius: 10, background: 'white', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.5)', cursor: qrStatus === 'uploading' ? 'default' : 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+            >
+              {qrStatus === 'uploading' ? (
+                <>
+                  <span style={{ width: 22, height: 22, borderRadius: '50%', border: '3px solid rgba(9,1,53,0.15)', borderTopColor: '#090135', animation: 'spin 0.8s linear infinite' }} />
+                  <span style={{ fontSize: 8, fontWeight: 600, color: '#090135', letterSpacing: '0.04em' }}>Mengunggah…</span>
+                </>
+              ) : (
+                <>
+                  <span style={{ fontSize: 20, lineHeight: 1, color: '#090135' }}>↻</span>
+                  <span style={{ fontSize: 8, lineHeight: 1.25, fontWeight: 700, color: '#090135', textAlign: 'center' }}>Ulangi<br />QR</span>
+                </>
+              )}
+            </button>
           ) : null}
 
           {/* AI/Original badge — top left */}

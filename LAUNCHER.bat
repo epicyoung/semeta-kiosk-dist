@@ -36,6 +36,9 @@ timeout /t 5 /nobreak >nul
 set "BROWSER="
 REM Dedicated profile = flag kiosk ga mental kalau Chrome utama lagi kebuka.
 REM --start-fullscreen (bukan --kiosk): lebih stabil pas print, ga keluar fullscreen.
+REM NOTE: --kiosk-printing SENGAJA dicopot buat event — biar dialog print Chrome MUNCUL
+REM   tiap pencet Print (operator bisa pilih printer / copies / cetak ulang). Balikin flag-nya
+REM   kalau mau silent print lagi (langsung keluar tanpa dialog).
 REM --use-fake-ui-for-media-stream: auto-grant izin kamera (device ASLI, bukan fake).
 REM   Wajib karena profil fresh di --user-data-dir belum pernah kasih izin kamera,
 REM   dan prompt-nya ketutup fullscreen → getUserMedia gantung di "LOADING CAMERA...".
@@ -43,7 +46,7 @@ REM --test-type: nge-suppress banner kuning "unsupported command-line flag" yang
 REM   dipicu flag di atas. Aman di kiosk localhost-only. Upgrade bersih (tanpa flag
 REM   testing sama sekali): reg policy VideoCaptureAllowedUrls → http://localhost:3000.
 set "KDATA=%LOCALAPPDATA%\SemetaKioskChrome"
-set "BFLAGS=--start-fullscreen --kiosk-printing --use-fake-ui-for-media-stream --test-type --user-data-dir="%KDATA%" --no-first-run --no-default-browser-check --disable-features=Translate,InfobarUIForBubble --disable-session-crashed-bubble --disable-infobars --overscroll-history-navigation=0 --autoplay-policy=no-user-gesture-required"
+set "BFLAGS=--start-fullscreen --use-fake-ui-for-media-stream --test-type --user-data-dir="%KDATA%" --no-first-run --no-default-browser-check --disable-features=Translate,InfobarUIForBubble --disable-session-crashed-bubble --disable-infobars --overscroll-history-navigation=0 --autoplay-policy=no-user-gesture-required"
 if exist "C:\Program Files\Google\Chrome\Application\chrome.exe" set "BROWSER=C:\Program Files\Google\Chrome\Application\chrome.exe"
 if exist "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" set "BROWSER=C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
 if not defined BROWSER if exist "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" set "BROWSER=C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
