@@ -52,7 +52,12 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
     }
 
     case 'SHOW_PREVIEW':
-      return { screen: 'preview', aiUrl: action.aiUrl, originalUrl: action.originalUrl, sourceUrl: action.sourceUrl, rawAiUrl: action.rawAiUrl, base: action.base, processingSec: action.processingSec, selectedFrame: null }
+      // Landing di frame chooser dulu — tamu pilih frame, baru NEXT ke preview (upload+print).
+      return { screen: 'framechooser', aiUrl: action.aiUrl, originalUrl: action.originalUrl, sourceUrl: action.sourceUrl, rawAiUrl: action.rawAiUrl, base: action.base, processingSec: action.processingSec }
+
+    case 'CONFIRM_FRAME':
+      if (state.screen !== 'framechooser') return state
+      return { screen: 'preview', aiUrl: state.aiUrl, originalUrl: state.originalUrl, sourceUrl: state.sourceUrl, rawAiUrl: state.rawAiUrl, base: state.base, processingSec: state.processingSec, selectedFrame: action.frame }
 
     case 'GO_DELIVERY':
       if (state.screen !== 'preview') return state
@@ -74,7 +79,9 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
       if (state.screen === 'template') return { screen: 'category', imageUrl: state.imageUrl }
       if (state.screen === 'faceassign') return { screen: 'template', imageUrl: state.imageUrl, category: state.category, selected: null }
       // Re-edit pakai selfie BERSIH — originalUrl bisa ke-watermark (freemium) → face crop di FaceAssign kebawa watermark.
-      if (state.screen === 'preview') return { screen: 'category', imageUrl: state.sourceUrl ?? state.originalUrl }
+      if (state.screen === 'framechooser') return { screen: 'category', imageUrl: state.sourceUrl ?? state.originalUrl }
+      // Preview BACK = re-pilih frame → balik ke frame chooser (bukan re-pilih template).
+      if (state.screen === 'preview') return { screen: 'framechooser', aiUrl: state.aiUrl, originalUrl: state.originalUrl, sourceUrl: state.sourceUrl, rawAiUrl: state.rawAiUrl, base: state.base, processingSec: state.processingSec }
       return state
 
     case 'RESET':

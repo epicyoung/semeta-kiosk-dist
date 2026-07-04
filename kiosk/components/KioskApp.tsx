@@ -21,7 +21,7 @@ import { SPINDONESIA_CATEGORY } from '@/lib/spindonesia-category'
 import { useOrientedFrames } from '@/lib/frames'
 
 const SCREEN_ORDER: KioskState['screen'][] = [
-  'idle', 'consent', 'liveview', 'aichoice', 'category', 'template', 'faceassign', 'processing', 'preview',
+  'idle', 'consent', 'liveview', 'aichoice', 'category', 'template', 'faceassign', 'processing', 'framechooser', 'preview',
 ]
 
 const DUMMY_TEMPLATE = { id: 'd1', name: 'Template 1', category: 'faceswap', token_cost: 1, thumbnail_url: null, gender_filter: 'ALL' as const, engine_type: 'faceswap' as const, positive_prompt: null, negative_prompt: null, api_endpoint: null, video_endpoint: null, video_positive_prompt: null, video_negative_prompt: null }
@@ -47,6 +47,7 @@ const SCREEN_INIT: Partial<Record<KioskState['screen'], KioskState>> = {
     assignments: {},
   },
   processing: { screen: 'processing', progress: 0, step: 1, imageUrl: '', template: DUMMY_TEMPLATE, assignments: {} },
+  framechooser: { screen: 'framechooser', aiUrl: '', originalUrl: '' },
   preview:    { screen: 'preview', aiUrl: '', originalUrl: '', selectedFrame: null },
 }
 
@@ -190,7 +191,8 @@ export function KioskApp({ config }: { config: KioskConfig }) {
       case 'template':    return <TemplateScreen state={state} dispatch={wrappedDispatch} templates={templates} />
       case 'faceassign':  return <FaceAssignScreen state={state} dispatch={wrappedDispatch} />
       case 'processing':  return <ProcessingScreen state={state} dispatch={wrappedDispatch} generationSource={config.generation_source} eventName={config.event_name} licensed={config.licensed ?? false} onUploadFailed={(meta) => log('UPLOAD_FAILED', meta)} />
-      case 'preview':     return <PreviewScreen state={state} dispatch={wrappedDispatch} frames={orientedFrames} config={config} licensed={config.licensed ?? false} eventName={config.event_name} onAction={(a) => log('VISITOR_ACTION', { action: a })} />
+      case 'framechooser': return <PreviewScreen mode="choose" state={state} dispatch={wrappedDispatch} frames={orientedFrames} config={config} licensed={config.licensed ?? false} eventName={config.event_name} onAction={(a) => log('VISITOR_ACTION', { action: a })} />
+      case 'preview':     return <PreviewScreen mode="final" state={state} dispatch={wrappedDispatch} frames={orientedFrames} config={config} licensed={config.licensed ?? false} eventName={config.event_name} onAction={(a) => log('VISITOR_ACTION', { action: a })} />
     }
   })()
 

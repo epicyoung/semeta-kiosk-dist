@@ -10,7 +10,9 @@ import { uploadAsset } from '@/lib/upload'
 import { useT } from '@/lib/i18n'
 
 type Props = {
-  state: Extract<KioskState, { screen: 'preview' }>
+  // choose = frame chooser (cycling + Back/Next, no upload/print). final = preview (fixed frame, upload+print).
+  mode: 'choose' | 'final'
+  state: Extract<KioskState, { screen: 'preview' | 'framechooser' }>
   dispatch: Dispatch<KioskAction>
   frames: OrientedFrame[]
   config: Pick<KioskConfig, 'enable_email' | 'enable_print' | 'enable_video'>
@@ -50,7 +52,9 @@ function TabSwitcher({ activeTab, videoUrl, videoLoading, onSwitch }: {
 
 const VIDEO_QR_URL = process.env.NEXT_PUBLIC_KIOSK_URL ? `${process.env.NEXT_PUBLIC_KIOSK_URL}/#liveview-video` : '/#liveview-video'
 
-export function PreviewScreen({ state, dispatch, frames, config, licensed, eventName, onAction }: Props) {
+export function PreviewScreen({ mode, state, dispatch, frames, config, licensed, eventName, onAction }: Props) {
+  const isChoose = mode === 'choose'
+  const isFinal = mode === 'final'
   const t = useT()
   const [showOriginal, setShowOriginal] = useState(false)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
@@ -74,7 +78,10 @@ export function PreviewScreen({ state, dispatch, frames, config, licensed, event
 
   // Cycling cuma pool portrait (frame foto AI). Landscape dipake via pairing di tab Original.
   const allFrames = frames.filter(f => f.orientation === 'portrait')
-  const currentFrame = frameIdx === null ? null : allFrames[frameIdx - 1] ?? null
+  const cyclingFrame = frameIdx === null ? null : allFrames[frameIdx - 1] ?? null
+  // Choose = frame lagi dipilih (cycling). Final = frame kepilih dari framechooser (fixed by id, no index drift).
+  const chosenFrameId = state.screen === 'preview' ? state.selectedFrame?.id ?? null : null
+  const currentFrame = isChoose ? cyclingFrame : (chosenFrameId ? frames.find(f => f.id === chosenFrameId) ?? null : null)
   // frameIdx: null = no frame, 1-based index into allFrames
   function prevFrame() { setFrameIdx(i => i === null ? allFrames.length : i <= 1 ? allFrames.length : i - 1) }
   function nextFrame() { setFrameIdx(i => i === null ? 1 : i >= allFrames.length ? 1 : i + 1) }
@@ -204,11 +211,11 @@ export function PreviewScreen({ state, dispatch, frames, config, licensed, event
   }
 
   useEffect(() => {
-    if (!licensed || !state.base) return
-    const debounce = setTimeout(() => { runUpload(2) }, 600) // debounce cycling frame — jangan upload tiap tap panah
+    if (!isFinal || !licensed || !state.base) return // upload cuma di preview final, frame udah fixed
+    const debounce = setTimeout(() => { runUpload(2) }, 600)
     return () => clearTimeout(debounce)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [licensed, state.base, currentFrame?.url, frameForOriginal?.url])
+  }, [isFinal, licensed, state.base, currentFrame?.url, frameForOriginal?.url])
 
   const qrValue = activeTab === 'video' ? VIDEO_QR_URL : shareUrl
 
@@ -216,26 +223,30 @@ export function PreviewScreen({ state, dispatch, frames, config, licensed, event
     <div className="screen-split screen-split--center flex flex-col w-full h-full" style={{ overflow: 'clip' }}>
       <div className="screen-title text-center px-5 pt-5 pb-4">
         <h1 className="h1-glow" style={{ fontSize: 'clamp(32px,5vw,48px)', fontWeight: 500, letterSpacing: '-0.02em', lineHeight: 1.15, marginBottom: 8 }}>
-          {t('preview_title') as string}
+          {t(isChoose ? 'preview_title' : 'delivery_title') as string}
         </h1>
         <p style={{ fontSize: 'var(--text-base)', fontWeight: 300, color: 'var(--fg-muted)', lineHeight: 1.618, whiteSpace: 'pre-line' }}>
-          {t('preview_subtitle') as string}
+          {t(isChoose ? 'preview_subtitle' : 'delivery_subtitle') as string}
         </p>
       </div>
 
       <div className="screen-content">
-        {/* Tab switcher portrait-only — di atas foto, normal flow */}
-        <div className="preview-tab-switcher" style={{ justifyContent: 'center', paddingBottom: 10 }}>
-          <TabSwitcher activeTab={activeTab} videoUrl={videoUrl} videoLoading={videoLoading} onSwitch={setActiveTab} />
-        </div>
+        {/* Tab switcher portrait-only — di atas foto, normal flow. Video cuma di preview final. */}
+        {isFinal && (
+          <div className="preview-tab-switcher" style={{ justifyContent: 'center', paddingBottom: 10 }}>
+            <TabSwitcher activeTab={activeTab} videoUrl={videoUrl} videoLoading={videoLoading} onSwitch={setActiveTab} />
+          </div>
+        )}
 
         {/* Media area — position:relative jadi anchor tab switcher landscape */}
         <div className="flex-1 min-h-0 flex items-center justify-center gap-3" style={{ padding: 4, position: 'relative' }}>
           {/* Tab switcher landscape-only — absolute top-center di atas foto, di luar overflow:hidden */}
-          <div className="preview-tab-switcher-landscape" style={{ position: 'absolute', top: 35, left: '50%', transform: 'translateX(-50%)', zIndex: 50 }}>
-            <TabSwitcher activeTab={activeTab} videoUrl={videoUrl} videoLoading={videoLoading} onSwitch={setActiveTab} />
-          </div>
-        {activeTab === 'photo' && (
+          {isFinal && (
+            <div className="preview-tab-switcher-landscape" style={{ position: 'absolute', top: 35, left: '50%', transform: 'translateX(-50%)', zIndex: 50 }}>
+              <TabSwitcher activeTab={activeTab} videoUrl={videoUrl} videoLoading={videoLoading} onSwitch={setActiveTab} />
+            </div>
+          )}
+        {activeTab === 'photo' && isChoose && (
           <button onClick={prevFrame} className="glass-btn" style={{ flexShrink: 0, width: 48, height: 48, fontSize: 'var(--text-xl)', padding: 0 }}>‹</button>
         )}
         <div
@@ -285,8 +296,9 @@ export function PreviewScreen({ state, dispatch, frames, config, licensed, event
           )}
 
           {/* QR — top right. Real bila licensed + URL siap; decoy "nonaktif" bila freeware
-              (QR = fitur berbayar). Decoy diutamakan biar licensed yg lagi upload ga keliatan mati. */}
-          {!licensed ? (
+              (QR = fitur berbayar). Decoy diutamakan biar licensed yg lagi upload ga keliatan mati.
+              QR cuma di preview final — frame chooser belum upload apa-apa. */}
+          {isFinal && (!licensed ? (
             <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 40, padding: 6, borderRadius: 10, background: 'white', boxShadow: '0 4px 20px rgba(0,0,0,0.5)' }}>
               <div style={{ position: 'relative', width: 80, height: 80 }}>
                 {/* QR boongan — pola asli ketutup label, keliatan "ada tapi mati" */}
@@ -321,7 +333,7 @@ export function PreviewScreen({ state, dispatch, frames, config, licensed, event
                 </>
               )}
             </button>
-          ) : null}
+          ) : null)}
 
           {/* AI/Original badge — top left */}
           <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 40, fontSize: 'var(--text-2xs)', letterSpacing: '0.2em', textTransform: 'uppercase', background: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.8)', padding: '4px 10px', borderRadius: 'var(--radius-chip)', backdropFilter: 'blur(8px)' }}>
@@ -337,7 +349,7 @@ export function PreviewScreen({ state, dispatch, frames, config, licensed, event
             </div>
           )}
         </div>
-        {activeTab === 'photo' && (
+        {activeTab === 'photo' && isChoose && (
           <button onClick={nextFrame} className="glass-btn" style={{ flexShrink: 0, width: 48, height: 48, fontSize: 'var(--text-xl)', padding: 0 }}>›</button>
         )}
         </div>
@@ -403,6 +415,17 @@ export function PreviewScreen({ state, dispatch, frames, config, licensed, event
           </div>
         )}
 
+        {isChoose ? (
+          // Frame chooser footer — Back (re-pilih template) + Next (bawa frame ke preview).
+          <div className="screen-actions-row flex gap-3">
+            <TouchButton variant="secondary" onClick={() => dispatch({ type: 'BACK' })} className="flex-1">
+              {t('nav_back') as string}
+            </TouchButton>
+            <TouchButton onClick={() => dispatch({ type: 'CONFIRM_FRAME', frame: currentFrame })} className="flex-1">
+              {t('nav_next') as string}
+            </TouchButton>
+          </div>
+        ) : (
         <div className="screen-actions-row flex gap-3">
           {config.enable_print && (
             <TouchButton onClick={() => setQty(1)} className="flex-1" disabled={printing}>
@@ -427,6 +450,7 @@ export function PreviewScreen({ state, dispatch, frames, config, licensed, event
             {t('preview_btn_restart') as string}
           </TouchButton>
         </div>
+        )}
       </div>
 
       {/* Email sent celebration popup */}
