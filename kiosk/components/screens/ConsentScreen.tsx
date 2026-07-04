@@ -25,13 +25,11 @@ export function ConsentScreen({ dispatch }: { dispatch: Dispatch<KioskAction> })
 
   return (
     <div className="screen-split flex flex-col w-full h-full overflow-hidden">
-      <div className="screen-title text-center px-5 pt-5 pb-3">
-        <h1 className="h1-glow" style={{ fontSize: 'clamp(26px,4.5vw,40px)', fontWeight: 500, letterSpacing: '-0.02em', lineHeight: 1.15, marginBottom: 8, textWrap: 'balance' }}>
+      <div className="screen-title text-center px-5 pt-5 pb-4">
+        <h1 className="h1-glow" style={{ fontSize: 'clamp(32px,5vw,48px)', fontWeight: 500, letterSpacing: '-0.02em', lineHeight: 1.15, marginBottom: 8 }}>
           {t('consent_title') as string}
         </h1>
-        {/* Copy has an explicit \n — one sentence per line = 2 lines by design.
-            pre-line honours it; no max-width/balance that would force a 3rd line. */}
-        <p style={{ fontSize: 'var(--text-sm)', fontWeight: 300, color: 'var(--fg-muted)', lineHeight: 1.7, textAlign: 'center', whiteSpace: 'pre-line' }}>
+        <p style={{ fontSize: 'var(--text-base)', fontWeight: 300, color: 'var(--fg-muted)', lineHeight: 1.618, whiteSpace: 'pre-line' }}>
           {t('consent_subtitle') as string}
         </p>
         <p style={{ fontSize: 'var(--text-xs)', fontWeight: 300, color: 'var(--fg-muted)', lineHeight: 1.6, textAlign: 'center', fontStyle: 'italic', marginTop: 6, opacity: 0.7, textWrap: 'balance' }}>

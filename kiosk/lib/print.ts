@@ -31,16 +31,33 @@ async function toDataUrl(url: string): Promise<string> {
   })
 }
 
-/** Foto selalu 4R. Print box Chrome boleh muncul — yang haram: print ga keluar. */
+/** Baca orientasi foto dari dimensi. Landscape → kertas 6×4, portrait → 4×6.
+ *  Biar foto landscape ga ke-crop dipaksa masuk kertas portrait (bug lama). */
+function readOrientation(dataUrl: string): Promise<'portrait' | 'landscape'> {
+  return new Promise(resolve => {
+    const im = new Image()
+    im.onload = () => resolve(im.naturalWidth > im.naturalHeight ? 'landscape' : 'portrait')
+    im.onerror = () => resolve('portrait') // gagal baca → default 4R portrait (perilaku lama)
+    im.src = dataUrl
+  })
+}
+
+/** Foto 4R, kertas ikut orientasi foto (portrait 4×6 / landscape 6×4) → landscape ga ke-crop.
+ *  Print box Chrome boleh muncul — yang haram: print ga keluar. */
 export async function printPhoto(url: string, copies: number): Promise<void> {
   const dataUrl = await toDataUrl(url)
+  const orient = await readOrientation(dataUrl)
+  // Kertas + img sisi panjang ikut orientasi foto. object-fit:cover tetep (strip full-bleed),
+  // tapi rasio kertas ≈ rasio foto → cover ga motong (kecuali foto jauh dari 3:2).
+  const page = orient === 'landscape' ? '6in 4in' : '4in 6in'
+  const imgSize = orient === 'landscape' ? 'width:6in;height:4in' : 'width:4in;height:6in'
   const iframe = getPrintFrame()
   const doc = iframe.contentDocument!
   doc.open()
   doc.write(`<!DOCTYPE html><html><head><style>
-    @page { size: 4in 6in; margin: 0; }
+    @page { size: ${page}; margin: 0; }
     * { margin:0; padding:0; box-sizing:border-box; }
-    img { width:4in; height:6in; object-fit:cover; display:block; }
+    img { ${imgSize}; object-fit:cover; display:block; }
     img + img { page-break-before: always; }
   </style></head><body>${Array.from({ length: copies }, () => `<img src="${dataUrl}" />`).join('')}</body></html>`)
   doc.close()

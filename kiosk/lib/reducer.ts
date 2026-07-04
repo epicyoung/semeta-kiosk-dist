@@ -43,7 +43,7 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
 
     case 'START_PROCESSING':
       if (state.screen !== 'faceassign' || !state.template) return state
-      return { screen: 'processing', progress: 0, step: 1, imageUrl: state.imageUrl, template: state.template, assignments: state.assignments }
+      return { screen: 'processing', progress: 0, step: 1, imageUrl: state.imageUrl, template: state.template, assignments: state.assignments, faceMapping: action.faceMapping }
 
     case 'SET_PROGRESS': {
       if (state.screen !== 'processing') return state
@@ -74,7 +74,6 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
     case 'BACK':
       if (state.screen === 'consent') return { screen: 'idle' }
       if (state.screen === 'liveview') return { screen: 'idle' }
-      if (state.screen === 'aichoice') return { screen: 'liveview' }
       if (state.screen === 'category') return { screen: 'liveview' }
       if (state.screen === 'template') return { screen: 'category', imageUrl: state.imageUrl }
       if (state.screen === 'faceassign') return { screen: 'template', imageUrl: state.imageUrl, category: state.category, selected: null }

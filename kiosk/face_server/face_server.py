@@ -24,9 +24,10 @@ if os.name == "nt":
         if os.path.exists(_cudnn): os.add_dll_directory(_cudnn)
         if os.path.exists(_cublas): os.add_dll_directory(_cublas)
 
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
+import json
 import cv2
 import numpy as np
 import insightface
@@ -149,6 +150,36 @@ def filter_real_faces(faces):
     return [max(faces, key=lambda f: getattr(f, "det_score", 0.0))]
 
 
+def resolve_pairs(mapping_str, n_template, n_selfie):
+    """Per template face i (L-R) → index selfie face (L-R) yang di-swap. None = slot dilewat.
+    mapping_str kosong/invalid → default identitas L-R (swap semua, slot i <- selfie i, clamp).
+    Entry out-of-range / bukan int → None. Sinkron sama index UI karena filter+sort sama /detect."""
+    pairs = None
+    if mapping_str:
+        try:
+            parsed = json.loads(mapping_str)
+            if isinstance(parsed, list):
+                pairs = parsed
+        except (ValueError, TypeError):
+            pairs = None
+    if pairs is None:
+        return [i if i < n_selfie else None for i in range(n_template)]
+    out = []
+    for i in range(n_template):
+        v = pairs[i] if i < len(pairs) else None
+        out.append(v if isinstance(v, int) and 0 <= v < n_selfie else None)
+    return out
+
+
+def _selfcheck_resolve_pairs():
+    assert resolve_pairs(None, 2, 2) == [0, 1]           # default identity
+    assert resolve_pairs("[1,0]", 2, 2) == [1, 0]        # explicit reversed
+    assert resolve_pairs("[null,1]", 2, 2) == [None, 1]  # slot 0 skipped
+    assert resolve_pairs("[0,5]", 2, 2) == [0, None]     # out-of-range → None
+    assert resolve_pairs("bad", 3, 2) == [0, 1, None]    # invalid → identity + clamp
+    assert resolve_pairs("[0]", 2, 2) == [0, None]       # short list → rest None
+
+
 @app.post("/detect")
 async def detect_faces(image: UploadFile = File(...)):
     """Return real face bounding boxes (left-to-right), for the FaceAssign UI.
@@ -175,36 +206,53 @@ async def detect_faces(image: UploadFile = File(...)):
 
 
 @app.post("/swap")
-async def swap_face(template: UploadFile = File(...), selfie: UploadFile = File(...)):
-    """Swap largest selfie face onto largest template face, with optional CodeFormer enhancement.
+async def swap_face(
+    template: UploadFile = File(...),
+    selfie: UploadFile = File(...),
+    mapping: str = Form(None),
+):
+    """Multi-face swap: tiap muka template (L-R) di-swap sama muka selfie yang di-assign lewat
+    `mapping` (dari FaceAssign UI). Tanpa mapping → default swap SEMUA muka urut L-R.
+    Filter + sort L-R SAMA PERSIS kayak /detect biar index mapping sinkron sama UI.
 
     Watermark is NOT applied here. The kiosk client burns the local copies (original + AI) in
-    one place when unlicensed (lib/watermark-canvas.ts) so preview/print/save share one canvas;
-    burning here too would double-stamp. The guest-facing R2 copy is burned by the worker.
+    one place when unlicensed (lib/watermark-canvas.ts) so preview/print/save share one canvas.
     """
     start = time.time()
 
     template_img = cv2.imdecode(np.frombuffer(await template.read(), np.uint8), cv2.IMREAD_COLOR)
     selfie_img = cv2.imdecode(np.frombuffer(await selfie.read(), np.uint8), cv2.IMREAD_COLOR)
 
-    template_faces = face_analyser.get(template_img)
+    template_faces = sorted(filter_real_faces(face_analyser.get(template_img)), key=lambda f: f.bbox[0])
     if not template_faces:
         return JSONResponse({"error": "No face in template"}, status_code=400)
-
-    selfie_faces = face_analyser.get(selfie_img)
+    selfie_faces = sorted(filter_real_faces(face_analyser.get(selfie_img)), key=lambda f: f.bbox[0])
     if not selfie_faces:
         return JSONResponse({"error": "No face in selfie"}, status_code=400)
 
-    area = lambda f: (f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1])
-    target_face = max(template_faces, key=area)
-    source_face = max(selfie_faces, key=area)
+    pairs = resolve_pairs(mapping, len(template_faces), len(selfie_faces))
 
-    result_img = face_swapper.get(template_img, target_face, source_face, paste_back=True)
-    if codeformer_enhancer:
-        result_img = codeformer_enhancer.enhance(result_img, target_face)
+    # Swap tiap muka berurutan ke result yang sama — muka ga overlap jadi bbox awal tetep valid.
+    result_img = template_img
+    swapped = 0
+    for tface, src_idx in zip(template_faces, pairs):
+        if src_idx is None:
+            continue
+        result_img = face_swapper.get(result_img, tface, selfie_faces[src_idx], paste_back=True)
+        if codeformer_enhancer:
+            result_img = codeformer_enhancer.enhance(result_img, tface)
+        swapped += 1
+
+    # Semua slot ke-skip (mapping nyasar) → jangan balikin template mentah; fallback biggest<->biggest.
+    if swapped == 0:
+        t = max(template_faces, key=_bbox_area)
+        s = max(selfie_faces, key=_bbox_area)
+        result_img = face_swapper.get(template_img, t, s, paste_back=True)
+        if codeformer_enhancer:
+            result_img = codeformer_enhancer.enhance(result_img, t)
 
     _, buf = cv2.imencode(".jpg", result_img, [cv2.IMWRITE_JPEG_QUALITY, 92])
-    print(f"[semeta] swap done in {round(time.time() - start, 2)}s ({active_provider})")
+    print(f"[semeta] swap done in {round(time.time() - start, 2)}s, {swapped}/{len(template_faces)} faces ({active_provider})")
 
     io = BytesIO(buf.tobytes())
     io.seek(0)
@@ -213,5 +261,6 @@ async def swap_face(template: UploadFile = File(...), selfie: UploadFile = File(
 
 if __name__ == "__main__":
     import uvicorn
+    _selfcheck_resolve_pairs()  # fail-fast kalau logika mapping rusak
     print("[semeta] Starting Face Server on port 8000...")
     uvicorn.run(app, host="0.0.0.0", port=8000)

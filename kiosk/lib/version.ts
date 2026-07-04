@@ -1,6 +1,7 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import path from 'path'
+import fs from 'fs'
 
 const exec = promisify(execFile)
 
@@ -13,6 +14,16 @@ export type VersionInfo = {
   latest: string | null    // remote short hash, null if offline / no remote
   hasUpdate: boolean
   isGit: boolean           // false = extracted archive, not a clone → Update disabled
+  label: string | null     // human version dari file VERSION (v2026.07.04), bump manual tiap rilis
+}
+
+// Baca file VERSION di repo root (v2026.07.04). Null kalau ga ada — hash tetep jalan.
+function readVersionLabel(): string | null {
+  try {
+    return fs.readFileSync(path.join(REPO_ROOT, 'VERSION'), 'utf8').trim() || null
+  } catch {
+    return null
+  }
 }
 
 async function git(args: string[]): Promise<string> {
@@ -23,11 +34,12 @@ async function git(args: string[]): Promise<string> {
 // Compare local HEAD vs remote HEAD. Both null-safe: no git → isGit:false;
 // offline → latest:null, hasUpdate:false (never claim an update we can't fetch).
 export async function getVersionInfo(): Promise<VersionInfo> {
+  const label = readVersionLabel()
   let current: string | null = null
   try {
     current = await git(['rev-parse', '--short', 'HEAD'])
   } catch {
-    return { current: null, latest: null, hasUpdate: false, isGit: false }
+    return { current: null, latest: null, hasUpdate: false, isGit: false, label }
   }
 
   let latest: string | null = null
@@ -40,7 +52,7 @@ export async function getVersionInfo(): Promise<VersionInfo> {
     latest = null // offline or no remote configured
   }
 
-  return { current, latest, hasUpdate: computeHasUpdate(current, latest), isGit: true }
+  return { current, latest, hasUpdate: computeHasUpdate(current, latest), isGit: true, label }
 }
 
 // Pure — unit-tested. Update only when we have BOTH hashes and they differ.

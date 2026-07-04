@@ -73,6 +73,14 @@ export function FaceAssignScreen({ state, dispatch }: Props) {
 
   const canProceed = Object.keys(assignments).length > 0
 
+  // Bikin mapping urut slot template (L-R) → index selfie face (L-R). faceId = index L-R (String(i)),
+  // slotId = "slot_{i}" — jadi Number(faceId) langsung = index selfie. null = slot ga di-assign.
+  const buildFaceMapping = (): (number | null)[] =>
+    templateSlots.map(slot => {
+      const fid = assignments[slot.id]
+      return fid !== undefined ? Number(fid) : null
+    })
+
   if (detecting) return (
     <div className="flex items-center justify-center w-full h-full flex-col gap-3">
       <div className="animate-spin" style={{ width: 32, height: 32, borderRadius: '50%', border: '3px solid rgba(255,255,255,0.15)', borderTopColor: 'rgba(255,255,255,0.7)' }} />
@@ -172,7 +180,7 @@ export function FaceAssignScreen({ state, dispatch }: Props) {
         <TouchButton variant="secondary" onClick={() => dispatch({ type: 'BACK' })} className="flex-1">
           {t('nav_back') as string}
         </TouchButton>
-        <TouchButton onClick={() => dispatch({ type: 'START_PROCESSING' })} disabled={!canProceed} className="flex-1">
+        <TouchButton onClick={() => dispatch({ type: 'START_PROCESSING', faceMapping: buildFaceMapping() })} disabled={!canProceed} className="flex-1">
           {t('nav_next') as string}
         </TouchButton>
       </div>

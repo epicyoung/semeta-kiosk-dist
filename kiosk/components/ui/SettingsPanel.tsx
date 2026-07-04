@@ -180,8 +180,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   const [cameraStatus,    setCameraStatus]    = useState<PbStatus>('idle')
   const [pbCreds,         setPbCreds]         = useState<{ email: string; password: string } | null>(null)
   const [updateState,     setUpdateState]     = useState<'idle'|'checking'|'available'|'uptodate'|'pulling'|'ok'|'err'>('idle')
-  const [version,         setVersion]         = useState<{ current: string | null; isGit: boolean }>({ current: null, isGit: true })
-  const [enableAiChoice,  setEnableAiChoice]  = useState(config.enable_ai_choice ?? false)
+  const [version,         setVersion]         = useState<{ current: string | null; isGit: boolean; label: string | null }>({ current: null, isGit: true, label: null })
   // Accordion: which group is open
   const [openGroup,       setOpenGroup]       = useState<string>('event')
   const toggleGroup = (id: string) => setOpenGroup(prev => prev === id ? '' : id)
@@ -386,7 +385,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
     if (!open) return
     fetch('/api/update')
       .then(r => r.json())
-      .then((d: { current: string | null; isGit: boolean }) => setVersion({ current: d.current, isGit: d.isGit }))
+      .then((d: { current: string | null; isGit: boolean; label: string | null }) => setVersion({ current: d.current, isGit: d.isGit, label: d.label }))
       .catch(() => {})
   }, [open])
 
@@ -394,8 +393,8 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
     setUpdateState('checking')
     try {
       const res = await fetch('/api/update', { cache: 'no-store' })
-      const d = await res.json() as { hasUpdate: boolean; current: string | null; isGit: boolean }
-      setVersion({ current: d.current, isGit: d.isGit })
+      const d = await res.json() as { hasUpdate: boolean; current: string | null; isGit: boolean; label: string | null }
+      setVersion({ current: d.current, isGit: d.isGit, label: d.label })
       setUpdateState(d.hasUpdate ? 'available' : 'uptodate')
       if (!d.hasUpdate) setTimeout(() => setUpdateState('idle'), 2500)
     } catch {
@@ -489,7 +488,6 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         pocketbase_url:    pbUrl,
         output_dir:        outputDir,
         locale,
-        enable_ai_choice:  enableAiChoice,
       }
       if (logo_url) patch.logo_url = logo_url
       if (bg_url)   patch.bg_url   = bg_url
@@ -511,7 +509,6 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         pocketbase_url:    pbUrl,
         output_dir:        outputDir,
         locale,
-        enable_ai_choice:  enableAiChoice,
         ...(logo_url ? { logo_url } : {}),
         ...(bg_url   ? { bg_url   } : {}),
       } as Partial<KioskConfig>)
@@ -709,15 +706,6 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
 
             {/* ── GROUP 3: AI ENGINE & TEMPLATES ────────────────────────── */}
             <AccordionGroup id="engine" icon="🧠" title="AI Engine & Templates" open={openGroup === 'engine'} onToggle={toggleGroup}>
-              {/* AI Choice toggle */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                <div>
-                  <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>Mode Pilihan AI</span>
-                  <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0' }}>Tampilkan pilihan AI / Original ke tamu sebelum template</p>
-                </div>
-                <Toggle on={enableAiChoice} onToggle={() => setEnableAiChoice(v => !v)} />
-              </div>
-
               {/* Engine Mode */}
               <Row label={t('set_mode') as string}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -853,29 +841,27 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                       style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 'var(--radius-glass)', color: 'rgba(255,255,255,0.65)', cursor: 'pointer', fontSize: 'var(--text-sm)', lineHeight: 1, padding: '5px 9px' }}
                     >↻</button>
                     <span style={{ fontSize: 'var(--text-xs)', fontWeight: isUnlimited ? 700 : 400, letterSpacing: isUnlimited ? '0.06em' : undefined, fontFamily: 'var(--font-ui)', color: isUnlimited ? '#f0c040' : config.licensed ? '#a3be8c' : config.has_secret ? '#f0c040' : 'rgba(255,255,255,0.3)' }}>
-                      {isUnlimited ? '⚡ GODMODE' : config.licensed ? t('set_secret_state_active') as string : config.has_secret ? t('set_secret_state_expired') as string : '—'}
+                      {config.bypassed ? '⚡ GODMODE' : isUnlimited ? '∞ UNLIMITED' : config.licensed ? t('set_secret_state_active') as string : config.has_secret ? t('set_secret_state_expired') as string : '—'}
                     </span>
                   </div>
                 </div>
                 {!secretEditing ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
                     <span style={{
-                      flex: 1, background: config.bypassed ? 'rgba(124,58,237,0.15)' : 'rgba(255,255,255,0.06)',
-                      border: config.bypassed ? '1px solid rgba(124,58,237,0.4)' : '1px solid rgba(255,255,255,0.1)',
+                      flex: 1, background: 'rgba(255,255,255,0.06)',
+                      border: '1px solid rgba(255,255,255,0.1)',
                       borderRadius: 'var(--radius-glass)',
-                      color: config.bypassed ? '#a78bfa' : 'rgba(255,255,255,0.5)',
-                      fontSize: config.bypassed ? 'var(--text-xs)' : 'var(--text-sm)',
-                      fontWeight: config.bypassed ? 700 : 400,
+                      color: 'rgba(255,255,255,0.5)',
+                      fontSize: 'var(--text-sm)',
+                      fontWeight: 400,
                       padding: '9px 12px',
-                      fontFamily: 'var(--font-ui)', letterSpacing: config.bypassed ? '0.2em' : '0.12em', userSelect: 'none',
+                      fontFamily: 'var(--font-ui)', letterSpacing: '0.12em', userSelect: 'none',
                     }}>
-                      {config.bypassed
-                        ? '⚡ GOD MODE'
-                        : config.has_secret && config.secret_hint
-                          ? secretRevealed
-                            ? config.secret_hint
-                            : (h => h.length > 4 ? h.slice(0, -4).replace(/[^-]/g, '*') + h.slice(-4) : h.replace(/./g, '*'))(config.secret_hint)
-                          : t('set_secret_placeholder_empty') as string}
+                      {config.has_secret && config.secret_hint
+                        ? secretRevealed
+                          ? config.secret_hint
+                          : (h => h.length > 4 ? h.slice(0, 4) + h.slice(4).replace(/[^-]/g, '*') : h.replace(/./g, '*'))(config.secret_hint)
+                        : t('set_secret_placeholder_empty') as string}
                     </span>
                     {config.has_secret && config.secret_hint && (
                       <button
@@ -1060,13 +1046,30 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                 </div>
               )}
 
+              {/* Status lampu — clean output & QR cuma nyala kalau licensed (timer + key aman).
+                  Default abu2. Godmode/unlimited = licensed=true → ikut nyala. */}
+              <div style={{ display: 'flex', gap: 10, padding: '12px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                {([
+                  { on: config.licensed ?? false, label: 'NO WATERMARK' },
+                  { on: config.licensed ?? false, label: 'QR ACTIVE' },
+                ] as const).map(({ on, label }) => (
+                  <div key={label} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 'var(--radius-glass)', padding: '8px 12px' }}>
+                    <span style={{ width: 9, height: 9, borderRadius: '50%', flexShrink: 0, background: on ? '#a3be8c' : 'rgba(255,255,255,0.2)', boxShadow: on ? '0 0 8px rgba(163,190,140,0.8)' : 'none', transition: 'background .2s, box-shadow .2s' }} />
+                    <span style={{ fontSize: 'var(--text-2xs)', fontWeight: 600, letterSpacing: '0.06em', fontFamily: 'var(--font-ui)', color: on ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.35)' }}>{label}</span>
+                  </div>
+                ))}
+              </div>
+
               {/* System / Update */}
               <div style={{ padding: '12px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div>
                     <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{t('set_version_label') as string}</span>
                     <p style={{ fontSize: 'var(--text-2xs)', fontFamily: 'var(--font-ui)', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0' }}>
-                      {version.current ?? '—'}
+                      {version.label ?? version.current ?? '—'}
+                      {version.label && version.current && (
+                        <span style={{ color: 'rgba(255,255,255,0.18)', marginLeft: 6 }}>({version.current})</span>
+                      )}
                     </p>
                   </div>
                   {version.isGit ? (

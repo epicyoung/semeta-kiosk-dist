@@ -10,18 +10,16 @@ export function orientationOf(w: number, h: number): Orientation {
   return w > h ? 'landscape' : 'portrait'
 }
 
-const norm = (s: string) => s.trim().toLowerCase()
-
-// Pasangan landscape dari frame pilihan tamu — match by name. Strict: ga ada pasangan = null
-// (original tampil polos), no fuzzy fallback. Lihat spec 2026-07-04.
-export function findLandscapePair(
+// Frame buat Original pas mismatch: ambil frame PERTAMA dengan orientasi yang dibutuhin
+// (bukan yang lagi dipilih). Generik dua arah — Ori landscape → cari landscape (P+L), Ori
+// portrait → cari portrait (L+P, pas AI landscape). No pairing by-nama: operator upload bebas.
+// Ga ada frame orientasi itu = null (Original polos, foto tetap uncrop). Lihat spec 2026-07-04.
+export function findOverlayForOrientation(
   frames: OrientedFrame[],
   chosen: OrientedFrame | null,
+  want: Orientation,
 ): OrientedFrame | null {
-  if (!chosen) return null
-  return frames.find(f =>
-    f.id !== chosen.id && f.orientation === 'landscape' && norm(f.name) === norm(chosen.name)
-  ) ?? null
+  return frames.find(f => f.id !== chosen?.id && f.orientation === want) ?? null
 }
 
 // Client-only. null saat gagal load (frame rusak / offline) — caller treats as portrait.

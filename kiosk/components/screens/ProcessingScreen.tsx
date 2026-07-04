@@ -71,6 +71,7 @@ async function localSwap(
   templateUrl: string,
   selfieUrl: string,
   onProgress: (pct: number) => void,
+  faceMapping?: (number | null)[],
 ): Promise<string> {
   onProgress(10)
   const [templateBlob, selfieBlob] = await Promise.all([toBlob(templateUrl), toBlob(selfieUrl)])
@@ -78,6 +79,8 @@ async function localSwap(
   const fd = new FormData()
   fd.append('template', templateBlob, 'template.jpg')
   fd.append('selfie', selfieBlob, 'selfie.jpg')
+  // Assignment dari FaceAssign — face_server swap tiap muka sesuai ini. Absen → server default swap semua L-R.
+  if (faceMapping && faceMapping.length > 0) fd.append('mapping', JSON.stringify(faceMapping))
   onProgress(50)
   const res = await fetch('http://localhost:8000/swap', { method: 'POST', body: fd })
   if (!res.ok) throw new Error(`face_server /swap: ${res.status}`)
@@ -262,7 +265,9 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
     const interval = setInterval(() => setCopyIndex(i => (i + 1) % copy.length), 4_000)
     const genStart = performance.now() // processing duration for the log (performance.now = clock-safe)
 
-    // no-AI mode: skip generation, save original only (both A+AI slots = original)
+    // no-AI mode: skip generation, save original only (both A+AI slots = original).
+    // ponytail: dormant sejak AiChoiceScreen dihapus (ga ada yg set __no_ai__ lagi). Dibiarin —
+    // harmless, siap dipake lagi kalau "Foto Original" balik lewat template khusus.
     if (state.template.id === '__no_ai__') {
       void (async () => {
         const local = await localCopies(state.imageUrl, state.imageUrl, licensed)
@@ -303,7 +308,7 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
       const templateUrl = state.template.thumbnail_url ?? ''
       // face_server returns clean; client burns both copies (original + AI) in one place
       // when unlicensed → preview/print/save share one watermarked canvas.
-      localSwap(templateUrl, state.imageUrl, (pct) => dispatch({ type: 'SET_PROGRESS', progress: pct }))
+      localSwap(templateUrl, state.imageUrl, (pct) => dispatch({ type: 'SET_PROGRESS', progress: pct }), state.faceMapping)
         .then(async (aiUrl) => {
           const local = await localCopies(state.imageUrl, aiUrl, licensed)
           dispatch({ type: 'SET_PROGRESS', progress: 100 })

@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, type Dispatch } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { TouchButton } from '@/components/ui/TouchButton'
 import type { KioskAction, KioskState, KioskConfig } from '@/lib/types'
-import { findLandscapePair, loadImageDims, orientationOf, type OrientedFrame } from '@/lib/frames'
+import { findOverlayForOrientation, loadImageDims, orientationOf, type OrientedFrame } from '@/lib/frames'
 import { printPhoto } from '@/lib/print'
 import { compositeFrame } from '@/lib/frame-composite'
 import { uploadAsset } from '@/lib/upload'
@@ -15,7 +15,7 @@ type Props = {
   state: Extract<KioskState, { screen: 'preview' | 'framechooser' }>
   dispatch: Dispatch<KioskAction>
   frames: OrientedFrame[]
-  config: Pick<KioskConfig, 'enable_email' | 'enable_print' | 'enable_video'>
+  config: Pick<KioskConfig, 'enable_email' | 'enable_print' | 'enable_video' | 'has_secret'>
   licensed: boolean
   eventName: string
   onAction?: (action: 'printed' | 'emailed' | 'shared') => void
@@ -60,6 +60,10 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [qrStatus, setQrStatus] = useState<'idle' | 'uploading' | 'failed'>('idle')
   const uploadSeq = useRef(0)
+  // base yang udah/lagi di-upload — cegah upload dobel. Frame di final FIXED (dari chooser),
+  // tapi `mismatch` resolve async (loadImageDims) → frameForOriginal berubah → effect re-run.
+  // Tanpa guard ini tiap foto ke-upload 2x (dobel R2 + dobel log PHOTO_UPLOADED).
+  const uploadedBase = useRef<string | null>(null)
   const [printing, setPrinting] = useState(false)
   const [frameIdx, setFrameIdx] = useState<number | null>(
     frames.some(f => f.orientation === 'portrait') ? 1 : null)
@@ -98,9 +102,12 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
 
   const mismatch = !!origDims && !!aiDims &&
     orientationOf(origDims.w, origDims.h) !== orientationOf(aiDims.w, aiDims.h)
-  const pairedLandscape = findLandscapePair(frames, currentFrame)
-  // Frame yang tampil di view aktif: Original-mismatch -> pasangan landscape (bisa null = polos)
-  const visibleFrame = showOriginal && mismatch ? pairedLandscape : currentFrame
+  // Pas mismatch, Original butuh overlay seorientasi FOTO ASLI (Ori landscape→landscape frame,
+  // Ori portrait→portrait frame). currentFrame selalu portrait (pool picker), jadi cuma dipakai
+  // saat match. Ga ada frame seorientasi = null → Original polos (foto tetap uncrop).
+  const origOrientation = origDims ? orientationOf(origDims.w, origDims.h) : 'portrait'
+  const mismatchOverlay = findOverlayForOrientation(frames, currentFrame, origOrientation)
+  const visibleFrame = showOriginal && mismatch ? mismatchOverlay : currentFrame
   // Box Original-mismatch snap ke aspect ASLI foto -> object-cover = exact fit, zero crop
   const showNative = showOriginal && mismatch && activeTab === 'photo'
 
@@ -175,13 +182,14 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
   // Ganti frame = re-upload key R2 yang SAMA (overwrite) → URL QR stabil, QR ga kedip.
   // RAW (sourceUrl/rawAiUrl) yang dikirim: worker yang mutusin watermark server-side.
   // Unlicensed: no upload — QR = sinyal sesi berbayar (decoy di JSX bawah).
-  const frameForOriginal = mismatch ? pairedLandscape : currentFrame
+  const frameForOriginal = mismatch ? mismatchOverlay : currentFrame
   // Upload A(Original)+B(AI) ke R2, dua-duanya frame kepilih di-burn dulu → QR ke microsite.
   // attempts: auto-retry (effect) 2x; manual (tombol Ulangi QR) 1x. Guard uploadSeq = frame
   // paling baru yang menang, QR ga ketimpa hasil upload lama.
   async function runUpload(attempts: number) {
     if (!licensed || !state.base) return
     const base = state.base
+    uploadedBase.current = base // kunci guard di sini (bukan di effect) — begitu upload beneran mulai
     const seq = ++uploadSeq.current
     const rawOriginal = state.sourceUrl ?? state.originalUrl
     const rawAi = state.rawAiUrl ?? state.aiUrl
@@ -212,10 +220,14 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
 
   useEffect(() => {
     if (!isFinal || !licensed || !state.base) return // upload cuma di preview final, frame udah fixed
+    if (uploadedBase.current === state.base) return   // udah di-upload buat foto ini — jangan dobel
+    // Guard di-set DI DALAM runUpload (bukan di sini) — kalau debounce ke-cancel (StrictMode
+    // double-mount / re-render), guard belum terkunci, jadi effect berikutnya tetep jalan.
+    // Bug lama: set guard di sini → debounce cancel → runUpload ga jalan → QR kosong (harus pencet manual).
     const debounce = setTimeout(() => { runUpload(2) }, 600)
     return () => clearTimeout(debounce)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFinal, licensed, state.base, currentFrame?.url, frameForOriginal?.url])
+  }, [isFinal, licensed, state.base])
 
   const qrValue = activeTab === 'video' ? VIDEO_QR_URL : shareUrl
 
@@ -304,8 +316,10 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
                 {/* QR boongan — pola asli ketutup label, keliatan "ada tapi mati" */}
                 <QRCodeSVG value="https://spindonesia.id" size={80} bgColor="white" fgColor="#090135" />
                 <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,1)', borderRadius: 4, padding: 3 }}>
-                  <span style={{ fontSize: 7, lineHeight: 1.3, fontWeight: 600, color: '#090135', textAlign: 'center' }}>
-                    QR fitur nonaktif — hub admin
+                  <span style={{ fontSize: 7, lineHeight: 1.3, fontWeight: 600, color: '#090135', textAlign: 'center', fontFamily: 'var(--font-ui)' }}>
+                    {config.has_secret
+                      ? 'Butuh sewa aktif — mulai rental di admin'
+                      : 'Belum ada kunci — isi di Settings'}
                   </span>
                 </div>
               </div>
@@ -332,6 +346,18 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
                   <span style={{ fontSize: 8, lineHeight: 1.25, fontWeight: 700, color: '#090135', textAlign: 'center' }}>Ulangi<br />QR</span>
                 </>
               )}
+            </button>
+          ) : activeTab === 'photo' ? (
+            // licensed tapi belum ada shareUrl & status idle = upload effect ga jalan (base kosong?).
+            // Kasih tombol paksa upload biar operator ga buntu + keliatan sebabnya.
+            <button
+              onClick={() => runUpload(1)}
+              style={{ position: 'absolute', top: 12, right: 12, zIndex: 40, width: 92, height: 92, padding: 6, borderRadius: 10, background: 'white', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.5)', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 5, fontFamily: 'var(--font-ui)' }}
+            >
+              <span style={{ fontSize: 20, lineHeight: 1, color: '#090135' }}>↻</span>
+              <span style={{ fontSize: 8, lineHeight: 1.25, fontWeight: 700, color: '#090135', textAlign: 'center' }}>
+                {state.base ? 'Buat QR' : 'Foto belum tersimpan'}
+              </span>
             </button>
           ) : null)}
 

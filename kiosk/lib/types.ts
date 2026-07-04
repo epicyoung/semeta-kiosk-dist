@@ -85,7 +85,6 @@ export type KioskConfig = {
   secret_hint?: string   // full secret — dikirim ke Settings panel untuk masking + reveal client-side
   lock_message?: string  // custom message dari admin saat force_locked
   locale?: Locale
-  enable_ai_choice?: boolean  // show AI-or-original choice screen after capture (toggled in Settings)
 }
 
 // Display languages: plain EN/ID + KO/JA/NL/ZH/AR + Dark Myth variants (oracle tone on titles/subtitles).
@@ -95,11 +94,11 @@ export type KioskState =
   | { screen: 'idle' }
   | { screen: 'consent' }
   | { screen: 'liveview' }
-  | { screen: 'aichoice'; imageUrl: string }
   | { screen: 'category'; imageUrl: string }
   | { screen: 'template'; selected: Template | null; category: string; imageUrl: string }
   | { screen: 'faceassign'; imageUrl: string; template: Template | null; category: string; faces: Face[]; templateSlots: FaceSlot[]; assignments: FaceAssignments }
-  | { screen: 'processing'; progress: number; step: 1 | 2 | 3; imageUrl: string; template: Template; assignments: FaceAssignments }
+  // faceMapping[i] = index selfie face (L-R) buat slot template ke-i (L-R). null = slot dilewat.
+  | { screen: 'processing'; progress: number; step: 1 | 2 | 3; imageUrl: string; template: Template; assignments: FaceAssignments; faceMapping?: (number | null)[] }
   // sourceUrl = selfie bersih (pre-watermark) buat BACK/re-edit + upload _A. originalUrl bisa
   // ke-burn watermark (freemium), jangan dipakai sbg sumber re-detect/upload.
   // rawAiUrl = hasil AI bersih (pre-watermark) buat upload _B. base = seq key dari finalizeLocal.
@@ -120,7 +119,7 @@ export type KioskAction =
   | { type: 'GO_FACE_ASSIGN'; faces: Face[]; templateSlots: FaceSlot[] }
   | { type: 'ASSIGN_FACE'; faceId: string; slotId: string }
   | { type: 'UNASSIGN_FACE'; faceId: string }
-  | { type: 'START_PROCESSING' }
+  | { type: 'START_PROCESSING'; faceMapping?: (number | null)[] }
   | { type: 'SET_PROGRESS'; progress: number }
   | { type: 'SHOW_PREVIEW'; aiUrl: string; originalUrl: string; sourceUrl?: string; rawAiUrl?: string; base?: string; processingSec?: number }
   | { type: 'GO_DELIVERY'; aiUrl: string; originalUrl: string; uploadAiUrl: string; uploadOriginalUrl: string }
