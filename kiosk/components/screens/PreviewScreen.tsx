@@ -5,6 +5,7 @@ import { TouchButton } from '@/components/ui/TouchButton'
 import type { KioskAction, KioskState, KioskConfig } from '@/lib/types'
 import { findLandscapePair, loadImageDims, orientationOf, type OrientedFrame } from '@/lib/frames'
 import { printPhoto } from '@/lib/print'
+import { compositeFrame } from '@/lib/frame-composite'
 import { useT } from '@/lib/i18n'
 
 type Props = {
@@ -93,8 +94,16 @@ export function PreviewScreen({ state, dispatch, frames, config, licensed, onAct
 
   const printUrl = showOriginal ? state.originalUrl : state.aiUrl
 
-  async function doPrint(url: string, copies: number) {
-    await printPhoto(url, copies)
+  async function doPrint(url: string, frameUrl: string | null, copies: number) {
+    // Burn frame ke foto full-res sebelum print — DOM overlay ga ikut ke printer.
+    // compositeFrame passthrough kalau frameUrl null. Gagal composite → print foto polos.
+    let out = url
+    try {
+      out = await compositeFrame(url, frameUrl)
+    } catch (err) {
+      console.warn('[print] composite frame gagal, print foto polos:', err)
+    }
+    await printPhoto(out, copies)
   }
 
   function handlePrintBtn() {
@@ -102,7 +111,7 @@ export function PreviewScreen({ state, dispatch, frames, config, licensed, onAct
     setPrinting(true)
     setQty(null)
     onAction?.('printed')
-    doPrint(printUrl, qty ?? 1)
+    doPrint(printUrl, visibleFrame?.url ?? null, qty ?? 1)
   }
   function onPrintAnimEnd() { setPrinting(false) }
 
