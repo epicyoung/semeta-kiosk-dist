@@ -56,8 +56,8 @@ const ja: Translations = {
   ],
 
   // ── PreviewScreen ────────────────────────────────────────────────────────────
-  preview_title: '完成しました！ ✨',
-  preview_subtitle: '写真をタップしてAI ↔ オリジナルを切り替え',
+  preview_title: 'フレームを選ぼう ✦',
+  preview_subtitle: 'フレームを選択 — 写真をタップでAI ↔ オリジナル比較',
   preview_tap_compare: 'タップして比較',
   preview_tap_see_ai: 'タップしてAIを見る',
   preview_generating: '生成中...',
@@ -84,6 +84,11 @@ const ja: Translations = {
   preview_btn_video_ready: '動画の準備完了',
   preview_btn_rechoose: '選び直す',
   preview_btn_restart: '最初から',
+  preview_btn_next: '次へ →',
+  delivery_title: '完成しました！ ✨',
+  delivery_subtitle: 'QRをスキャンして持ち帰ろう — その場で印刷もOK',
+  delivery_qr_uploading: 'QRを準備中…',
+  delivery_qr_retry: '再試行',
 
   // ── ConsentScreen ────────────────────────────────────────────────────────────
   consent_title: '始める前に ✦',
@@ -253,7 +258,7 @@ const ja: Translations = {
   set_change: '変更',
   set_remove: '削除',
   set_frames: 'フレームオーバーレイ',
-  set_frames_hint: '透過PNG · 2:3比率 · 最大10個',
+  set_frames_hint: '透過PNG · 2:3 または 3:2 · 最大10 · 同名 = 縦横ペア',
   set_frames_loading: '読み込み中…',
   set_frames_empty: 'まだフレームがありません',
   set_bg_effects: '背景エフェクト',

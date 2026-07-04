@@ -2,14 +2,15 @@
 import { useState, useEffect, useRef, type Dispatch } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { TouchButton } from '@/components/ui/TouchButton'
-import type { KioskAction, KioskState, Frame, KioskConfig } from '@/lib/types'
+import type { KioskAction, KioskState, KioskConfig } from '@/lib/types'
+import { findLandscapePair, loadImageDims, orientationOf, type OrientedFrame } from '@/lib/frames'
 import { printPhoto } from '@/lib/print'
 import { useT } from '@/lib/i18n'
 
 type Props = {
   state: Extract<KioskState, { screen: 'preview' }>
   dispatch: Dispatch<KioskAction>
-  frames: Frame[]
+  frames: OrientedFrame[]
   config: Pick<KioskConfig, 'enable_email' | 'enable_print' | 'enable_video'>
   licensed: boolean
   onAction?: (action: 'printed' | 'emailed' | 'shared') => void
@@ -50,7 +51,8 @@ export function PreviewScreen({ state, dispatch, frames, config, licensed, onAct
   const t = useT()
   const [showOriginal, setShowOriginal] = useState(false)
   const [printing, setPrinting] = useState(false)
-  const [frameIdx, setFrameIdx] = useState<number | null>(frames.length > 0 ? 1 : null)
+  const [frameIdx, setFrameIdx] = useState<number | null>(
+    frames.some(f => f.orientation === 'portrait') ? 1 : null)
   const [qty, setQty] = useState<number | null>(null)
   const [emailMode, setEmailMode] = useState(false)
   const [email, setEmail] = useState('')
@@ -64,11 +66,30 @@ export function PreviewScreen({ state, dispatch, frames, config, licensed, onAct
   const inputRef = useRef<HTMLInputElement>(null)
   const progressRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const allFrames = frames
+  // Cycling cuma pool portrait (frame foto AI). Landscape dipake via pairing di tab Original.
+  const allFrames = frames.filter(f => f.orientation === 'portrait')
   const currentFrame = frameIdx === null ? null : allFrames[frameIdx - 1] ?? null
   // frameIdx: null = no frame, 1-based index into allFrames
   function prevFrame() { setFrameIdx(i => i === null ? allFrames.length : i <= 1 ? allFrames.length : i - 1) }
   function nextFrame() { setFrameIdx(i => i === null ? 1 : i >= allFrames.length ? 1 : i + 1) }
+
+  // Orientasi asli foto — mismatch = original beda orientasi dari hasil AI (AI = bentuk template).
+  const [origDims, setOrigDims] = useState<{ w: number; h: number } | null>(null)
+  const [aiDims, setAiDims] = useState<{ w: number; h: number } | null>(null)
+  useEffect(() => {
+    let live = true
+    if (state.originalUrl) loadImageDims(state.originalUrl).then(d => { if (live) setOrigDims(d) })
+    if (state.aiUrl) loadImageDims(state.aiUrl).then(d => { if (live) setAiDims(d) })
+    return () => { live = false }
+  }, [state.originalUrl, state.aiUrl])
+
+  const mismatch = !!origDims && !!aiDims &&
+    orientationOf(origDims.w, origDims.h) !== orientationOf(aiDims.w, aiDims.h)
+  const pairedLandscape = findLandscapePair(frames, currentFrame)
+  // Frame yang tampil di view aktif: Original-mismatch -> pasangan landscape (bisa null = polos)
+  const visibleFrame = showOriginal && mismatch ? pairedLandscape : currentFrame
+  // Box Original-mismatch snap ke aspect ASLI foto -> object-cover = exact fit, zero crop
+  const showNative = showOriginal && mismatch && activeTab === 'photo'
 
   const printUrl = showOriginal ? state.originalUrl : state.aiUrl
 
@@ -93,7 +114,7 @@ export function PreviewScreen({ state, dispatch, frames, config, licensed, onAct
   async function handleEmailSend() {
     if (!email) return
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setEmailError(true); return }
-    const aiUrl = state.r2AiUrl ?? state.aiUrl
+    const aiUrl = state.aiUrl
     await fetch('/api/send-email', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ to: email, photo_url: aiUrl }),
@@ -129,9 +150,9 @@ export function PreviewScreen({ state, dispatch, frames, config, licensed, onAct
     return () => { clearInterval(interval); clearTimeout(done) }
   }, [videoLoading])
 
-  // ponytail: only show QR when we have a real shareable URL — base64 is too long for QR
-  const r2Ready = state.r2AiUrl && !state.r2AiUrl.startsWith('data:')
-  const qrValue = activeTab === 'video' ? VIDEO_QR_URL : (r2Ready ? state.r2AiUrl! : null)
+  // ponytail: r2 URLs pindah ke delivery state (Task 8) — QR di layar ini mati sementara,
+  // dibongkar total di task berikutnya.
+  const qrValue = activeTab === 'video' ? VIDEO_QR_URL : null
 
   return (
     <div className="screen-split screen-split--center flex flex-col w-full h-full" style={{ overflow: 'clip' }}>
@@ -159,7 +180,10 @@ export function PreviewScreen({ state, dispatch, frames, config, licensed, onAct
         {activeTab === 'photo' && (
           <button onClick={prevFrame} className="glass-btn" style={{ flexShrink: 0, width: 48, height: 48, fontSize: 'var(--text-xl)', padding: 0 }}>‹</button>
         )}
-        <div className="preview-media">
+        <div
+          className={`preview-media${showNative && origDims ? ' preview-media--native' : ''}`}
+          style={showNative && origDims ? { '--native-ratio': `${origDims.w} / ${origDims.h}` } as React.CSSProperties : undefined}
+        >
 
           {/* Media layer */}
           {activeTab === 'photo' ? (
@@ -177,7 +201,7 @@ export function PreviewScreen({ state, dispatch, frames, config, licensed, onAct
                 <img src={state.originalUrl} alt="Original" className="absolute inset-0 w-full h-full object-cover z-10"
                   style={{ opacity: showOriginal ? 1 : 0, transition: 'opacity 0.3s ease' }} />
               )}
-              {currentFrame && <img src={currentFrame.url} alt="Frame" className="absolute inset-0 w-full h-full object-cover pointer-events-none z-20" />}
+              {visibleFrame && <img src={visibleFrame.url} alt="Frame" className="absolute inset-0 w-full h-full object-cover pointer-events-none z-20" />}
             </div>
           ) : (
             <div className="absolute inset-0 animate-fade-in" style={{ background: '#000' }}>

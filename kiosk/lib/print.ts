@@ -1,6 +1,22 @@
-// Silent print via hidden iframe. Chrome must run with --kiosk-printing (see start.bat/dev.bat).
-// Foto selalu 4R (4x6in). Tiap copy = halaman sendiri via page-break-before.
-export async function printPhoto(url: string, copies: number): Promise<void> {
+// Print foto 4R (4×6in). Jalur utama: POST /api/print → SumatraPDF native silent
+// (nol flash print-preview Chrome). Fallback: hidden-iframe window.print() untuk
+// mesin yang route-nya gagal (mis. printer belum ke-set). Signature dijaga stabil.
+
+/** Jalur utama: native silent print via backend lokal. Throw kalau route gagal. */
+async function printViaNative(url: string, copies: number): Promise<void> {
+  const res = await fetch('/api/print', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url, copies }),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `print route ${res.status}`)
+  }
+}
+
+/** Fallback lama: hidden iframe + window.print() (butuh Chrome --kiosk-printing). */
+async function printViaIframe(url: string, copies: number): Promise<void> {
   let dataUrl = url
   if (!url.startsWith('data:')) {
     const blob = await fetch(url).then(r => r.blob())
@@ -31,10 +47,19 @@ export async function printPhoto(url: string, copies: number): Promise<void> {
     iframe.onload = () => {
       clearTimeout(timeout)
       // ponytail: NO iframe.focus() — maling fokus dari kiosk & bisa nyentak keluar fullscreen.
-      // --kiosk-printing bikin print silent tanpa perlu iframe di-focus.
       iframe.contentWindow!.print()
       setTimeout(resolve, 2000)
     }
   })
   document.body.removeChild(iframe)
+}
+
+/** Foto selalu 4R. Native dulu; kalau route gagal, fallback ke iframe. */
+export async function printPhoto(url: string, copies: number): Promise<void> {
+  try {
+    await printViaNative(url, copies)
+  } catch (err) {
+    console.warn('[print] native gagal, fallback iframe:', err)
+    await printViaIframe(url, copies)
+  }
 }

@@ -51,6 +51,7 @@ export async function fetchPocketBaseFrames(pbUrl: string): Promise<Frame[]> {
       return {
         id: String(r.id ?? ''),
         url: img ? `${pbUrl}/api/files/frames/${String(r.id)}/${img}` : '',
+        name: String(r.name ?? ''),
       }
     }).filter(f => f.url)
   } catch {

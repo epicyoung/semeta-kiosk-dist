@@ -52,10 +52,14 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
     }
 
     case 'SHOW_PREVIEW':
-      return { screen: 'preview', aiUrl: action.aiUrl, originalUrl: action.originalUrl, sourceUrl: action.sourceUrl, selectedFrame: null }
+      return { screen: 'preview', aiUrl: action.aiUrl, originalUrl: action.originalUrl, sourceUrl: action.sourceUrl, rawAiUrl: action.rawAiUrl, base: action.base, processingSec: action.processingSec, selectedFrame: null }
+
+    case 'GO_DELIVERY':
+      if (state.screen !== 'preview') return state
+      return { screen: 'delivery', aiUrl: action.aiUrl, originalUrl: action.originalUrl, uploadAiUrl: action.uploadAiUrl, uploadOriginalUrl: action.uploadOriginalUrl, base: state.base, processingSec: state.processingSec }
 
     case 'SET_R2_URLS':
-      if (state.screen !== 'preview') return state
+      if (state.screen !== 'delivery') return state
       return { ...state, r2OriginalUrl: action.r2OriginalUrl, r2AiUrl: action.r2AiUrl }
 
     case 'SELECT_FRAME':
@@ -65,6 +69,7 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
     case 'BACK':
       if (state.screen === 'consent') return { screen: 'idle' }
       if (state.screen === 'liveview') return { screen: 'idle' }
+      if (state.screen === 'aichoice') return { screen: 'liveview' }
       if (state.screen === 'category') return { screen: 'liveview' }
       if (state.screen === 'template') return { screen: 'category', imageUrl: state.imageUrl }
       if (state.screen === 'faceassign') return { screen: 'template', imageUrl: state.imageUrl, category: state.category, selected: null }

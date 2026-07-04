@@ -56,8 +56,8 @@ const nl: Translations = {
   ],
 
   // ── PreviewScreen ────────────────────────────────────────────────────────────
-  preview_title: 'Hier is je resultaat! ✨',
-  preview_subtitle: 'Tik op de foto om te wisselen AI ↔ Origineel',
+  preview_title: 'Lijst je moment in ✦',
+  preview_subtitle: 'Kies een lijst — tik op de foto om AI ↔ Origineel te vergelijken',
   preview_tap_compare: 'Tik om te vergelijken',
   preview_tap_see_ai: 'Tik om AI te zien',
   preview_generating: 'Genereren...',
@@ -84,6 +84,11 @@ const nl: Translations = {
   preview_btn_video_ready: 'Video klaar',
   preview_btn_rechoose: 'Opnieuw kiezen',
   preview_btn_restart: 'Opnieuw starten',
+  preview_btn_next: 'Volgende →',
+  delivery_title: 'Hier is je resultaat! ✨',
+  delivery_subtitle: 'Scan de QR om hem mee te nemen — of print hem direct',
+  delivery_qr_uploading: 'QR wordt voorbereid…',
+  delivery_qr_retry: 'Opnieuw',
 
   // ── ConsentScreen ────────────────────────────────────────────────────────────
   consent_title: 'Voordat we beginnen ✦',
@@ -253,7 +258,7 @@ const nl: Translations = {
   set_change: 'Wijzigen',
   set_remove: 'Verwijderen',
   set_frames: 'Frame-overlays',
-  set_frames_hint: 'Transparante PNG · 2:3-verhouding · max. 10',
+  set_frames_hint: 'Transparante PNG · 2:3 of 3:2 · max 10 · zelfde naam = staand+liggend paar',
   set_frames_loading: 'Laden…',
   set_frames_empty: 'Nog geen frames',
   set_bg_effects: 'Achtergrondeffecten',

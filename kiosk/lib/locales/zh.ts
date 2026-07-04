@@ -56,8 +56,8 @@ const zh: Translations = {
   ],
 
   // ── PreviewScreen ────────────────────────────────────────────────────────────
-  preview_title: '这就是你的成果！✨',
-  preview_subtitle: '点击照片切换 AI ↔ 原图',
+  preview_title: '给这一刻加个相框 ✦',
+  preview_subtitle: '选择相框 — 点击照片对比 AI ↔ 原图',
   preview_tap_compare: '点击对比',
   preview_tap_see_ai: '点击查看 AI',
   preview_generating: '生成中…',
@@ -84,6 +84,11 @@ const zh: Translations = {
   preview_btn_video_ready: '视频已就绪',
   preview_btn_rechoose: '重新选择',
   preview_btn_restart: '重新开始',
+  preview_btn_next: '下一步 →',
+  delivery_title: '这就是你的成果！✨',
+  delivery_subtitle: '扫描二维码带走它 — 也可以立即打印',
+  delivery_qr_uploading: '正在生成二维码…',
+  delivery_qr_retry: '重试',
 
   // ── ConsentScreen ────────────────────────────────────────────────────────────
   consent_title: '开始之前 ✦',
@@ -253,7 +258,7 @@ const zh: Translations = {
   set_change: '更改',
   set_remove: '移除',
   set_frames: '边框叠加',
-  set_frames_hint: '透明 PNG · 2:3 比例 · 最多 10 个',
+  set_frames_hint: '透明 PNG · 2:3 或 3:2 · 最多 10 · 同名 = 竖版+横版一对',
   set_frames_loading: '加载中…',
   set_frames_empty: '暂无边框',
   set_bg_effects: '背景特效',

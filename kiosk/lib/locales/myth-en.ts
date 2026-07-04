@@ -28,8 +28,11 @@ const mythEn: Translations = {
   processing_title: 'Forging the Immortal',
   processing_subtitle: 'The mystic fires burn, the gears align.\nPatience, traveler — your portrait takes design.',
 
-  preview_title: 'Behold.',
-  preview_subtitle: 'What fades from sight, the forged light keeps.\nTap to wander between shadow and light.',
+  preview_title: 'Choose thy sigil ✦',
+  preview_subtitle: 'A border binds the vision.\nTap to wander between shadow and light.',
+
+  delivery_title: 'Behold.',
+  delivery_subtitle: 'What fades from sight, the forged light keeps.\nThe seal below carries it beyond these walls.',
 }
 
 export default mythEn

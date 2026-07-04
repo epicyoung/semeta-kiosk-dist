@@ -88,6 +88,13 @@ export interface Translations {
   preview_btn_video_ready: string
   preview_btn_rechoose: string
   preview_btn_restart: string
+  preview_btn_next: string
+
+  // ── DeliveryScreen ───────────────────────────────────────────────────────────
+  delivery_title: string
+  delivery_subtitle: string
+  delivery_qr_uploading: string   // spinner label while R2 upload in-flight
+  delivery_qr_retry: string       // retry button after failed upload
 
   // ── ConsentScreen ────────────────────────────────────────────────────────────
   consent_title: string

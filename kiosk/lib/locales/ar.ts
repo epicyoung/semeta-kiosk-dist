@@ -56,8 +56,8 @@ const ar: Translations = {
   ],
 
   // ── PreviewScreen ────────────────────────────────────────────────────────────
-  preview_title: 'ها هي نتيجتك! ✨',
-  preview_subtitle: 'انقر الصورة للتبديل بين الذكاء الاصطناعي ↔ الأصل',
+  preview_title: 'أطِّر لحظتك ✦',
+  preview_subtitle: 'اختر إطارًا — انقر الصورة للمقارنة بين الذكاء الاصطناعي ↔ الأصل',
   preview_tap_compare: 'انقر للمقارنة',
   preview_tap_see_ai: 'انقر لرؤية نتيجة الذكاء الاصطناعي',
   preview_generating: 'جارٍ الإنشاء...',
@@ -84,6 +84,11 @@ const ar: Translations = {
   preview_btn_video_ready: 'الفيديو جاهز',
   preview_btn_rechoose: 'إعادة الاختيار',
   preview_btn_restart: 'إعادة التشغيل',
+  preview_btn_next: 'التالي ←',
+  delivery_title: 'ها هي نتيجتك! ✨',
+  delivery_subtitle: 'امسح رمز QR لتأخذها معك — أو اطبعها الآن',
+  delivery_qr_uploading: 'جارٍ تجهيز رمز QR…',
+  delivery_qr_retry: 'أعد المحاولة',
 
   // ── ConsentScreen ────────────────────────────────────────────────────────────
   consent_title: 'قبل أن نبدأ ✦',
@@ -253,7 +258,7 @@ const ar: Translations = {
   set_change: 'تغيير',
   set_remove: 'إزالة',
   set_frames: 'إطارات التراكب',
-  set_frames_hint: 'PNG شفاف · نسبة 2:3 · بحد أقصى 10',
+  set_frames_hint: 'PNG شفاف · 2:3 أو 3:2 · حد أقصى 10 · نفس الاسم = زوج عمودي+أفقي',
   set_frames_loading: 'جارٍ التحميل…',
   set_frames_empty: 'لا توجد إطارات بعد',
   set_bg_effects: 'تأثيرات الخلفية',

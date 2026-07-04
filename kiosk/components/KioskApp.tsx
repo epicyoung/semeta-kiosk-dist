@@ -10,6 +10,7 @@ import { IdleScreen } from '@/components/screens/IdleScreen'
 import { LiveViewScreen } from '@/components/screens/LiveViewScreen'
 import { CategoryScreen } from '@/components/screens/CategoryScreen'
 import { TemplateScreen } from '@/components/screens/TemplateScreen'
+import { AiChoiceScreen } from '@/components/screens/AiChoiceScreen'
 import { FaceAssignScreen } from '@/components/screens/FaceAssignScreen'
 import { ProcessingScreen } from '@/components/screens/ProcessingScreen'
 import { PreviewScreen } from '@/components/screens/PreviewScreen'
@@ -17,9 +18,10 @@ import { ExpiredScreen } from '@/components/screens/ExpiredScreen'
 import { ConsentScreen } from '@/components/screens/ConsentScreen'
 import type { KioskConfig, KioskState } from '@/lib/types'
 import { SPINDONESIA_CATEGORY } from '@/lib/spindonesia-category'
+import { useOrientedFrames } from '@/lib/frames'
 
 const SCREEN_ORDER: KioskState['screen'][] = [
-  'idle', 'consent', 'liveview', 'category', 'template', 'faceassign', 'processing', 'preview',
+  'idle', 'consent', 'liveview', 'aichoice', 'category', 'template', 'faceassign', 'processing', 'preview',
 ]
 
 const DUMMY_TEMPLATE = { id: 'd1', name: 'Template 1', category: 'faceswap', token_cost: 1, thumbnail_url: null, gender_filter: 'ALL' as const, engine_type: 'faceswap' as const, positive_prompt: null, negative_prompt: null, api_endpoint: null, video_endpoint: null, video_positive_prompt: null, video_negative_prompt: null }
@@ -28,6 +30,7 @@ const SCREEN_INIT: Partial<Record<KioskState['screen'], KioskState>> = {
   idle:       { screen: 'idle' },
   consent:    { screen: 'consent' },
   liveview:   { screen: 'liveview' },
+  aichoice:   { screen: 'aichoice', imageUrl: '' },
   category:   { screen: 'category', imageUrl: '' },
   template:   { screen: 'template', imageUrl: '', category: 'cat-1', selected: null },
   faceassign: {
@@ -64,6 +67,7 @@ export function KioskApp({ config }: { config: KioskConfig }) {
   const withPin = (list: KioskConfig['templates']) =>
     [...spindonesiaPinned.current, ...list.filter(t => t.category !== SPINDONESIA_CATEGORY)]
   const [templates, setTemplates] = useState(config.templates)
+  const orientedFrames = useOrientedFrames(config.frames)
   const direction = useRef<'forward' | 'backward'>('forward')
 
   const { isExpired, pause, resume, refill } = useCountdown(config.remaining_sec ?? 0)
@@ -106,6 +110,11 @@ export function KioskApp({ config }: { config: KioskConfig }) {
         case 'CAPTURE': {
           retakeCount.current += 1
           log('VISITOR_PHOTO_TAKEN', { retake_count: retakeCount.current })
+          if (config.enable_ai_choice && 'imageUrl' in action) {
+            direction.current = 'forward'
+            dispatch({ type: 'SET_STATE', state: { screen: 'aichoice', imageUrl: action.imageUrl } })
+            return // skip reducer dispatch below
+          }
           break
         }
         case 'SELECT_CATEGORY':
@@ -176,11 +185,12 @@ export function KioskApp({ config }: { config: KioskConfig }) {
       case 'idle':        return <IdleScreen dispatch={wrappedDispatch} />
       case 'consent':     return <ConsentScreen dispatch={wrappedDispatch} />
       case 'liveview':    return <LiveViewScreen state={state} dispatch={wrappedDispatch} />
+      case 'aichoice':    return <AiChoiceScreen state={state} dispatch={wrappedDispatch} />
       case 'category':    return <CategoryScreen state={state} dispatch={wrappedDispatch} templates={templates} />
       case 'template':    return <TemplateScreen state={state} dispatch={wrappedDispatch} templates={templates} />
       case 'faceassign':  return <FaceAssignScreen state={state} dispatch={wrappedDispatch} />
       case 'processing':  return <ProcessingScreen state={state} dispatch={wrappedDispatch} generationSource={config.generation_source} eventName={config.event_name} licensed={config.licensed ?? false} onUploadFailed={(meta) => log('UPLOAD_FAILED', meta)} />
-      case 'preview':     return <PreviewScreen state={state} dispatch={wrappedDispatch} frames={config.frames} config={config} licensed={config.licensed ?? false} onAction={(a) => log('VISITOR_ACTION', { action: a })} />
+      case 'preview':     return <PreviewScreen state={state} dispatch={wrappedDispatch} frames={orientedFrames} config={config} licensed={config.licensed ?? false} onAction={(a) => log('VISITOR_ACTION', { action: a })} />
     }
   })()
 

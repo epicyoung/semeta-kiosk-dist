@@ -56,8 +56,8 @@ const ko: Translations = {
   ],
 
   // ── PreviewScreen ────────────────────────────────────────────────────────────
-  preview_title: '결과가 나왔어요! ✨',
-  preview_subtitle: '사진을 탭하면 AI ↔ 원본으로 전환됩니다',
+  preview_title: '순간을 프레임에 담아요 ✦',
+  preview_subtitle: '프레임을 고르세요 — 사진을 탭하면 AI ↔ 원본 비교',
   preview_tap_compare: '탭하여 비교하기',
   preview_tap_see_ai: '탭하여 AI 보기',
   preview_generating: '생성하는 중...',
@@ -84,6 +84,11 @@ const ko: Translations = {
   preview_btn_video_ready: '동영상 준비됨',
   preview_btn_rechoose: '다시 선택',
   preview_btn_restart: '다시 시작',
+  preview_btn_next: '다음 →',
+  delivery_title: '결과가 나왔어요! ✨',
+  delivery_subtitle: 'QR을 스캔해 간직하세요 — 지금 바로 인쇄도 가능해요',
+  delivery_qr_uploading: 'QR 준비 중…',
+  delivery_qr_retry: '다시 시도',
 
   // ── ConsentScreen ────────────────────────────────────────────────────────────
   consent_title: '시작하기 전에 ✦',
@@ -253,7 +258,7 @@ const ko: Translations = {
   set_change: '변경',
   set_remove: '제거',
   set_frames: '프레임 오버레이',
-  set_frames_hint: '투명 PNG · 2:3 비율 · 최대 10개',
+  set_frames_hint: '투명 PNG · 2:3 또는 3:2 · 최대 10 · 같은 이름 = 세로+가로 한 쌍',
   set_frames_loading: '불러오는 중…',
   set_frames_empty: '아직 프레임이 없습니다',
   set_bg_effects: '배경 효과',

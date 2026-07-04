@@ -734,9 +734,26 @@ h1, .h1-glow { letter-spacing: -0.02em; }
   flex-shrink: 0;
   border-radius: 24px;
   overflow: hidden;
+  transition: aspect-ratio 400ms ease, width 400ms ease;
 }
 @media (orientation: landscape) {
   .preview-media {
+    width: auto;
+    height: 100%;
+    max-width: 100%;
+  }
+}
+
+/* Original-mismatch: box ikut aspect asli foto (var dari PreviewScreen).
+   Media query landscape TETAP pegang kendali axis — jangan pindahin sizing ke inline style. */
+.preview-media--native {
+  aspect-ratio: var(--native-ratio, 2 / 3);
+  width: min(920px, 100%);
+  height: auto;
+  max-height: 100%;
+}
+@media (orientation: landscape) {
+  .preview-media--native {
     width: auto;
     height: 100%;
     max-width: 100%;

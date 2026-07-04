@@ -28,8 +28,11 @@ const mythId: Translations = {
   processing_title: 'Menempa Keabadian',
   processing_subtitle: 'Api mistis menyala, roda berputar selaras.\nSabar, sang pejalan — potretmu tengah diukir.',
 
-  preview_title: 'Lihatlah.',
-  preview_subtitle: 'Yang pudar dari pandangan, diabadikan cahaya.\nKetuk untuk beralih antara asli dan hasilnya.',
+  preview_title: 'Pilih segel takdirmu ✦',
+  preview_subtitle: 'Bingkai mengikat penglihatan.\nKetuk untuk beralih antara bayang dan cahaya.',
+
+  delivery_title: 'Lihatlah.',
+  delivery_subtitle: 'Yang pudar dari pandangan, diabadikan cahaya.\nSegel di bawah membawanya keluar dari dinding ini.',
 }
 
 export default mythId

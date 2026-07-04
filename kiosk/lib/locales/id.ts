@@ -56,8 +56,8 @@ const id: Translations = {
   ],
 
   // ── PreviewScreen ────────────────────────────────────────────────────────────
-  preview_title: 'Ini hasilnya! ✨',
-  preview_subtitle: 'Ketuk foto untuk beralih AI ↔ Asli',
+  preview_title: 'Bingkai momenmu ✦',
+  preview_subtitle: 'Pilih bingkai — ketuk foto untuk membandingkan AI ↔ Asli',
   preview_tap_compare: 'Ketuk untuk bandingkan',
   preview_tap_see_ai: 'Ketuk untuk lihat AI',
   preview_generating: 'Membuat...',
@@ -85,6 +85,11 @@ const id: Translations = {
   preview_btn_video_ready: 'Video Siap',
   preview_btn_rechoose: 'Ganti Pilihan',
   preview_btn_restart: 'Restart',
+  preview_btn_next: 'Lanjut →',
+  delivery_title: 'Ini hasilnya! ✨',
+  delivery_subtitle: 'Pindai QR untuk membawanya pulang — atau cetak sekarang',
+  delivery_qr_uploading: 'Menyiapkan QR…',
+  delivery_qr_retry: 'Coba lagi',
 
   // ── ConsentScreen ────────────────────────────────────────────────────────────
   consent_title: 'Sebelum Kita Mulai ✦',
@@ -255,7 +260,7 @@ const id: Translations = {
   set_change: 'Ganti',
   set_remove: 'Hapus',
   set_frames: 'Frame Overlay',
-  set_frames_hint: 'PNG transparan · rasio 2:3 · max 10',
+  set_frames_hint: 'PNG transparan · 2:3 atau 3:2 · maks 10 · nama sama = pasangan portrait+landscape',
   set_frames_loading: 'Memuat…',
   set_frames_empty: 'Belum ada frame',
   set_bg_effects: 'Efek Latar',

@@ -56,8 +56,8 @@ const en: Translations = {
   ],
 
   // ── PreviewScreen ────────────────────────────────────────────────────────────
-  preview_title: "Here's your result! ✨",
-  preview_subtitle: 'Tap photo to toggle AI ↔ Original',
+  preview_title: 'Frame your moment ✦',
+  preview_subtitle: 'Pick a frame — tap photo to compare AI ↔ Original',
   preview_tap_compare: 'Tap to compare',
   preview_tap_see_ai: 'Tap to see AI',
   preview_generating: 'Generating...',
@@ -84,6 +84,11 @@ const en: Translations = {
   preview_btn_video_ready: 'Video Ready',
   preview_btn_rechoose: 'Re-choose',
   preview_btn_restart: 'Restart',
+  preview_btn_next: 'Next →',
+  delivery_title: "Here's your result! ✨",
+  delivery_subtitle: 'Scan the QR to take it home — or print it right now',
+  delivery_qr_uploading: 'Preparing your QR…',
+  delivery_qr_retry: 'Retry',
 
   // ── ConsentScreen ────────────────────────────────────────────────────────────
   consent_title: 'Before We Start ✦',
@@ -253,7 +258,7 @@ const en: Translations = {
   set_change: 'Change',
   set_remove: 'Remove',
   set_frames: 'Frame Overlays',
-  set_frames_hint: 'Transparent PNG · 2:3 ratio · max 10',
+  set_frames_hint: 'Transparent PNG · 2:3 or 3:2 · max 10 · same name = portrait+landscape pair',
   set_frames_loading: 'Loading…',
   set_frames_empty: 'No frames yet',
   set_bg_effects: 'Background Effects',

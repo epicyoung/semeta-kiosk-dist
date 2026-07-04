@@ -41,6 +41,7 @@ export type FaceAssignments = Record<string, string>
 export type Frame = {
   id: string
   url: string
+  name: string // pairing key: portrait "neon" <-> landscape "neon" (case-insensitive)
 }
 
 export type GenerationSource = 'LOCAL' | 'CLOUD' | 'fal'
@@ -84,6 +85,7 @@ export type KioskConfig = {
   secret_hint?: string   // full secret — dikirim ke Settings panel untuk masking + reveal client-side
   lock_message?: string  // custom message dari admin saat force_locked
   locale?: Locale
+  enable_ai_choice?: boolean  // show AI-or-original choice screen after capture (toggled in Settings)
 }
 
 // Display languages: plain EN/ID + KO/JA/NL/ZH/AR + Dark Myth variants (oracle tone on titles/subtitles).
@@ -93,12 +95,17 @@ export type KioskState =
   | { screen: 'idle' }
   | { screen: 'consent' }
   | { screen: 'liveview' }
+  | { screen: 'aichoice'; imageUrl: string }
   | { screen: 'category'; imageUrl: string }
   | { screen: 'template'; selected: Template | null; category: string; imageUrl: string }
   | { screen: 'faceassign'; imageUrl: string; template: Template | null; category: string; faces: Face[]; templateSlots: FaceSlot[]; assignments: FaceAssignments }
   | { screen: 'processing'; progress: number; step: 1 | 2 | 3; imageUrl: string; template: Template; assignments: FaceAssignments }
-  // sourceUrl = selfie bersih (pre-watermark) buat BACK/re-edit. originalUrl bisa ke-burn watermark (freemium), jangan dipakai sbg sumber re-detect.
-  | { screen: 'preview'; aiUrl: string; originalUrl: string; sourceUrl?: string; selectedFrame: Frame | null; r2OriginalUrl?: string; r2AiUrl?: string }
+  // sourceUrl = selfie bersih (pre-watermark) buat BACK/re-edit + upload _A. originalUrl bisa
+  // ke-burn watermark (freemium), jangan dipakai sbg sumber re-detect/upload.
+  // rawAiUrl = hasil AI bersih (pre-watermark) buat upload _B. base = seq key dari finalizeLocal.
+  | { screen: 'preview'; aiUrl: string; originalUrl: string; sourceUrl?: string; rawAiUrl?: string; base?: string; processingSec?: number; selectedFrame: Frame | null }
+  // aiUrl/originalUrl = display (burned+framed). uploadAiUrl/uploadOriginalUrl = raw+framed → R2.
+  | { screen: 'delivery'; aiUrl: string; originalUrl: string; uploadAiUrl: string; uploadOriginalUrl: string; base?: string; processingSec?: number; r2OriginalUrl?: string; r2AiUrl?: string }
   | { screen: 'force_locked'; reason?: LockReason; message?: string }
 
 export type KioskAction =
@@ -113,7 +120,8 @@ export type KioskAction =
   | { type: 'UNASSIGN_FACE'; faceId: string }
   | { type: 'START_PROCESSING' }
   | { type: 'SET_PROGRESS'; progress: number }
-  | { type: 'SHOW_PREVIEW'; aiUrl: string; originalUrl: string; sourceUrl?: string }
+  | { type: 'SHOW_PREVIEW'; aiUrl: string; originalUrl: string; sourceUrl?: string; rawAiUrl?: string; base?: string; processingSec?: number }
+  | { type: 'GO_DELIVERY'; aiUrl: string; originalUrl: string; uploadAiUrl: string; uploadOriginalUrl: string }
   | { type: 'SELECT_FRAME'; frame: Frame | null }
   | { type: 'BACK' }
   | { type: 'RESET' }
