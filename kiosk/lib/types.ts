@@ -1,7 +1,19 @@
 import type { LockReason } from './license'
 
-export type EngineType = 'faceswap' | 'fullbody' | 'api'
+export type EngineType = 'faceswap' | 'fullbody' | 'api' | 'comfy' | 'print'
 export type GenderFilter = 'MAN' | 'WOMEN' | 'HIJAB' | 'ALL'
+
+// Photo Print (non-AI). 2R selalu dicetak 2-up di kertas 4R — printer gak pernah ganti media.
+export type PrintSize = '4R' | '2R'
+
+export type ComfyModelFamily = 'sd15' | 'sdxl' | 'flux'
+export type ComfyControlnetMode = 'canny' | 'depth' | 'off'
+
+// Video engine (img2vid): output image terakhir dijadikan seed ke provider video via FAL.
+// Semua provider lewat satu FAL_API_KEY (Worker env) — bedanya cuma endpoint FAL per provider.
+export type VideoProvider =
+  | 'SEEDANCE' | 'LTX' | 'WAN' | 'VEO' | 'KLING'
+  | 'PIXVERSE' | 'HAPPYHORSE' | 'VIDU'
 
 export type Template = {
   id: string
@@ -17,6 +29,11 @@ export type Template = {
   video_endpoint: string | null
   video_positive_prompt: string | null
   video_negative_prompt: string | null
+  denoise?: number | null // override kreatif per-template; null = pakai default global settings
+  // Engine 'print' only — semua null/undefined buat engine lain
+  shot_count?: number | null   // jumlah jepretan per sesi; null ⇒ 4
+  print_size?: PrintSize | null // null ⇒ '4R'
+  overlay_url?: string | null  // PNG transparan (alpha utuh) dibakar di atas slot foto
 }
 
 export type Face = {
@@ -46,6 +63,18 @@ export type Frame = {
 
 export type GenerationSource = 'LOCAL' | 'CLOUD' | 'fal'
 
+// One AI result from the multi-template swap loop. Carries everything the frame→preview flow
+// needs so PICK_RESULT can collapse a chosen result straight into framechooser.
+export type SwapResult = {
+  templateId: string
+  aiUrl: string
+  originalUrl: string
+  sourceUrl?: string
+  rawAiUrl?: string
+  base?: string
+  processingSec?: number
+}
+
 export type VideoDefaults = {
   default_positive_prompt: string
   default_negative_prompt: string
@@ -70,6 +99,22 @@ export type KioskConfig = {
   engine_mode?: string
   camera_source?: string
   api_model?: string
+  max_templates?: number          // VIP multi-template: 1 (default) — 4. undefined ⇒ 1.
+  enable_magic_catcher?: boolean  // reaction cam toggle. undefined ⇒ false.
+  // Engine comfy (per-template engine_type 'comfy') — global knobs, persist di settings.json
+  comfy_model_family?: ComfyModelFamily
+  comfy_checkpoint?: string
+  comfy_controlnet?: ComfyControlnetMode
+  comfy_denoise?: number        // 0.10–0.95 — kekuatan restyle img2img
+  comfy_face_lock?: boolean     // ReActor swap muka tamu balik ke hasil
+  comfy_sampler?: string        // override sampler; '' / undefined = default per family
+  comfy_scheduler?: string      // override scheduler; '' / undefined = default per family
+  comfy_cfg?: string            // override CFG ('3'..'10'); '' / undefined = default; flux dikunci 1.0
+  comfy_steps?: string          // override steps ('15'|'20'|'25'|'30'); '' / undefined = default; flux dikunci 20
+  comfy_cn_strength?: string    // override ControlNet strength ('0.3'..'1.0'); '' / undefined = default 0.8
+  // Video engine (img2vid) — routing di Worker. undefined ⇒ OFF.
+  enable_video_engine?: boolean
+  video_provider?: VideoProvider  // dipakai kalau enable_video_engine true. undefined ⇒ PIXVERSE (HPP termurah).
   template_local?: string
   template_source?: TemplateSource
   pocketbase_url?: string
@@ -95,33 +140,45 @@ export type KioskState =
   | { screen: 'consent' }
   | { screen: 'liveview' }
   | { screen: 'category'; imageUrl: string }
-  | { screen: 'template'; selected: Template | null; category: string; imageUrl: string }
-  | { screen: 'faceassign'; imageUrl: string; template: Template | null; category: string; faces: Face[]; templateSlots: FaceSlot[]; assignments: FaceAssignments }
+  | { screen: 'template'; selected: Template[]; category: string; imageUrl: string }
+  | { screen: 'faceassign'; imageUrl: string; templates: Template[]; category: string; faces: Face[]; templateSlots: FaceSlot[]; assignments: FaceAssignments }
+  // Photo Print: layout dipilih dulu → jepret N kali di sini (kebalikan flow AI yang foto duluan)
+  | { screen: 'multicapture'; template: Template; shots: string[] }
   // faceMapping[i] = index selfie face (L-R) buat slot template ke-i (L-R). null = slot dilewat.
-  | { screen: 'processing'; progress: number; step: 1 | 2 | 3; imageUrl: string; template: Template; assignments: FaceAssignments; faceMapping?: (number | null)[] }
+  // templates: 1 (biasa) atau 2-4 (VIP multi). Swap sequential, 1 selfie mapping dipakai semua.
+  // shots: engine 'print' only — N jepretan buat compose layout, imageUrl = shots[0]
+  | { screen: 'processing'; progress: number; step: 1 | 2 | 3; imageUrl: string; templates: Template[]; assignments: FaceAssignments; faceMapping?: (number | null)[]; shots?: string[] }
+  // Multi-template only: N hasil AI, tamu pilih 1 di grid → PICK_RESULT collapse ke framechooser.
+  | { screen: 'resultchooser'; results: SwapResult[]; imageUrl: string }
   // sourceUrl = selfie bersih (pre-watermark) buat BACK/re-edit + upload _A. originalUrl bisa
   // ke-burn watermark (freemium), jangan dipakai sbg sumber re-detect/upload.
   // rawAiUrl = hasil AI bersih (pre-watermark) buat upload _B. base = seq key dari finalizeLocal.
   // framechooser = pilih frame dulu (cycling), NEXT bawa selectedFrame ke preview. No upload/print di sini.
-  | { screen: 'framechooser'; aiUrl: string; originalUrl: string; sourceUrl?: string; rawAiUrl?: string; base?: string; processingSec?: number }
-  | { screen: 'preview'; aiUrl: string; originalUrl: string; sourceUrl?: string; rawAiUrl?: string; base?: string; processingSec?: number; selectedFrame: Frame | null }
+  | { screen: 'framechooser'; aiUrl: string; originalUrl: string; sourceUrl?: string; rawAiUrl?: string; base?: string; processingSec?: number; videoUrl?: string }
+  // printSize set = sesi Photo Print (video tab & toggle AI/Asli disembunyiin, BACK balik ke template)
+  | { screen: 'preview'; aiUrl: string; originalUrl: string; sourceUrl?: string; rawAiUrl?: string; base?: string; processingSec?: number; selectedFrame: Frame | null; videoUrl?: string; printSize?: PrintSize }
   // aiUrl/originalUrl = display (burned+framed). uploadAiUrl/uploadOriginalUrl = raw+framed → R2.
   | { screen: 'delivery'; aiUrl: string; originalUrl: string; uploadAiUrl: string; uploadOriginalUrl: string; base?: string; processingSec?: number; r2OriginalUrl?: string; r2AiUrl?: string }
   | { screen: 'force_locked'; reason?: LockReason; message?: string }
 
 export type KioskAction =
   | { type: 'START' }
-  | { type: 'CONSENT_GIVEN' }
+  | { type: 'CONSENT_GIVEN'; print?: boolean } // print = mode print_local → skip liveview+category, langsung template
   | { type: 'CAPTURE'; imageUrl: string }
+  | { type: 'START_CAPTURE_LOOP' } // template (engine 'print') → multicapture
+  | { type: 'SHOT_TAKEN'; imageUrl: string }
+  | { type: 'RETAKE_SHOTS' } // reset semua jepretan, ulang sequence
   | { type: 'SELECT_CATEGORY'; category: string }
-  | { type: 'SELECT_TEMPLATE'; template: Template }
+  | { type: 'SELECT_TEMPLATE'; template: Template; maxTemplates: number }
   | { type: 'CONFIRM_TEMPLATE' }
+  | { type: 'PICK_RESULT'; result: SwapResult }
   | { type: 'GO_FACE_ASSIGN'; faces: Face[]; templateSlots: FaceSlot[] }
   | { type: 'ASSIGN_FACE'; faceId: string; slotId: string }
   | { type: 'UNASSIGN_FACE'; faceId: string }
   | { type: 'START_PROCESSING'; faceMapping?: (number | null)[] }
   | { type: 'SET_PROGRESS'; progress: number }
-  | { type: 'SHOW_PREVIEW'; aiUrl: string; originalUrl: string; sourceUrl?: string; rawAiUrl?: string; base?: string; processingSec?: number }
+  // direct = skip framechooser langsung ke preview (Photo Print: overlay udah dibakar, frame dobel haram)
+  | { type: 'SHOW_PREVIEW'; aiUrl: string; originalUrl: string; sourceUrl?: string; rawAiUrl?: string; base?: string; processingSec?: number; videoUrl?: string; direct?: boolean; printSize?: PrintSize }
   | { type: 'GO_DELIVERY'; aiUrl: string; originalUrl: string; uploadAiUrl: string; uploadOriginalUrl: string }
   | { type: 'SELECT_FRAME'; frame: Frame | null }
   | { type: 'CONFIRM_FRAME'; frame: Frame | null } // framechooser NEXT → preview bawa frame kepilih

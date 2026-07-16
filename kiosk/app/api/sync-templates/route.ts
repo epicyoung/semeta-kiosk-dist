@@ -3,6 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import sharp from 'sharp'
 import { computeTargetHeight, computeTargetWidth, computeCropTop, computeCropLeft, HEADROOM_RATIO } from '@/lib/crop'
+import { parseSidecar, type TemplateSidecar } from '@/lib/template-sidecar'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -36,7 +37,20 @@ async function readDims(fp: string): Promise<{ w: number; h: number } | null> {
   }
 }
 
-type FolderFile = { name: string; category: string; fp: string }
+type FolderFile = { name: string; category: string; fp: string; sidecar: TemplateSidecar | null }
+
+// Sidecar <nama>.json di sebelah gambar → template comfy (engine_type + prompts + denoise).
+// ponytail: edit sidecar SETELAH ke-sync gak auto-update (dedup by category||name) —
+// hapus record di PB / rename file kalau mau re-sync isi barunya.
+function readSidecar(imagePath: string): TemplateSidecar | null {
+  const jsonPath = imagePath.replace(/\.[^.]+$/, '.json')
+  if (!fs.existsSync(jsonPath)) return null
+  try {
+    return parseSidecar(fs.readFileSync(jsonPath, 'utf-8'))
+  } catch {
+    return null
+  }
+}
 
 // Ask face_server for face boxes. Returns:
 //   faceY = topmost face top (smallest y) → protects the highest head (vertical crop headroom)
@@ -113,10 +127,13 @@ function scanFolder(inbox: string): FolderFile[] {
   for (const entry of fs.readdirSync(inbox, { withFileTypes: true })) {
     if (entry.isDirectory()) {
       const subdir = path.join(inbox, entry.name)
-      for (const file of fs.readdirSync(subdir).filter(f => EXTS.includes(path.extname(f).toLowerCase())))
-        result.push({ name: toTitleCase(file), category: entry.name, fp: path.join(subdir, file) })
+      for (const file of fs.readdirSync(subdir).filter(f => EXTS.includes(path.extname(f).toLowerCase()))) {
+        const fp = path.join(subdir, file)
+        result.push({ name: toTitleCase(file), category: entry.name, fp, sidecar: readSidecar(fp) })
+      }
     } else if (EXTS.includes(path.extname(entry.name).toLowerCase())) {
-      result.push({ name: toTitleCase(entry.name), category: DEFAULT_CATEGORY, fp: path.join(inbox, entry.name) })
+      const fp = path.join(inbox, entry.name)
+      result.push({ name: toTitleCase(entry.name), category: DEFAULT_CATEGORY, fp, sidecar: readSidecar(fp) })
     }
   }
   return result
@@ -156,9 +173,24 @@ async function uploadTemplate(token: string, f: FolderFile, buf: Buffer, mime: s
   const fd = new FormData()
   fd.append('name', f.name)
   fd.append('category', f.category)
-  fd.append('engine_type', 'faceswap')
+  // Sidecar nentuin engine + prompt; tanpa sidecar = faceswap kayak biasa (zero breaking)
+  fd.append('engine_type', f.sidecar?.engine_type ?? 'faceswap')
+  if (f.sidecar?.positive_prompt) fd.append('positive_prompt', f.sidecar.positive_prompt)
+  if (f.sidecar?.negative_prompt) fd.append('negative_prompt', f.sidecar.negative_prompt)
+  if (f.sidecar?.denoise != null) fd.append('denoise', String(f.sidecar.denoise))
   fd.append('gender_filter', 'ALL')
-  fd.append('token_cost', '1')
+  // Photo Print: nol AI call → nol token. Overlay PNG mentah masuk field 'overlay'
+  // (alpha selamat) — thumbnail tetep JPEG flatten putih sebagai preview grid.
+  const isPrint = f.sidecar?.engine_type === 'print'
+  fd.append('token_cost', isPrint ? '0' : '1')
+  if (isPrint) {
+    if (f.sidecar?.shot_count != null) fd.append('shot_count', String(f.sidecar.shot_count))
+    if (f.sidecar?.print_size) fd.append('print_size', f.sidecar.print_size)
+    if (path.extname(f.fp).toLowerCase() === '.png') {
+      const raw = fs.readFileSync(f.fp)
+      fd.append('overlay', new Blob([new Uint8Array(raw)], { type: 'image/png' }), path.basename(f.fp))
+    }
+  }
   fd.append('is_active', 'true')
   // ponytail: isi selalu JPEG (normalizeJpeg) → paksa ekstensi .jpg biar filename ga bohong (input .png)
   const jpgName = path.basename(f.fp, path.extname(f.fp)) + '.jpg'
@@ -210,7 +242,11 @@ export async function POST() {
       const dims = await readDims(f.fp)
       if (!dims) { skipped.push({ name: `${f.category}/${f.name}`, reason: 'tidak bisa baca dimensi' }); continue }
       try {
-        const out = await cropTo23(f.fp, dims.w, dims.h)
+        // Print: overlay bukan foto — crop 2:3 + face-detect ngerusak preview layout non-2:3
+        // (2R landscape kepotong jadi sliver). Cukup resize+flatten putih buat thumbnail grid.
+        const out = f.sidecar?.engine_type === 'print'
+          ? { buf: await normalizeJpeg(sharp(f.fp)), mime: 'image/jpeg', cropped: false, detectDown: false }
+          : await cropTo23(f.fp, dims.w, dims.h)
         if (out.detectDown) anyDetectDown = true
         const ok = await uploadTemplate(token, f, out.buf, out.mime)
         if (ok) { added++; if (out.cropped) cropped++ }

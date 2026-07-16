@@ -17,14 +17,18 @@ type Props = {
   state: Extract<KioskState, { screen: 'template' }>
   dispatch: Dispatch<KioskAction>
   templates: Template[]
+  maxTemplates: number
 }
 
-export function TemplateScreen({ state, dispatch, templates }: Props) {
+export function TemplateScreen({ state, dispatch, templates, maxTemplates }: Props) {
   const t = useT()
   const hasReal = templates.length > 0
   const allList = hasReal ? templates : DUMMY_TEMPLATES
   const filtered = allList.filter(t => t.category === state.category)
-  const list = filtered.length > 0 ? filtered : allList
+  // VIP multi (maxTemplates>1): tampilin SEMUA template — tamu pilih lintas kategori dalam 1 layar,
+  // gak perlu bolak-balik category (yang reset pilihan). Single: filter per kategori (behavior lama).
+  const list = maxTemplates > 1 ? allList : (filtered.length > 0 ? filtered : allList)
+  const selectedCount = state.selected.length
 
   return (
     <div className="screen-split flex flex-col w-full h-full overflow-hidden">
@@ -43,17 +47,22 @@ export function TemplateScreen({ state, dispatch, templates }: Props) {
             ? `${list.length} template${list.length === 1 ? '' : 's'} loaded`
             : 'loading templates…'}
         </p>
+        {maxTemplates > 1 && (
+          <p style={{ marginTop: 4, fontSize: 'var(--text-xs)', color: selectedCount > 0 ? '#a78bfa' : 'var(--fg-muted)', letterSpacing: '0.05em' }}>
+            {selectedCount}/{maxTemplates} {t('template_multi_counter') as string}
+          </p>
+        )}
       </div>
 
       <div className="screen-content">
         <div className="flex-1 min-h-0 overflow-y-auto px-5 template-scroll">
           <div className="grid grid-cols-4" style={{ gap: 12, paddingBottom: 24 }}>
             {list.map(tmpl => {
-              const selected = state.selected?.id === tmpl.id
+              const selected = state.selected.some(s => s.id === tmpl.id)
               return (
                 <button
                   key={tmpl.id}
-                  onClick={() => dispatch({ type: 'SELECT_TEMPLATE', template: tmpl })}
+                  onClick={() => dispatch({ type: 'SELECT_TEMPLATE', template: tmpl, maxTemplates })}
                   className="relative overflow-hidden active:scale-[0.97] transition-all duration-200"
                   style={{
                     borderRadius: 'var(--radius-btn)',
@@ -63,7 +72,8 @@ export function TemplateScreen({ state, dispatch, templates }: Props) {
                 >
                   <div className="w-full aspect-[2/3] relative flex items-center justify-center overflow-hidden" style={{ background: selected ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.08)' }}>
                     {tmpl.thumbnail_url
-                      ? <img src={tmpl.thumbnail_url} alt={tmpl.name} className="absolute inset-0 w-full h-full object-cover" />
+                      // Print: thumbnail bisa non-2:3 (2R landscape) — contain biar layout keliatan utuh
+                      ? <img src={tmpl.thumbnail_url} alt={tmpl.name} className={`absolute inset-0 w-full h-full ${tmpl.engine_type === 'print' ? 'object-contain' : 'object-cover'}`} />
                       : <span style={{ fontSize: 'var(--text-2xs)', color: 'var(--fg-muted)', letterSpacing: '0.15em', textTransform: 'uppercase' }}>{tmpl.name}</span>
                     }
                     {tmpl.category === SPINDONESIA_CATEGORY && (
@@ -85,8 +95,15 @@ export function TemplateScreen({ state, dispatch, templates }: Props) {
           {t('nav_back') as string}
         </TouchButton>
         <TouchButton
-          onClick={() => { if (state.selected) dispatch({ type: 'CONFIRM_TEMPLATE' }) }}
-          disabled={!state.selected}
+          onClick={() => {
+            if (state.selected.length === 0) return
+            const first = state.selected[0]
+            // print = photobooth non-AI → masuk capture loop (foto N kali setelah pilih layout)
+            if (state.selected.length === 1 && first.engine_type === 'print') { dispatch({ type: 'START_CAPTURE_LOOP' }); return }
+            // comfy = img2img dari prompt, gak ada slot muka → skip FaceAssign. Comfy selalu single.
+            dispatch(state.selected.length === 1 && first.engine_type === 'comfy' ? { type: 'START_PROCESSING' } : { type: 'CONFIRM_TEMPLATE' })
+          }}
+          disabled={state.selected.length === 0}
           className="flex-1"
         >
           {t('nav_next') as string}

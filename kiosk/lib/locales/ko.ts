@@ -5,6 +5,7 @@ const ko: Translations = {
   idle_title: 'Semeta Suites',
   idle_subtitle: '인생샷 남길 준비 됐어?\n피드 박제할 사진 찍어보자.',
   idle_next: '다음 →',
+  legal_recording_notice: '이 키오스크를 사용함으로써, 기록 및 홍보·마케팅 목적의 사진 및 영상 촬영에 동의하게 됩니다.',
 
   // ── CategoryScreen ───────────────────────────────────────────────────────────
   category_title: '무드 고르기',
@@ -15,6 +16,11 @@ const ko: Translations = {
   // ── TemplateScreen ───────────────────────────────────────────────────────────
   template_title: '스타일 선택',
   template_subtitle: "가장 '나'다운 걸로 골라봐.",
+  template_multi_counter: '선택됨',
+
+  // ── ResultChooserScreen ──────────────────────────────────────────────────────
+  resultchooser_title: '마음에 드는 결과 선택',
+  resultchooser_subtitle: '하나를 눌러 계속하세요',
 
   // ── Shared navigation buttons ────────────────────────────────────────────────
   nav_back: '← 이전',
@@ -40,6 +46,15 @@ const ko: Translations = {
   liveview_error_retry: '다시 시도',
   liveview_rotate_aria: '카메라 전환',
 
+  // ── MultiCaptureScreen (Photo Print) ─────────────────────────────────────────
+  multicapture_title: '포토 세션 ✦',
+  multicapture_subtitle: '포즈를 취하세요 — 카메라가 자동으로 찍어요.\n준비되셨나요!',
+  multicapture_counter: '컷',
+  multicapture_get_ready: '다음 포즈!',
+  multicapture_start: '⊙ 시작',
+  multicapture_review_title: '마음에 드시나요?',
+  multicapture_retake: '↻ 다시 찍기',
+
   // ── ProcessingScreen ─────────────────────────────────────────────────────────
   processing_title: '렌더링 중 ✦',
   processing_subtitle: '조금만 기다려, 다 와가...',
@@ -47,6 +62,7 @@ const ko: Translations = {
   processing_error_subtitle: '사진 처리 실패!\n다시 한 번 찍어보자.',
   processing_start_over: '처음부터 다시',
   processing_try_again: '다시 시도',
+  processing_multi: '처리 중',
   processing_copy: [
     'AI는 수천 장의 사진을 학습하며 사람을 그리는 법을 익혔습니다',
     '이미지가 나타나기 전, 모든 픽셀은 50번 넘게 다시 계산됩니다',
@@ -84,7 +100,6 @@ const ko: Translations = {
   preview_btn_video_ready: '동영상 준비됨',
   preview_btn_rechoose: '다시 선택',
   preview_btn_restart: '다시 시작',
-  preview_btn_next: '다음 →',
   delivery_title: '짠! 완성 ✨',
   delivery_subtitle: 'QR 스캔해서 폰에 저장하거나 지금 바로 인쇄해봐.',
   delivery_qr_uploading: 'QR 준비 중…',
@@ -180,14 +195,12 @@ const ko: Translations = {
   // ── SettingsPanel (operator panel) ───────────────────────────────────────────
   set_header: '키오스크 설정',
   set_close_aria: '닫기',
-  set_done: '완료',
+  set_done: '저장 후 적용',
   set_saving: '저장하는 중…',
   set_save_error: '저장에 실패했습니다. 다시 시도하세요.',
-  set_sec_license: '라이선스',
   set_secret_label: '키오스크 시크릿',
   set_secret_installed: '● 설치됨 — 즉시 적용, 재시작 불필요',
   set_secret_empty_hint: '미설정 — 관리자에게 문의',
-  set_secret_state_godmode: '⚡ GOD MODE 활성화됨',
   set_secret_state_active: '✓ 활성',
   set_secret_state_expired: '⏳ 대여 만료됨',
   set_secret_placeholder_empty: '미설정',
@@ -196,7 +209,6 @@ const ko: Translations = {
   set_secret_save: '저장',
   set_secret_saved: '✓ 저장됨',
   set_secret_cancel: '취소',
-  set_secret_saved_note: '시크릿이 저장되었습니다. 다음 핸드셰이크(약 10초 후 자동) 시 적용됩니다 — 재시작 불필요.',
   set_time_remaining: '남은 시간',
   set_resume: '재개',
   set_resume_need_conn: '연결 필요',
@@ -208,18 +220,13 @@ const ko: Translations = {
   set_pause_quota_exhausted_badge: '소진됨',
   set_pause_quota_exhausted_note: '일시정지 할당량을 모두 소진했습니다 — 세션은 계속 실행되며 더 이상 일시정지할 수 없습니다.',
   set_pause_quota_low_note: '일시정지 할당량이 얼마 남지 않았습니다.',
-  set_sec_identity: '키오스크 정보',
   set_kiosk_name: '키오스크 이름',
   set_kiosk_no: '키오스크 번호',
-  set_sec_event: '이벤트',
   set_event_name: '이벤트 이름',
-  set_sec_language: '언어',
   set_display_language: '표시 언어',
-  set_sec_output: '출력',
   set_folder: '폴더',
   set_pb_data: 'Epicyoung PB 데이터',
   set_pb_data_note: '읽기 전용 — Epicyoung PB에서 관리됨',
-  set_sec_templates: '템플릿',
   set_source: '소스',
   set_pb_url: 'Epicyoung PB URL',
   set_status: '상태',
@@ -234,11 +241,12 @@ const ko: Translations = {
   set_badge_checking: '확인하는 중…',
   set_badge_connected: '● 연결됨',
   set_badge_offline: '✗ 오프라인',
-  set_sec_engine: '엔진',
   set_mode: '모드',
   set_api_model: 'API 모델',
-  set_sec_camera: '카메라',
-  set_sec_system: '시스템',
+  set_max_templates: '게스트당 최대 템플릿 수',
+  set_max_templates_hint: '고사양 PC 및 VIP 이벤트(소량)에서만 1보다 크게 설정하세요. 처리 시간이 늘어납니다.',
+  set_magic_catcher: 'Magic Catcher (Reaction Cam)',
+  set_magic_catcher_hint: 'AI 결과가 공개될 때 게스트의 반응을 녹화합니다(오디오 없음, 로컬 저장). 안내 문구가 표시되어야 합니다.',
   set_version_label: '버전',
   set_update_check: '업데이트 확인',
   set_update_checking: '확인하는 중…',
@@ -249,7 +257,6 @@ const ko: Translations = {
   set_update_failed: '업데이트 실패',
   set_update_restart_note: '업데이트가 설치되었습니다. 적용하려면 LAUNCHER.bat을 닫았다가 다시 여세요.',
   set_update_disabled_note: '자동 업데이트를 사용할 수 없습니다(git 설치가 아님).',
-  set_sec_branding: '브랜딩',
   set_logo: '로고',
   set_logo_hint: 'PNG/SVG · 높이 100px · 72 dpi',
   set_bg: '배경',

@@ -1,10 +1,14 @@
 'use client'
 import { useEffect, useRef, useState, type Dispatch } from 'react'
 import { TouchButton } from '@/components/ui/TouchButton'
-import { openComfySocket } from '@/lib/comfy'
+import { comfyGenerate, type ComfyCfg } from '@/lib/comfy'
 import { proxied } from '@/lib/facedetect'
-import type { GenerationSource, KioskAction, KioskState } from '@/lib/types'
+import type { GenerationSource, KioskAction, KioskState, SwapResult, VideoProvider } from '@/lib/types'
+import { animateImage } from '@/lib/video'
+import { uploadAsset } from '@/lib/upload'
 import { burnWatermark } from '@/lib/watermark-canvas'
+import { composePrintLayout } from '@/lib/print-layout'
+import { useMagicCatcher } from '@/lib/use-magic-catcher'
 import { useT } from '@/lib/i18n'
 
 // Write one full-res photo to disk (server route owns fs + naming convention)
@@ -242,17 +246,28 @@ type Props = {
   generationSource: GenerationSource
   eventName: string
   licensed: boolean
+  comfy: ComfyCfg
+  enableMagicCatcher: boolean
+  enableVideoEngine: boolean
+  videoProvider: VideoProvider
   onUploadFailed?: (metadata: Record<string, unknown>) => void
 }
 
-export function ProcessingScreen({ state, dispatch, generationSource, eventName, licensed, onUploadFailed }: Props) {
+export function ProcessingScreen({ state, dispatch, generationSource, eventName, licensed, comfy, enableMagicCatcher, enableVideoEngine, videoProvider, onUploadFailed }: Props) {
   const t = useT()
   const copy = t('processing_copy') as string[]
-  const wsRef = useRef<WebSocket | null>(null)
   const [copyIndex, setCopyIndex] = useState(0)
+  // Video engine ON → tampilkan status "animating" biar tamu tau mesin ga hang (render video lama).
+  const [animating, setAnimating] = useState(false)
+  // Multi-template: index template yang lagi di-swap (buat teks "N/M…"). Single = 0, ga tampil.
+  const [multiIdx, setMultiIdx] = useState(0)
   // ponytail: #error hash → preview error-state. Reaktif ke hashchange biar ganti hash di bar ga nyangkut.
   const isErrorHash = () => typeof window !== 'undefined' && window.location.hash === '#error'
   const [timedOut, setTimedOut] = useState(isErrorHash)
+
+  // Magic Catcher — rekam reaksi tamu saat reveal AI. Gated: toggle config + disclaimer di idle.
+  // No-op internal kalau disabled / #error preview. Hook self-cleaning (kamera mati pas unmount).
+  useMagicCatcher({ enabled: enableMagicCatcher && !timedOut, eventName })
 
   useEffect(() => {
     const onHash = () => setTimedOut(isErrorHash())
@@ -265,26 +280,31 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
     const interval = setInterval(() => setCopyIndex(i => (i + 1) % copy.length), 4_000)
     const genStart = performance.now() // processing duration for the log (performance.now = clock-safe)
 
-    // no-AI mode: skip generation, save original only (both A+AI slots = original).
-    // ponytail: dormant sejak AiChoiceScreen dihapus (ga ada yg set __no_ai__ lagi). Dibiarin —
-    // harmless, siap dipake lagi kalau "Foto Original" balik lewat template khusus.
-    if (state.template.id === '__no_ai__') {
-      void (async () => {
-        const local = await localCopies(state.imageUrl, state.imageUrl, licensed)
-        dispatch({ type: 'SET_PROGRESS', progress: 100 })
-        // finalizeLocal jalan barengan dwell — base siap sebelum preview kebuka, no race
-        const [base] = await Promise.all([
-          finalizeLocal(eventName, local.original, local.original,
-            (err) => onUploadFailed?.({ stage: 'finalize', error: String(err).slice(0, 300) })),
-          new Promise(r => setTimeout(r, REVEAL_DWELL_MS)),
-        ])
-        dispatch({
-          type: 'SHOW_PREVIEW', aiUrl: local.original, originalUrl: local.original,
-          sourceUrl: state.imageUrl, rawAiUrl: state.imageUrl, base: base ?? undefined,
-          processingSec: 0,
-        })
-      })()
-      return () => clearInterval(interval)
+    // Video engine post-step, dipakai semua jalur single sebelum SHOW_PREVIEW.
+    // FAIL-SAFE: gagal apa pun return undefined → preview lanjut dgn foto still.
+    // Tamu ga boleh pulang kosong cuma karena provider video down.
+    //
+    // Ceiling #2 fix: FAL butuh image_url PUBLIK. Hasil AI = dataURL/blob/localhost yg FAL
+    // ga bisa akses → upload dulu sbg seed (type S, bersih, no watermark) ke R2, kirim URL
+    // R2 publik ke FAL. base = session id (buat key R2). Gagal upload = skip video (foto aman).
+    const maybeAnimate = async (aiUrl: string, base?: string): Promise<string | undefined> => {
+      if (!enableVideoEngine) return undefined
+      setAnimating(true)
+      try {
+        let seedUrl = aiUrl
+        if (base) {
+          try {
+            const { url } = await uploadAsset(aiUrl, 'S', base, { eventName })
+            seedUrl = url // URL R2 publik — FAL bisa akses
+          } catch (e) {
+            console.error('[video] seed upload gagal, kirim url asli (mungkin ditolak FAL):', e)
+          }
+        }
+        const video = await animateImage(seedUrl, videoProvider)
+        return video ?? undefined
+      } finally {
+        setAnimating(false)
+      }
     }
 
     if (MOCK) {
@@ -302,14 +322,50 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
       return () => { clearInterval(tick); clearTimeout(done); clearInterval(interval) }
     }
 
-    if (generationSource === 'LOCAL') {
+    // Photo Print: compose lokal (BUKAN AI, nol token, full offline) — N shot + overlay → satu sheet.
+    // Skip maybeAnimate (gak ada gambar AI buat di-animate) & direct skip framechooser
+    // (overlay udah kebakar di composite — frame kedua bakal numpuk di print+upload).
+    const printShots = state.templates[0].engine_type === 'print' ? state.shots : undefined
+    if (printShots && printShots.length > 0) {
+      const tmpl = state.templates[0]
+      const controller = new AbortController()
+      // Watchdog 120s kayak sibling engine — overlay dari PB bisa ngadat, jangan parkir di 30%.
+      const timeout = setTimeout(() => { controller.abort(); setTimedOut(true) }, 120_000)
+      ;(async () => {
+        dispatch({ type: 'SET_PROGRESS', progress: 30 })
+        const sheet = await composePrintLayout(printShots, tmpl.overlay_url ?? null, tmpl.print_size ?? '4R')
+        if (controller.signal.aborted) return
+        dispatch({ type: 'SET_PROGRESS', progress: 70 })
+        // Watermark freemium tetep berlaku: display di-burn saat unlicensed, raw bersih
+        // buat upload (Worker yang burn server-side). original = shot pertama (polos).
+        const local = await localCopies(printShots[0], sheet, licensed)
+        dispatch({ type: 'SET_PROGRESS', progress: 100 })
+        const [base] = await Promise.all([
+          finalizeLocal(eventName, local.original, local.ai,
+            (err) => onUploadFailed?.({ stage: 'finalize', error: String(err).slice(0, 300) })),
+          new Promise(r => setTimeout(r, REVEAL_DWELL_MS)),
+        ])
+        if (controller.signal.aborted) return
+        dispatch({
+          type: 'SHOW_PREVIEW', aiUrl: local.ai, originalUrl: local.original,
+          sourceUrl: printShots[0], rawAiUrl: sheet, base: base ?? undefined,
+          processingSec: Math.round((performance.now() - genStart) / 1000),
+          direct: true, printSize: tmpl.print_size ?? '4R',
+        })
+      })()
+        .catch(() => { if (!controller.signal.aborted) setTimedOut(true) })
+        .finally(() => clearTimeout(timeout))
+      return () => { controller.abort(); clearTimeout(timeout); clearInterval(interval) }
+    }
+
+    // Engine per-template: comfy menang atas generation_source (konsumen pertama engine_type).
+    // Comfy selalu single-template (ga pernah multi-select) → templates[0] aman.
+    if (state.templates[0].engine_type === 'comfy') {
       const controller = new AbortController()
       const timeout = setTimeout(() => { controller.abort(); setTimedOut(true) }, 120_000)
-      const templateUrl = state.template.thumbnail_url ?? ''
-      // face_server returns clean; client burns both copies (original + AI) in one place
-      // when unlicensed → preview/print/save share one watermarked canvas.
-      localSwap(templateUrl, state.imageUrl, (pct) => dispatch({ type: 'SET_PROGRESS', progress: pct }), state.faceMapping)
+      comfyGenerate(state.imageUrl, state.templates[0], comfy, (pct) => dispatch({ type: 'SET_PROGRESS', progress: pct }), controller.signal)
         .then(async (aiUrl) => {
+          if (controller.signal.aborted) return // StrictMode double-invoke / unmount — jangan dispatch
           const local = await localCopies(state.imageUrl, aiUrl, licensed)
           dispatch({ type: 'SET_PROGRESS', progress: 100 })
           // finalizeLocal jalan barengan dwell — base siap sebelum preview kebuka, no race
@@ -318,12 +374,60 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
               (err) => onUploadFailed?.({ stage: 'finalize', error: String(err).slice(0, 300) })),
             new Promise(r => setTimeout(r, REVEAL_DWELL_MS)),
           ])
+          const videoUrl = await maybeAnimate(aiUrl, base ?? undefined)
           dispatch({
             type: 'SHOW_PREVIEW', aiUrl: local.ai, originalUrl: local.original,
             sourceUrl: state.imageUrl, rawAiUrl: aiUrl, base: base ?? undefined,
-            processingSec: Math.round((performance.now() - genStart) / 1000),
+            processingSec: Math.round((performance.now() - genStart) / 1000), videoUrl,
           })
         })
+        .catch(() => { if (!controller.signal.aborted) setTimedOut(true) })
+        .finally(() => clearTimeout(timeout))
+      return () => { controller.abort(); clearTimeout(timeout); clearInterval(interval) }
+    }
+
+    if (generationSource === 'LOCAL') {
+      const controller = new AbortController()
+      // Timeout scaled per template — N swaps sequential, jangan abort di tengah antrian.
+      const timeout = setTimeout(() => { controller.abort(); setTimedOut(true) }, 120_000 * state.templates.length)
+      // Sequential swap tiap template (HARAM Promise.all — proteksi hardware). 1 selfie mapping
+      // dipakai semua. face_server returns clean; client burns both copies saat unlicensed.
+      ;(async () => {
+        const results: SwapResult[] = []
+        const total = state.templates.length
+        for (let i = 0; i < total; i++) {
+          if (controller.signal.aborted) return
+          setMultiIdx(i)
+          const tmpl = state.templates[i]
+          const templateUrl = tmpl.thumbnail_url ?? ''
+          // Scale per-template pct ke rentang penuh 0-100 → bar ga reset tiap template (multi).
+          // Single (total=1) → identik pct lama.
+          const aiUrl = await localSwap(templateUrl, state.imageUrl, (pct) => dispatch({ type: 'SET_PROGRESS', progress: Math.round((i * 100 + pct) / total) }), state.faceMapping)
+          const local = await localCopies(state.imageUrl, aiUrl, licensed)
+          const base = await finalizeLocal(eventName, local.original, local.ai,
+            (err) => onUploadFailed?.({ stage: 'finalize', error: String(err).slice(0, 300) }))
+          results.push({
+            templateId: tmpl.id, aiUrl: local.ai, originalUrl: local.original,
+            sourceUrl: state.imageUrl, rawAiUrl: aiUrl, base: base ?? undefined,
+            processingSec: Math.round((performance.now() - genStart) / 1000),
+          })
+        }
+        dispatch({ type: 'SET_PROGRESS', progress: 100 })
+        await new Promise(r => setTimeout(r, REVEAL_DWELL_MS)) // let the crisp reveal paint
+        if (controller.signal.aborted) return
+        if (results.length === 1) {
+          // Single = jalur lama, byte-identik: langsung ke framechooser via SHOW_PREVIEW.
+          const r = results[0]
+          const videoUrl = await maybeAnimate(r.rawAiUrl ?? r.aiUrl, r.base)
+          dispatch({
+            type: 'SHOW_PREVIEW', aiUrl: r.aiUrl, originalUrl: r.originalUrl,
+            sourceUrl: r.sourceUrl, rawAiUrl: r.rawAiUrl, base: r.base, processingSec: r.processingSec, videoUrl,
+          })
+        } else {
+          // Multi = tamu pilih 1 dulu di grid chooser, baru masuk flow frame/preview.
+          dispatch({ type: 'SET_STATE', state: { screen: 'resultchooser', results, imageUrl: state.imageUrl } })
+        }
+      })()
         .catch(() => { if (!controller.signal.aborted) setTimedOut(true) })
         .finally(() => clearTimeout(timeout))
       return () => { controller.abort(); clearTimeout(timeout); clearInterval(interval) }
@@ -337,7 +441,7 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        template_id: state.template.id,
+        template_id: state.templates[0].id,
         image_base64: state.imageUrl,
         assignments: state.assignments,
       }),
@@ -354,10 +458,11 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
             (err) => onUploadFailed?.({ stage: 'finalize', error: String(err).slice(0, 300) })),
           new Promise(r => setTimeout(r, REVEAL_DWELL_MS)),
         ])
+        const videoUrl = await maybeAnimate(url, base ?? undefined)
         dispatch({
           type: 'SHOW_PREVIEW', aiUrl: local.ai, originalUrl: local.original,
           sourceUrl: state.imageUrl, rawAiUrl: url, base: base ?? undefined,
-          processingSec: Math.round((performance.now() - genStart) / 1000),
+          processingSec: Math.round((performance.now() - genStart) / 1000), videoUrl,
         })
       })
       .catch((err) => { if (err.name !== 'AbortError') setTimedOut(true) })
@@ -404,7 +509,8 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
           {t('processing_title') as string}
         </h1>
         <p style={{ fontSize: 'var(--text-base)', fontWeight: 300, color: 'var(--fg-muted)', lineHeight: 1.618, whiteSpace: 'pre-line' }}>
-          {t('processing_subtitle') as string}
+          {/* ponytail: string inline — i18n buat status video YAGNI sampai diminta translate */}
+          {animating ? 'Foto jadi! Lagi bikin videonya...' : (t('processing_subtitle') as string)}
         </p>
       </div>
 
@@ -412,7 +518,7 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
         <div className="flex-1 min-h-0 flex flex-col items-center justify-center self-center gap-10 px-8 w-full max-w-sm pb-[35px]">
 
         {/* Denoise reveal of the CHOSEN TEMPLATE (falls back to selfie if it has no thumbnail) */}
-        <RenderCosmetics src={state.template.thumbnail_url || state.imageUrl || MOCK_AI_URL} pct={pct} />
+        <RenderCosmetics src={(state.templates[multiIdx] ?? state.templates[0]).thumbnail_url || state.imageUrl || MOCK_AI_URL} pct={pct} />
 
         {/* Step indicators */}
         <div className="flex gap-8">
@@ -446,6 +552,13 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
             <span style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.2)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>{generationSource}</span>
           </div>
         </div>
+
+        {/* Multi-template progress — "Processing N/M…" (t() ga support interpolasi → concat) */}
+        {state.templates.length > 1 && (
+          <p style={{ fontSize: 'var(--text-sm)', color: '#a78bfa', letterSpacing: '0.05em', textAlign: 'center' }}>
+            {t('processing_multi') as string} {multiIdx + 1}/{state.templates.length}…
+          </p>
+        )}
 
         {/* Rotating copy */}
         <p key={copyIndex} className="animate-fade-in" style={{

@@ -1,27 +1,92 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import type { KioskConfig, Template, TemplateSource, Locale } from '@/lib/types'
+import type { KioskConfig, Template, TemplateSource, Locale, ComfyModelFamily, ComfyControlnetMode, VideoProvider } from '@/lib/types'
 import { fetchPocketBaseTemplates } from '@/lib/pocketbase'
 import { useT } from '@/lib/i18n'
 import type { Translations } from '@/lib/locales/types'
 
 type TFn = (key: keyof Translations) => Translations[keyof Translations]
-type EngineKey = 'faceswap_local' | 'fullbody_local' | 'faceswap_api' | 'fullbody_api'
+type EngineKey = 'faceswap_local' | 'fullbody_local' | 'print_local' | 'faceswap_api' | 'fullbody_api'
 
 const ENGINE_OPTS: { value: EngineKey; label: string; soon?: boolean }[] = [
   { value: 'faceswap_local', label: 'Faceswap (LOCAL)' },
-  { value: 'fullbody_local', label: 'Fullbody (LOCAL) — soon', soon: true },
+  { value: 'fullbody_local', label: 'Fullbody (LOCAL)' }, // = engine comfy stylize via face_server
+  { value: 'print_local',    label: 'Photo Print (non-AI)' }, // photobooth klasik: overlay PNG + N shot, nol token
   { value: 'faceswap_api',   label: 'Faceswap (API) — soon',  soon: true },
   { value: 'fullbody_api',   label: 'Fullbody (API) — soon',  soon: true },
 ]
 const API_MODEL_OPTS = [
-  { value: 'nanobanana2', label: 'Nanobanana 2' },
-  { value: 'gptimg2',     label: 'GPT-IMG 2'    },
+  { value: 'nanobanana2', label: 'Nano Banana Pro' },
+  { value: 'gptimg2',     label: 'GPT Image 2'     },
+  { value: 'flux1dev',    label: 'Flux.1 dev'      },
+  { value: 'flux2pro',    label: 'Flux 2 Pro'      },
 ]
 const CAMERA_OPTS = [
   { value: 'webcam', label: 'Webcam (getUserMedia)' },
   { value: 'canon',  label: 'Canon (EOS Utility)'  },
 ]
+// Stylize (face_server) — opsi asli dari GET :8000/capabilities, ini cuma label map.
+const COMFY_FAMILY_LABELS: Record<string, string> = { sd15: 'SD 1.5', sdxl: 'SDXL', flux: 'Flux' }
+const COMFY_CONTROLNET_LABELS: Record<string, string> = { canny: 'Canny (garis/outline)', depth: 'Depth (kedalaman 3D)', off: 'Off' }
+// Sampler/scheduler — value '' = default per family. Allowlist sinkron sama comfy_client.py.
+const COMFY_SAMPLER_OPTS = [
+  { value: '',                label: 'Default (per family)' },
+  { value: 'dpmpp_2m',        label: 'DPM++ 2M' },
+  { value: 'dpmpp_2m_sde',    label: 'DPM++ 2M SDE' },
+  { value: 'dpmpp_sde',       label: 'DPM++ SDE' },
+  { value: 'euler',           label: 'Euler' },
+  { value: 'euler_ancestral', label: 'Euler a' },
+  { value: 'ddim',            label: 'DDIM' },
+  { value: 'uni_pc',          label: 'UniPC' },
+]
+const COMFY_SCHEDULER_OPTS = [
+  { value: '',            label: 'Default (per family)' },
+  { value: 'karras',      label: 'Karras' },
+  { value: 'normal',      label: 'Normal' },
+  { value: 'simple',      label: 'Simple' },
+  { value: 'sgm_uniform', label: 'SGM Uniform' },
+  { value: 'exponential', label: 'Exponential' },
+]
+// CFG override — '' = default per family (sd15/sdxl 7). Server clamp 1-12, flux dikunci 1.0.
+const COMFY_CFG_OPTS = [
+  { value: '', label: 'Default (per family)' },
+  ...['3', '4', '5', '6', '7', '8', '9', '10'].map(v => ({ value: v, label: v })),
+]
+// Steps override — semua "aman", beda cuma speed vs detail halus. '' = default (sd15/sdxl 30).
+// Server clamp 15-30, flux dikunci 20.
+const COMFY_STEPS_OPTS = [
+  { value: '', label: 'Default (per family)' },
+  ...['15', '20', '25', '30'].map(v => ({ value: v, label: v })),
+]
+// ControlNet strength override — '' = default 0.8. Server clamp 0.3-1.0.
+const COMFY_CN_STRENGTH_OPTS = [
+  { value: '', label: 'Default (0.8)' },
+  ...['0.3', '0.5', '0.6', '0.7', '0.8', '0.9', '1.0'].map(v => ({ value: v, label: v })),
+]
+const COMFY_CONTROLNET_STRENGTH = 0.8 // fixed di face_server — hanya buat recipe line
+// Video engine (img2vid) providers — semua lewat FAL, bedanya endpoint FAL per provider (Worker).
+const VIDEO_PROVIDER_OPTS: { value: VideoProvider; label: string }[] = [
+  { value: 'SEEDANCE',   label: 'Seedance 2.0'    },
+  { value: 'LTX',        label: 'LTX 2.3'         },
+  { value: 'WAN',        label: 'WAN 2.7'         },
+  { value: 'VEO',        label: 'Veo 3.1'         },
+  { value: 'KLING',      label: 'Kling v3 Pro'    },
+  { value: 'PIXVERSE',   label: 'PixVerse V6'     },
+  { value: 'HAPPYHORSE', label: 'Happy Horse 1.1' },
+  { value: 'VIDU',       label: 'Vidu Q2 Pro'     },
+]
+
+type StylizeCaps = {
+  stylize: boolean
+  families: Record<string, string[]>
+  controlnets: string[]
+  face_lock: boolean
+}
+
+// Prepend saved value kalau ga ada di caps — biar save ga diam-diam nge-flip setting.
+function withSaved(list: string[], saved: string): string[] {
+  return list.includes(saved) ? list : [saved, ...list]
+}
 
 const pbActionBtn: React.CSSProperties = {
   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
@@ -89,6 +154,20 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   )
 }
 
+// Row + footnote awam di bawah label — buat setting teknis (CFG/steps/ControlNet strength)
+// yang namanya sendiri gak cukup jelas buat operator non-teknis.
+function RowHint({ label, hint, children }: { label: string; hint: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', gap: 16 }}>
+      <div style={{ minWidth: 0 }}>
+        <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{label}</span>
+        <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0', lineHeight: 1.4 }}>{hint}</p>
+      </div>
+      <div style={{ flexShrink: 0 }}>{children}</div>
+    </div>
+  )
+}
+
 function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
   return (
     <button type="button" onClick={onToggle} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
@@ -151,6 +230,46 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   const [engine,          setEngine]          = useState<EngineKey>((config.engine_mode as EngineKey) || 'faceswap_local')
   const [apiModel,        setApiModel]        = useState(config.api_model || 'nanobanana2')
   const [camera,          setCamera]          = useState(config.camera_source || 'webcam')
+  const [comfyFamily,     setComfyFamily]     = useState<ComfyModelFamily>(config.comfy_model_family ?? 'sd15')
+  const [comfyCheckpoint, setComfyCheckpoint] = useState(config.comfy_checkpoint ?? 'epicrealism_pureEvolutionV5.safetensors')
+  const [comfyControlnet, setComfyControlnet] = useState<ComfyControlnetMode>(config.comfy_controlnet ?? 'canny')
+  const [comfyDenoise,    setComfyDenoise]    = useState(config.comfy_denoise ?? 0.65)
+  const [comfyFaceLock,   setComfyFaceLock]   = useState(config.comfy_face_lock ?? true)
+  const [comfySampler,    setComfySampler]    = useState(config.comfy_sampler ?? '')
+  const [comfyScheduler,  setComfyScheduler]  = useState(config.comfy_scheduler ?? '')
+  const [comfyCfg,        setComfyCfg]        = useState(config.comfy_cfg ?? '')
+  const [comfySteps,      setComfySteps]      = useState(config.comfy_steps ?? '')
+  const [comfyCnStrength, setComfyCnStrength] = useState(config.comfy_cn_strength ?? '')
+  const [maxTemplates,    setMaxTemplates]    = useState(config.max_templates ?? 1)
+  const [magicCatcher,    setMagicCatcher]    = useState(config.enable_magic_catcher ?? false)
+  const [videoEngine,     setVideoEngine]     = useState(config.enable_video_engine ?? false)
+  // Default PIXVERSE — HPP termurah (±Rp4rb/5s vs Seedance ±Rp27rb). Seedance = flagship, pilih sadar.
+  const [videoProvider,   setVideoProvider]   = useState<VideoProvider>(config.video_provider ?? 'PIXVERSE')
+
+  // Dompet token — fetch pas panel dibuka (fresh, gak nunggu heartbeat 60s). Pola sama
+  // kayak verifySecret: /api/heartbeat pakai secret tersimpan server-side. Freeware/
+  // bypassed/offline gak bawa saldo → null → tampil '—'.
+  const [tokenBalance, setTokenBalance] = useState<number | null>(null)
+  const [videoCosts, setVideoCosts] = useState<Record<string, number>>({})
+  useEffect(() => {
+    if (!open) return
+    let live = true
+    fetch('/api/heartbeat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (!live || !d) return
+        setTokenBalance(typeof d.tenant_token_balance === 'number' ? d.tenant_token_balance : null)
+        setVideoCosts(d.video_costs ?? {})
+      })
+      .catch(() => {/* offline → biarin '—' */})
+    return () => { live = false }
+  }, [open])
+  // Footnote harga video ala SaaS — harga dari dashboard admin (app_settings), bukan hardcode
+  const selectedVideoCost = videoCosts[videoProvider] as number | undefined
+  const videoProviderOpts = VIDEO_PROVIDER_OPTS.map(o =>
+    videoCosts[o.value] != null ? { ...o, label: `${o.label} — ${videoCosts[o.value]} token` } : o)
+  const [comfyStatus,     setComfyStatus]     = useState<PbStatus>('idle')
+  const [comfyCaps,       setComfyCaps]       = useState<StylizeCaps | null>(null)
   const [logoFile,        setLogoFile]        = useState<File | null>(null)
   const [logoPreview,     setLogoPreview]     = useState<string | null>(null)
   const [bgFile,          setBgFile]          = useState<File | null>(null)
@@ -189,6 +308,25 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   const toggleGroup = (id: string) => setOpenGroup(prev => prev === id ? '' : id)
 
   const isApi = engine.endsWith('_api')
+  // Yang dipake aja yang terpampang — opsi murni dari caps, saved value di-prepend biar ga ilang.
+  const comfyFamilyOpts = withSaved(Object.keys(comfyCaps?.families ?? {}), comfyFamily)
+    .map(v => ({ value: v, label: COMFY_FAMILY_LABELS[v] ?? v }))
+  const comfyCkptOpts = withSaved(comfyCaps?.families[comfyFamily] ?? [], comfyCheckpoint)
+    .map(v => ({ value: v, label: v }))
+  const comfyControlnetOpts = withSaved([...(comfyCaps?.controlnets ?? []), 'off'], comfyControlnet)
+    .map(v => ({ value: v, label: COMFY_CONTROLNET_LABELS[v] ?? v }))
+  // Flux kunci mati sampler/scheduler/cfg/steps di server (lihat resolve_sampler comfy_client.py)
+  // — override apa pun diabaikan, jadi jangan ditampilin di recipe biar gak nyesatin operator.
+  const comfyFluxLocked = comfyFamily === 'flux'
+  const comfyRecipe = [
+    COMFY_FAMILY_LABELS[comfyFamily] ?? comfyFamily,
+    comfyCheckpoint.replace(/\.(safetensors|ckpt)$/i, ''),
+    comfyControlnet === 'off' ? 'controlnet off' : `${comfyControlnet} ${comfyCnStrength || COMFY_CONTROLNET_STRENGTH}`,
+    `denoise ${comfyDenoise.toFixed(2)}`,
+    !comfyFluxLocked && comfyCfg ? `cfg ${comfyCfg}` : null,
+    !comfyFluxLocked && comfySteps ? `${comfySteps} steps` : null,
+    `face lock ${comfyFaceLock ? 'ON' : 'OFF'}`,
+  ].filter(Boolean).join(' · ')
   const UNLIMITED_SEC = 86400 * 300
   const isUnlimited = (config.bypassed ?? false) || remainSec >= UNLIMITED_SEC || pauseQuotaSec >= UNLIMITED_SEC
 
@@ -239,6 +377,25 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
       .catch(() => { if (!ctrl.signal.aborted) setEngineStatus('offline') })
     return () => ctrl.abort()
   }, [open, engine, isApi])
+
+  // Stylize caps — satu fetch ke face_server, kiosk ga perlu tau backend-nya apa.
+  useEffect(() => {
+    if (!open) { setComfyStatus('idle'); return }
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), 4000) // ponytail: short timeout, jangan gantung nunggu server mati
+    let closed = false
+    setComfyStatus('checking')
+    fetch('http://localhost:8000/capabilities', { signal: ctrl.signal, cache: 'no-store' })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error(String(r.status))))
+      .then((caps: StylizeCaps) => {
+        if (closed) return
+        setComfyCaps(caps)
+        setComfyStatus(caps.stylize ? 'connected' : 'offline')
+      })
+      .catch(() => { if (!closed) { setComfyCaps(null); setComfyStatus('offline') } })
+      .finally(() => clearTimeout(timer))
+    return () => { closed = true; clearTimeout(timer); ctrl.abort() }
+  }, [open])
 
   useEffect(() => {
     if (!open || camera !== 'canon') { setCameraStatus('idle'); return }
@@ -526,6 +683,20 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         pocketbase_url:    pbUrl,
         output_dir:        outputDir,
         locale,
+        comfy_model_family: comfyFamily,
+        comfy_checkpoint:   comfyCheckpoint,
+        comfy_controlnet:   comfyControlnet,
+        comfy_denoise:      comfyDenoise,
+        comfy_face_lock:    comfyFaceLock,
+        comfy_sampler:      comfySampler,
+        comfy_scheduler:    comfyScheduler,
+        comfy_cfg:          comfyCfg,
+        comfy_steps:        comfySteps,
+        comfy_cn_strength:  comfyCnStrength,
+        max_templates:      maxTemplates,
+        enable_magic_catcher: magicCatcher,
+        enable_video_engine: videoEngine,
+        video_provider:      videoProvider,
       }
       if (logo_url) patch.logo_url = logo_url
       if (bg_url)   patch.bg_url   = bg_url
@@ -547,10 +718,28 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         pocketbase_url:    pbUrl,
         output_dir:        outputDir,
         locale,
+        comfy_model_family: comfyFamily,
+        comfy_checkpoint:   comfyCheckpoint,
+        comfy_controlnet:   comfyControlnet,
+        comfy_denoise:      comfyDenoise,
+        comfy_face_lock:    comfyFaceLock,
+        comfy_sampler:      comfySampler,
+        comfy_scheduler:    comfyScheduler,
+        comfy_cfg:          comfyCfg,
+        comfy_steps:        comfySteps,
+        comfy_cn_strength:  comfyCnStrength,
+        max_templates:      maxTemplates,
+        enable_magic_catcher: magicCatcher,
+        enable_video_engine: videoEngine,
+        video_provider:      videoProvider,
         ...(logo_url ? { logo_url } : {}),
         ...(bg_url   ? { bg_url   } : {}),
       } as Partial<KioskConfig>)
-      onClose()
+      // Sisanya apply live (config reaktif). Kamera cuma re-init pas LiveView mount, dan
+      // DUNIA TEMPLATE (faceswap vs comfy) disaring server-side pas boot → ganti kamera
+      // ATAU engine mode wajib reload, kalau gak kategori comfy gak bakal muncul.
+      if (camera !== (config.camera_source ?? 'webcam') || engine !== (config.engine_mode ?? 'faceswap_local')) restartToIdle()
+      else onClose()
     } catch {
       setError(t('set_save_error') as string)
     } finally {
@@ -752,15 +941,146 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                 </div>
               </Row>
               {isApi && (
-                <Row label={t('set_api_model') as string}>
+                <RowHint label={t('set_api_model') as string} hint="Tiap foto motong token sesuai token_cost template (diatur di dashboard admin).">
                   <Sel value={apiModel} options={API_MODEL_OPTS} onChange={setApiModel} />
-                </Row>
+                </RowHint>
+              )}
+
+              {/* Stylize = engine mode FULLBODY (LOCAL) — opsinya cuma muncul di mode itu,
+                  jangan campur sama faceswap. Opsi murni dari GET :8000/capabilities. */}
+              {engine === 'fullbody_local' && (<>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '15px 0 2px' }}>
+                <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, letterSpacing: '0.06em', color: 'rgba(255,255,255,0.45)' }}>Stylize (face_server)</span>
+                <StatusBadge status={comfyStatus} t={t} />
+              </div>
+              {/* Recipe aktif — live unsaved state */}
+              <p style={{ fontSize: 'var(--text-2xs)', fontFamily: 'var(--font-ui)', color: 'rgba(255,255,255,0.35)', margin: '0 0 4px', wordBreak: 'break-all' }}>
+                {comfyRecipe}
+              </p>
+              {comfyCaps ? (
+                <>
+                  <Row label="Model family">
+                    <Sel value={comfyFamily} options={comfyFamilyOpts} onChange={v => {
+                      setComfyFamily(v as ComfyModelFamily)
+                      // Ganti family = reset checkpoint ke milik family baru — checkpoint
+                      // lama nyangkut = pasangan mismatch kesimpen, /stylize nolak 400.
+                      const first = comfyCaps?.families[v]?.[0]
+                      if (first) setComfyCheckpoint(first)
+                    }} />
+                  </Row>
+                  <Row label="Checkpoint">
+                    <Sel value={comfyCheckpoint} options={comfyCkptOpts} onChange={setComfyCheckpoint} />
+                  </Row>
+                  <RowHint label="ControlNet" hint="Seberapa ketat pose/garis dari foto tamu dipertahankan. Off = model bebas berkreasi, abaikan foto asli.">
+                    <Sel value={comfyControlnet} options={comfyControlnetOpts} onChange={v => setComfyControlnet(v as ComfyControlnetMode)} />
+                  </RowHint>
+                  {comfyControlnet !== 'off' && (
+                    <RowHint label="ControlNet strength" hint="Seberapa ketat pose/garis foto tamu 'mengunci' hasil. Rendah = pose lebih longgar/kreatif. Tinggi = pose persis foto asli, tapi gampang kaku/artefak di tepi.">
+                      <Sel value={comfyCnStrength} options={COMFY_CN_STRENGTH_OPTS} onChange={setComfyCnStrength} />
+                    </RowHint>
+                  )}
+                  {comfyCaps.face_lock && (
+                    <Row label="Face lock">
+                      <Toggle on={comfyFaceLock} onToggle={() => setComfyFaceLock(v => !v)} />
+                    </Row>
+                  )}
+                  {/* Flux kunci mati sampler/scheduler/cfg/steps di server (resolve_sampler
+                      comfy_client.py) — sembunyiin 4 kontrol ini biar operator gak nyetel
+                      sesuatu yang diem-diem gak ngefek. */}
+                  {comfyFluxLocked ? (
+                    <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '8px 0' }}>
+                      Flux pakai resep tetap (Euler · Simple · CFG 1.0 · 20 steps) — gak bisa diubah, biar hasil gak rusak.
+                    </p>
+                  ) : (
+                    <>
+                      <Row label="Sampler">
+                        <Sel value={comfySampler} options={COMFY_SAMPLER_OPTS} onChange={setComfySampler} />
+                      </Row>
+                      <Row label="Scheduler">
+                        <Sel value={comfyScheduler} options={COMFY_SCHEDULER_OPTS} onChange={setComfyScheduler} />
+                      </Row>
+                      <RowHint label="CFG (kesetiaan ke prompt)" hint="Seberapa 'nurut' hasil ke kata-kata prompt. Rendah = lebih natural/bebas tapi kadang melenceng dari prompt. Tinggi = ngotot ikutin prompt, tapi gampang belang warna/kebakar.">
+                        <Sel value={comfyCfg} options={COMFY_CFG_OPTS} onChange={setComfyCfg} />
+                      </RowHint>
+                      <RowHint label="Steps (kehalusan)" hint="Berapa kali gambar 'diproses ulang' sebelum jadi. Rendah = lebih cepat, sedikit kasar. Tinggi = lebih halus, sedikit lebih lama. 30 ke atas biasanya sudah tidak menambah kualitas.">
+                        <Sel value={comfySteps} options={COMFY_STEPS_OPTS} onChange={setComfySteps} />
+                      </RowHint>
+                    </>
+                  )}
+                </>
+              ) : comfyStatus === 'offline' ? (
+                <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '8px 0' }}>
+                  Stylize server offline — setting tersimpan tetap dipakai
+                </p>
+              ) : null}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <div>
+                  <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>Denoise (default)</span>
+                  <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0' }}>template bisa override</p>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <input
+                    type="range" min={0.10} max={0.95} step={0.05}
+                    value={comfyDenoise}
+                    onChange={e => setComfyDenoise(Number(e.target.value))}
+                    style={{ width: 140, height: 4, accentColor: 'var(--brand)', cursor: 'pointer' }}
+                  />
+                  <span style={{ fontSize: 'var(--text-xs)', fontFamily: 'var(--font-ui)', color: 'rgba(255,255,255,0.6)', width: 32, textAlign: 'right' }}>
+                    {comfyDenoise.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+              </>)}
+
+              {/* Video engine (img2vid) — img output terakhir jadi seed ke provider video via
+                  Worker. API key hidup di Worker (FAL), gak pernah ke browser. Default OFF. */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', gap: 16 }}>
+                <div style={{ minWidth: 0 }}>
+                  <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>Enable Video Engine (img2vid)</span>
+                  <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0', lineHeight: 1.4 }}>
+                    Hasil foto terakhir dianimasikan jadi video pendek lewat provider pilihan.
+                  </p>
+                </div>
+                <div style={{ flexShrink: 0 }}>
+                  <Toggle on={videoEngine} onToggle={() => setVideoEngine(v => !v)} />
+                </div>
+              </div>
+              {videoEngine && (
+                <RowHint
+                  label="Select Video Provider"
+                  hint={selectedVideoCost != null
+                    ? `Tiap video motong ${selectedVideoCost} token dari saldo.`
+                    : Object.keys(videoCosts).length > 0
+                      ? '❗ Provider ini nonaktif di dashboard admin — request video bakal ditolak.'
+                      : 'Harga token per provider tampil saat online.'}
+                >
+                  <Sel value={videoProvider} options={videoProviderOpts} onChange={v => setVideoProvider(v as VideoProvider)} />
+                </RowHint>
               )}
 
               {/* Output folder */}
               <Row label={t('set_folder') as string}>
                 <TextInput value={outputDir} onChange={setOutputDir} placeholder="C:/semeta" mono />
               </Row>
+
+              {/* VIP: max templates per guest — FACESWAP LOCAL only (multi-swap sequential via
+                  face_server :8000). Fullbody = comfy single. Faceswap API belum ada impl multi. */}
+              {engine === 'faceswap_local' && (
+                <div style={{ padding: '12px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{t('set_max_templates') as string}</span>
+                    <Sel
+                      value={String(maxTemplates)}
+                      options={[{ value: '1', label: '1' }, { value: '2', label: '2' }, { value: '3', label: '3' }, { value: '4', label: '4' }]}
+                      onChange={v => setMaxTemplates(Number(v))}
+                    />
+                  </div>
+                  <p style={{ fontSize: 'var(--text-2xs)', color: maxTemplates > 1 ? '#f0c040' : 'rgba(255,255,255,0.3)', margin: '6px 0 0' }}>
+                    {maxTemplates > 1 ? '⚠ ' : ''}{t('set_max_templates_hint') as string}
+                  </p>
+                </div>
+              )}
+
               <div style={{ padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{t('set_pb_data') as string}</span>
@@ -861,6 +1181,17 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                   <Sel value={camera} options={CAMERA_OPTS} onChange={setCamera} />
                 </div>
               </Row>
+
+              {/* Magic Catcher — reaction cam toggle. Recording gated by IdleScreen disclaimer. */}
+              <div style={{ padding: '13px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ maxWidth: 380 }}>
+                    <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{t('set_magic_catcher') as string}</span>
+                    <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0' }}>{t('set_magic_catcher_hint') as string}</p>
+                  </div>
+                  <Toggle on={magicCatcher} onToggle={() => setMagicCatcher(v => !v)} />
+                </div>
+              </div>
 
               {/* License / Secret */}
               <div style={{ padding: '12px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
@@ -1033,6 +1364,16 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                   </div>
                 </Row>
               )}
+              {/* Dompet token tenant — saldo kepotong cuma sama cloud AI (foto API + video).
+                  Faceswap lokal / comfy / Photo Print = 0 token. Saldo dari handshake pas panel dibuka. */}
+              <Row label="Token Balance">
+                <span style={{
+                  fontFamily: 'var(--font-ui)', fontSize: 'var(--text-lg)', fontWeight: 600, letterSpacing: '0.03em',
+                  color: tokenBalance == null ? 'rgba(255,255,255,0.25)' : tokenBalance > 50 ? '#a3be8c' : tokenBalance > 0 ? '#f0c040' : '#ff6b6b',
+                }}>
+                  {tokenBalance == null ? '—' : `${tokenBalance.toLocaleString('id-ID')} token`}
+                </span>
+              </Row>
               {resumeError && (
                 <p style={{ fontSize: 'var(--text-xs)', color: '#ff6b6b', margin: '-8px 0 8px' }}>
                   {t('set_resume_failed') as string}

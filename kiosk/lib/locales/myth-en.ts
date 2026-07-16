@@ -18,6 +18,11 @@ const mythEn: Translations = {
 
   template_title: 'Forge of Destiny',
   template_subtitle: 'Every frame holds a different fate.\nChoose the one that resonates.',
+  template_multi_counter: 'bound',
+
+  // ── ResultChooserScreen — oracle flavor
+  resultchooser_title: 'Claim Thy Vision',
+  resultchooser_subtitle: 'Touch the one fate you would keep.',
 
   liveview_title: 'Face the Light ✦',
   liveview_subtitle: "Stand firm before the oracle's gleam,\nand step into the dream.",
@@ -27,6 +32,7 @@ const mythEn: Translations = {
 
   processing_title: 'Forging the Immortal',
   processing_subtitle: 'The mystic fires burn, the gears align.\nPatience, traveler — your portrait takes design.',
+  processing_multi: 'Forging',
 
   preview_title: 'Choose thy sigil ✦',
   preview_subtitle: 'A border binds the vision.\nTap to wander between shadow and light.',

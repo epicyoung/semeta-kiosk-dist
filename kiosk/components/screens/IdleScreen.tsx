@@ -48,6 +48,10 @@ export function IdleScreen({ dispatch }: { dispatch: Dispatch<KioskAction> }) {
         <TouchButton className="w-full" onClick={() => dispatch({ type: 'START' })}>
           {t('idle_next') as string}
         </TouchButton>
+        {/* Legal gate for Magic Catcher — must render before reaction cam may record. */}
+        <p style={{ marginTop: 12, fontSize: 'var(--text-2xs)', lineHeight: 1.5, textAlign: 'center', color: 'rgba(255,255,255,0.6)', maxWidth: 520, marginInline: 'auto', fontFamily: 'var(--font-ui)' }}>
+          {t('legal_recording_notice') as string}
+        </p>
       </div>
     </div>
   )

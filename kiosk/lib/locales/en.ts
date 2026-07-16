@@ -5,6 +5,7 @@ const en: Translations = {
   idle_title: 'Semeta Suites',
   idle_subtitle: "Ready to steal the show?\nLet's make something feed-worthy.",
   idle_next: 'Next →',
+  legal_recording_notice: 'By using this kiosk, you consent to the capture of photos & video for documentation and promotional/marketing purposes.',
 
   // ── CategoryScreen ───────────────────────────────────────────────────────────
   category_title: 'Set the Vibe',
@@ -15,6 +16,11 @@ const en: Translations = {
   // ── TemplateScreen ───────────────────────────────────────────────────────────
   template_title: 'Choose Your Style',
   template_subtitle: "Pick the one that screams 'you'.",
+  template_multi_counter: 'selected',
+
+  // ── ResultChooserScreen ──────────────────────────────────────────────────────
+  resultchooser_title: 'Pick Your Favorite',
+  resultchooser_subtitle: 'Tap one result to continue',
 
   // ── Shared navigation buttons ────────────────────────────────────────────────
   nav_back: '← Previous',
@@ -40,6 +46,15 @@ const en: Translations = {
   liveview_error_retry: 'Try Again',
   liveview_rotate_aria: 'Rotate camera',
 
+  // ── MultiCaptureScreen (Photo Print) ─────────────────────────────────────────
+  multicapture_title: 'Photo Session ✦',
+  multicapture_subtitle: 'Strike a pose — the camera fires by itself.\nReady when you are!',
+  multicapture_counter: 'Shot',
+  multicapture_get_ready: 'Next pose!',
+  multicapture_start: '⊙ Start',
+  multicapture_review_title: 'Looking good?',
+  multicapture_retake: '↻ Retake',
+
   // ── ProcessingScreen ─────────────────────────────────────────────────────────
   processing_title: 'Rendering Your Masterpiece ✦',
   processing_subtitle: 'Hold tight, almost done...',
@@ -47,6 +62,7 @@ const en: Translations = {
   processing_error_subtitle: "We couldn't process that shot.\nLet's run it back!",
   processing_start_over: 'Start over',
   processing_try_again: 'Try again',
+  processing_multi: 'Processing',
   processing_copy: [
     'Our AI studied thousands of photos to learn how to paint people',
     'Every pixel is recalculated over 50 times before the image appears',
@@ -84,7 +100,6 @@ const en: Translations = {
   preview_btn_video_ready: 'Video Ready',
   preview_btn_rechoose: 'Re-choose',
   preview_btn_restart: 'Restart',
-  preview_btn_next: 'Next →',
   delivery_title: "Here's the Result! ✨",
   delivery_subtitle: 'Scan the QR to save it — or hit print right now.',
   delivery_qr_uploading: 'Preparing your QR…',
@@ -180,14 +195,12 @@ const en: Translations = {
   // ── SettingsPanel (operator panel) ───────────────────────────────────────────
   set_header: 'Kiosk Settings',
   set_close_aria: 'Close',
-  set_done: 'Done',
+  set_done: 'Save & Apply',
   set_saving: 'Saving…',
   set_save_error: 'Failed to save. Try again.',
-  set_sec_license: 'License',
   set_secret_label: 'Kiosk Secret',
   set_secret_installed: '● Installed — active immediately, no restart',
   set_secret_empty_hint: 'Not set — ask admin',
-  set_secret_state_godmode: '⚡ GOD MODE ACTIVATED',
   set_secret_state_active: '✓ Active',
   set_secret_state_expired: '⏳ Rental expired',
   set_secret_placeholder_empty: 'Not set',
@@ -196,7 +209,6 @@ const en: Translations = {
   set_secret_save: 'Save',
   set_secret_saved: '✓ Saved',
   set_secret_cancel: 'Cancel',
-  set_secret_saved_note: 'Secret saved. Active on next handshake (auto ~10s) — no restart needed.',
   set_time_remaining: 'Time Remaining',
   set_resume: 'Resume',
   set_resume_need_conn: 'Needs connection',
@@ -208,18 +220,13 @@ const en: Translations = {
   set_pause_quota_exhausted_badge: 'Used up',
   set_pause_quota_exhausted_note: 'Pause quota is used up — session keeps running and can no longer be paused.',
   set_pause_quota_low_note: 'Pause quota running low.',
-  set_sec_identity: 'Kiosk Identity',
   set_kiosk_name: 'Kiosk Name',
   set_kiosk_no: 'Kiosk No',
-  set_sec_event: 'Event',
   set_event_name: 'Event Name',
-  set_sec_language: 'Language',
   set_display_language: 'Display Language',
-  set_sec_output: 'Output',
   set_folder: 'Folder',
   set_pb_data: 'Epicyoung PB Data',
   set_pb_data_note: 'Read-only — managed by Epicyoung PB',
-  set_sec_templates: 'Templates',
   set_source: 'Source',
   set_pb_url: 'Epicyoung PB URL',
   set_status: 'Status',
@@ -234,11 +241,12 @@ const en: Translations = {
   set_badge_checking: 'Checking…',
   set_badge_connected: '● Connected',
   set_badge_offline: '✗ Offline',
-  set_sec_engine: 'Engine',
   set_mode: 'Mode',
   set_api_model: 'API Model',
-  set_sec_camera: 'Camera',
-  set_sec_system: 'System',
+  set_max_templates: 'Max Templates Per Guest',
+  set_max_templates_hint: 'Set >1 ONLY for high-end PC & VIP events (low volume). Increases processing time.',
+  set_magic_catcher: 'Magic Catcher (Reaction Cam)',
+  set_magic_catcher_hint: 'Record guest reaction during the AI reveal (no audio, saved locally). Requires disclaimer visible.',
   set_version_label: 'Version',
   set_update_check: 'Check for updates',
   set_update_checking: 'Checking…',
@@ -249,7 +257,6 @@ const en: Translations = {
   set_update_failed: 'Update failed',
   set_update_restart_note: 'Update installed. Close and reopen LAUNCHER.bat to apply.',
   set_update_disabled_note: 'Auto-update unavailable (not a git install).',
-  set_sec_branding: 'Branding',
   set_logo: 'Logo',
   set_logo_hint: 'PNG/SVG · 100px height · 72 dpi',
   set_bg: 'Background',

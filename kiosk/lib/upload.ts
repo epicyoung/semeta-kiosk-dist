@@ -11,10 +11,12 @@ export function fitWithin(width: number, height: number, maxPx: number): { w: nu
   return { w: Math.round(width * scale), h: Math.round(height * scale) }
 }
 
-/** Upload a photo/video to R2 via the Next.js API route. Returns { url, key }. */
+/** Upload a photo/video to R2 via the Next.js API route. Returns { url, key }.
+ * S = seed img2vid: image bersih buat FAL (URL R2 publik). Di-resize kayak A/B, no watermark
+ * (server skip S). Dipakai supaya FAL bisa akses seed walau hasil AI-nya blob/localhost. */
 export async function uploadAsset(
   dataUrlOrUrl: string,
-  type: "A" | "B" | "C",
+  type: "A" | "B" | "C" | "S",
   sessionId: string,
   meta?: { eventName?: string; durationSec?: number },
 ): Promise<{ url: string; key: string }> {

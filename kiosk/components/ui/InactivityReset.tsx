@@ -20,8 +20,13 @@ export function InactivityReset({ screen, dispatch, children }: Props) {
     clearTimeout(resetTimer.current)
     setWarning(false)
     if (!ENABLED || screen === 'idle') return
-    warnTimer.current = setTimeout(() => setWarning(true), 50_000)
-    resetTimer.current = setTimeout(() => dispatch({ type: 'RESET' }), 60_000)
+    // Processing: tamu diem NUNGGU render (stylize diffusion bisa 30–120s tanpa sentuhan) —
+    // 60s bakal motong sesi di tengah masak. Render dibatasi watchdog 120s-nya sendiri;
+    // 300s di sini cuma nyapu error screen yang ditinggal tamu biar booth balik ke idle.
+    // Multicapture: sequence N shot otomatis (±40s buat 4 shot) tanpa pointerdown — 60s kepepet.
+    const resetMs = screen === 'processing' || screen === 'multicapture' ? 300_000 : 60_000
+    warnTimer.current = setTimeout(() => setWarning(true), resetMs - 10_000)
+    resetTimer.current = setTimeout(() => dispatch({ type: 'RESET' }), resetMs)
   }, [screen, dispatch])
 
   useEffect(() => {

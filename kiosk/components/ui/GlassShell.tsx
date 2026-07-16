@@ -20,9 +20,12 @@ type Props = {
   pause?: () => void
   resume?: () => void
   onRefreshTemplates?: (templates: KioskConfig['templates']) => void
+  // Settings save → propagate ke parent (KioskApp) biar screen ikut reaktif (max_templates,
+  // magic catcher, dll) tanpa perlu reload. Tanpa ini config perubahan cuma kelihatan di panel.
+  onConfigChange?: (updated: Partial<KioskConfig>) => void
 }
 
-export function GlassShell({ screenKey, direction, children, config, onLogoClick, pause, resume, onRefreshTemplates }: Props) {
+export function GlassShell({ screenKey, direction, children, config, onLogoClick, pause, resume, onRefreshTemplates, onConfigChange }: Props) {
   const [pages, setPages] = useState<Page[]>([
     { key: screenKey, node: children, anim: 'none' },
   ])
@@ -231,7 +234,7 @@ export function GlassShell({ screenKey, direction, children, config, onLogoClick
               pause={pause}
               resume={resume}
               onRefreshTemplates={onRefreshTemplates}
-              onConfigSaved={updated => setLocalConfig(c => ({ ...c, ...updated }))}
+              onConfigSaved={updated => { setLocalConfig(c => ({ ...c, ...updated })); onConfigChange?.(updated) }}
             />
 
             {/* Industrial corner rivets — 4 dot kaca 5px di sudut (dalam padding 20px) */}

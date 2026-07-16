@@ -9,6 +9,9 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
 
     case 'CONSENT_GIVEN':
       if (state.screen !== 'consent') return state
+      // Photo Print: pilih layout DULU baru foto — skip liveview+category (punya flow AI).
+      // imageUrl '' + category '' = penanda flow print di screen template (BACK → idle).
+      if (action.print) return { screen: 'template', imageUrl: '', category: '', selected: [] }
       return { screen: 'liveview' }
 
     case 'CAPTURE':
@@ -17,15 +20,47 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
 
     case 'SELECT_CATEGORY':
       if (state.screen !== 'category') return state
-      return { screen: 'template', imageUrl: state.imageUrl, category: action.category, selected: null }
+      return { screen: 'template', imageUrl: state.imageUrl, category: action.category, selected: [] }
 
-    case 'SELECT_TEMPLATE':
+    case 'SELECT_TEMPLATE': {
       if (state.screen !== 'template') return state
-      return { ...state, selected: action.template }
+      const exists = state.selected.some(t => t.id === action.template.id)
+      if (exists) return { ...state, selected: state.selected.filter(t => t.id !== action.template.id) }
+      // maxTemplates<=1 → single-select replace (backward-compat). else append kalau masih muat.
+      if (action.maxTemplates <= 1) return { ...state, selected: [action.template] }
+      if (state.selected.length >= action.maxTemplates) return state // penuh → no-op
+      return { ...state, selected: [...state.selected, action.template] }
+    }
 
     case 'CONFIRM_TEMPLATE':
-      if (state.screen !== 'template' || !state.selected) return state
-      return { screen: 'faceassign', imageUrl: state.imageUrl, category: state.category, template: state.selected, faces: [], templateSlots: [], assignments: {} }
+      if (state.screen !== 'template' || state.selected.length === 0) return state
+      // Flow print (imageUrl '' — belum ada selfie): FaceAssign gak punya bahan → block.
+      // Kejadian cuma kalau print_local nyala tanpa template print (fallback dummy faceswap).
+      if (state.imageUrl === '') return state
+      return { screen: 'faceassign', imageUrl: state.imageUrl, category: state.category, templates: state.selected, faces: [], templateSlots: [], assignments: {} }
+
+    case 'START_CAPTURE_LOOP':
+      // Guard engine_type kayak comfy (defense-in-depth): cuma template print yang boleh ke capture loop.
+      if (state.screen !== 'template' || state.selected.length !== 1 || state.selected[0].engine_type !== 'print') return state
+      return { screen: 'multicapture', template: state.selected[0], shots: [] }
+
+    case 'SHOT_TAKEN': {
+      if (state.screen !== 'multicapture') return state
+      const target = state.template.shot_count ?? 4
+      if (state.shots.length >= target) return state // udah penuh → no-op
+      return { ...state, shots: [...state.shots, action.imageUrl] }
+    }
+
+    case 'RETAKE_SHOTS':
+      if (state.screen !== 'multicapture') return state
+      return { ...state, shots: [] }
+
+    case 'PICK_RESULT': {
+      // Multi-template: tamu pilih 1 hasil di grid → collapse ke framechooser (flow single lama).
+      if (state.screen !== 'resultchooser') return state
+      const r = action.result
+      return { screen: 'framechooser', aiUrl: r.aiUrl, originalUrl: r.originalUrl, sourceUrl: r.sourceUrl, rawAiUrl: r.rawAiUrl, base: r.base, processingSec: r.processingSec }
+    }
 
     case 'GO_FACE_ASSIGN':
       if (state.screen !== 'faceassign') return state
@@ -42,8 +77,18 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
     }
 
     case 'START_PROCESSING':
-      if (state.screen !== 'faceassign' || !state.template) return state
-      return { screen: 'processing', progress: 0, step: 1, imageUrl: state.imageUrl, template: state.template, assignments: state.assignments, faceMapping: action.faceMapping }
+      // Template comfy skip FaceAssign — NEXT di TemplateScreen langsung ke processing.
+      // Comfy TIDAK pernah multi-select → cuma jalur single (selected.length === 1).
+      // Guard engine_type: defense-in-depth, non-comfy wajib lewat faceassign.
+      if (state.screen === 'template' && state.selected.length === 1 && state.selected[0].engine_type === 'comfy')
+        return { screen: 'processing', progress: 0, step: 1, imageUrl: state.imageUrl, templates: state.selected, assignments: {} }
+      // Photo Print: multicapture selesai → processing bawa semua shot (compose lokal, bukan AI)
+      if (state.screen === 'multicapture') {
+        if (state.shots.length === 0) return state
+        return { screen: 'processing', progress: 0, step: 1, imageUrl: state.shots[0], templates: [state.template], assignments: {}, shots: state.shots }
+      }
+      if (state.screen !== 'faceassign' || state.templates.length === 0) return state
+      return { screen: 'processing', progress: 0, step: 1, imageUrl: state.imageUrl, templates: state.templates, assignments: state.assignments, faceMapping: action.faceMapping }
 
     case 'SET_PROGRESS': {
       if (state.screen !== 'processing') return state
@@ -52,12 +97,17 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
     }
 
     case 'SHOW_PREVIEW':
+      // direct (Photo Print): overlay udah dibakar di composite — skip framechooser yang
+      // auto-preselect frame (bakal numpuk PNG kedua di print+upload). selectedFrame null.
+      if (action.direct)
+        return { screen: 'preview', aiUrl: action.aiUrl, originalUrl: action.originalUrl, sourceUrl: action.sourceUrl, rawAiUrl: action.rawAiUrl, base: action.base, processingSec: action.processingSec, selectedFrame: null, videoUrl: action.videoUrl, printSize: action.printSize }
       // Landing di frame chooser dulu — tamu pilih frame, baru NEXT ke preview (upload+print).
-      return { screen: 'framechooser', aiUrl: action.aiUrl, originalUrl: action.originalUrl, sourceUrl: action.sourceUrl, rawAiUrl: action.rawAiUrl, base: action.base, processingSec: action.processingSec }
+      // videoUrl = hasil video engine (opsional) — kebawa terus sampai preview buat tab Video.
+      return { screen: 'framechooser', aiUrl: action.aiUrl, originalUrl: action.originalUrl, sourceUrl: action.sourceUrl, rawAiUrl: action.rawAiUrl, base: action.base, processingSec: action.processingSec, videoUrl: action.videoUrl }
 
     case 'CONFIRM_FRAME':
       if (state.screen !== 'framechooser') return state
-      return { screen: 'preview', aiUrl: state.aiUrl, originalUrl: state.originalUrl, sourceUrl: state.sourceUrl, rawAiUrl: state.rawAiUrl, base: state.base, processingSec: state.processingSec, selectedFrame: action.frame }
+      return { screen: 'preview', aiUrl: state.aiUrl, originalUrl: state.originalUrl, sourceUrl: state.sourceUrl, rawAiUrl: state.rawAiUrl, base: state.base, processingSec: state.processingSec, selectedFrame: action.frame, videoUrl: state.videoUrl }
 
     case 'GO_DELIVERY':
       if (state.screen !== 'preview') return state
@@ -75,12 +125,21 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
       if (state.screen === 'consent') return { screen: 'idle' }
       if (state.screen === 'liveview') return { screen: 'idle' }
       if (state.screen === 'category') return { screen: 'liveview' }
-      if (state.screen === 'template') return { screen: 'category', imageUrl: state.imageUrl }
-      if (state.screen === 'faceassign') return { screen: 'template', imageUrl: state.imageUrl, category: state.category, selected: null }
+      // Flow print (imageUrl '' — belum ada foto): BACK dari pemilih layout = pulang ke idle
+      if (state.screen === 'template') return state.imageUrl === '' ? { screen: 'idle' } : { screen: 'category', imageUrl: state.imageUrl }
+      if (state.screen === 'multicapture') return { screen: 'template', imageUrl: '', category: '', selected: [] }
+      if (state.screen === 'faceassign') return { screen: 'template', imageUrl: state.imageUrl, category: state.category, selected: [] }
+      // resultchooser BACK = restart ke idle — re-run N swap ga aman, hasil udah ke-save lokal.
+      if (state.screen === 'resultchooser') return { screen: 'idle' }
       // Re-edit pakai selfie BERSIH — originalUrl bisa ke-watermark (freemium) → face crop di FaceAssign kebawa watermark.
       if (state.screen === 'framechooser') return { screen: 'category', imageUrl: state.sourceUrl ?? state.originalUrl }
-      // Preview BACK = re-pilih frame → balik ke frame chooser (bukan re-pilih template).
-      if (state.screen === 'preview') return { screen: 'framechooser', aiUrl: state.aiUrl, originalUrl: state.originalUrl, sourceUrl: state.sourceUrl, rawAiUrl: state.rawAiUrl, base: state.base, processingSec: state.processingSec }
+      // Preview BACK ("Ganti Pilihan") = re-pilih TEMPLATE → balik ke category (pintu pilih template).
+      // Pakai selfie BERSIH (sourceUrl) — originalUrl bisa ke-watermark (freemium) → face crop kebawa watermark.
+      // Print: composite bukan selfie — balik ke pemilih layout, bukan category.
+      if (state.screen === 'preview') {
+        if (state.printSize) return { screen: 'template', imageUrl: '', category: '', selected: [] }
+        return { screen: 'category', imageUrl: state.sourceUrl ?? state.originalUrl }
+      }
       return state
 
     case 'RESET':

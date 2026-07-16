@@ -15,7 +15,9 @@ type Props = {
 
 export function FaceAssignScreen({ state, dispatch }: Props) {
   const t = useT()
-  const { template, faces, templateSlots } = state
+  // Multi-template share ONE selfie mapping → slots detected from templates[0] (representative).
+  const { templates, faces, templateSlots } = state
+  const template = templates[0] ?? null
   const [assignments, setAssignments] = useState<Record<string, string>>({})
   const [expanded, setExpanded] = useState(true)
   const [face, setFace] = useState(80)

@@ -5,6 +5,7 @@ const id: Translations = {
   idle_title: 'Semeta Suites',
   idle_subtitle: 'Siap eksis hari ini?\nYuk bikin momen yang pantes masuk feed.',
   idle_next: 'Selanjutnya →',
+  legal_recording_notice: 'Dengan menggunakan kiosk ini, Anda menyetujui pengambilan gambar & video untuk keperluan dokumentasi serta promosi/marketing.',
 
   // ── CategoryScreen ───────────────────────────────────────────────────────────
   category_title: 'Tentukan Vibe',
@@ -15,6 +16,11 @@ const id: Translations = {
   // ── TemplateScreen ───────────────────────────────────────────────────────────
   template_title: 'Pilih Gaya',
   template_subtitle: "Cari yang paling 'kamu banget'.",
+  template_multi_counter: 'dipilih',
+
+  // ── ResultChooserScreen ──────────────────────────────────────────────────────
+  resultchooser_title: 'Pilih Favoritmu',
+  resultchooser_subtitle: 'Ketuk satu hasil untuk lanjut',
 
   // ── Shared navigation buttons ────────────────────────────────────────────────
   nav_back: '← Sebelumnya',
@@ -40,6 +46,15 @@ const id: Translations = {
   liveview_error_retry: 'Coba Lagi',
   liveview_rotate_aria: 'Putar kamera',
 
+  // ── MultiCaptureScreen (Photo Print) ─────────────────────────────────────────
+  multicapture_title: 'Sesi Foto ✦',
+  multicapture_subtitle: 'Pasang gaya — kamera jepret sendiri.\nSiap-siap ya!',
+  multicapture_counter: 'Foto',
+  multicapture_get_ready: 'Ganti gaya!',
+  multicapture_start: '⊙ Mulai',
+  multicapture_review_title: 'Udah oke?',
+  multicapture_retake: '↻ Ulangi',
+
   // ── ProcessingScreen ─────────────────────────────────────────────────────────
   processing_title: 'Lagi Di-render Nih ✦',
   processing_subtitle: 'Tahan napas, bentar lagi mateng...',
@@ -47,6 +62,7 @@ const id: Translations = {
   processing_error_subtitle: 'Foto lo gagal diproses nih.\nYuk jepret ulang!',
   processing_start_over: 'Mulai ulang',
   processing_try_again: 'Coba lagi',
+  processing_multi: 'Memproses',
   processing_copy: [
     'AI kami mempelajari ribuan foto untuk bisa melukis orang dengan detail',
     'Setiap piksel dihitung ulang lebih dari 50 kali sebelum gambar muncul',
@@ -85,7 +101,6 @@ const id: Translations = {
   preview_btn_video_ready: 'Video Siap',
   preview_btn_rechoose: 'Ganti Pilihan',
   preview_btn_restart: 'Restart',
-  preview_btn_next: 'Lanjut →',
   delivery_title: 'Ini Hasilnya! ✨',
   delivery_subtitle: 'Scan QR buat simpen ke HP — atau langsung cetak sekarang.',
   delivery_qr_uploading: 'Menyiapkan QR…',
@@ -182,14 +197,12 @@ const id: Translations = {
   // ── SettingsPanel (operator panel) ───────────────────────────────────────────
   set_header: 'Pengaturan Kiosk',
   set_close_aria: 'Tutup',
-  set_done: 'Selesai',
+  set_done: 'Simpan & Terapkan',
   set_saving: 'Menyimpan…',
   set_save_error: 'Gagal menyimpan. Coba lagi.',
-  set_sec_license: 'Lisensi',
   set_secret_label: 'Kiosk Secret',
   set_secret_installed: '● Terpasang — langsung aktif tanpa restart',
   set_secret_empty_hint: 'Belum diisi — minta ke admin',
-  set_secret_state_godmode: '⚡ GOD MODE ACTIVATED',
   set_secret_state_active: '✓ Aktif',
   set_secret_state_expired: '⏳ Sewa habis',
   set_secret_placeholder_empty: 'Belum diisi',
@@ -198,7 +211,6 @@ const id: Translations = {
   set_secret_save: 'Simpan',
   set_secret_saved: '✓ Tersimpan',
   set_secret_cancel: 'Batal',
-  set_secret_saved_note: 'Secret tersimpan. Aktif di handshake berikutnya (otomatis ~10 detik) — tidak perlu restart.',
   set_time_remaining: 'Sisa Waktu',
   set_resume: 'Lanjut',
   set_resume_need_conn: 'Perlu koneksi',
@@ -210,18 +222,13 @@ const id: Translations = {
   set_pause_quota_exhausted_badge: 'Habis',
   set_pause_quota_exhausted_note: 'Kuota jeda sudah habis — sesi tetap berjalan dan tidak bisa dijeda lagi.',
   set_pause_quota_low_note: 'Sisa jeda tinggal sedikit.',
-  set_sec_identity: 'Identitas Kiosk',
   set_kiosk_name: 'Nama Kiosk',
   set_kiosk_no: 'No Kiosk',
-  set_sec_event: 'Event',
   set_event_name: 'Nama Event',
-  set_sec_language: 'Bahasa',
   set_display_language: 'Bahasa Tampilan',
-  set_sec_output: 'Output',
   set_folder: 'Folder',
   set_pb_data: 'Data Epicyoung PB',
   set_pb_data_note: 'Read-only — dikelola oleh Epicyoung PB',
-  set_sec_templates: 'Template',
   set_source: 'Sumber',
   set_pb_url: 'URL Epicyoung PB',
   set_status: 'Status',
@@ -236,11 +243,12 @@ const id: Translations = {
   set_badge_checking: 'Mengecek…',
   set_badge_connected: '● Tersambung',
   set_badge_offline: '✗ Offline',
-  set_sec_engine: 'Engine',
   set_mode: 'Mode',
   set_api_model: 'Model API',
-  set_sec_camera: 'Kamera',
-  set_sec_system: 'Sistem',
+  set_max_templates: 'Max Template per Tamu',
+  set_max_templates_hint: 'Set >1 HANYA untuk PC kelas atas & event VIP (volume rendah). Menambah waktu proses.',
+  set_magic_catcher: 'Magic Catcher (Reaction Cam)',
+  set_magic_catcher_hint: 'Rekam reaksi tamu saat hasil AI muncul (tanpa audio, tersimpan lokal). Butuh disclaimer aktif.',
   set_version_label: 'Versi',
   set_update_check: 'Cek update',
   set_update_checking: 'Ngecek…',
@@ -251,7 +259,6 @@ const id: Translations = {
   set_update_failed: 'Update gagal',
   set_update_restart_note: 'Update terpasang. Tutup lalu buka lagi LAUNCHER.bat biar aktif.',
   set_update_disabled_note: 'Update otomatis tidak tersedia (bukan instalasi git).',
-  set_sec_branding: 'Branding',
   set_logo: 'Logo',
   set_logo_hint: 'PNG/SVG · tinggi 100px · 72 dpi',
   set_bg: 'Latar',

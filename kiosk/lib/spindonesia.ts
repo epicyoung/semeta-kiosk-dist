@@ -32,6 +32,7 @@ function mapWorkerTemplate(item: WorkerTemplate): Template {
     video_endpoint: (item.video_endpoint as string | null) ?? null,
     video_positive_prompt: (item.video_positive_prompt as string | null) ?? null,
     video_negative_prompt: (item.video_negative_prompt as string | null) ?? null,
+    denoise: null, // belum ada kolom cloud — pakai default global
   }
 }
 

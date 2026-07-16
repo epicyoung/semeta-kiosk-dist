@@ -17,7 +17,8 @@ export async function POST(req: NextRequest) {
 
   const { templates, settings } = await res.json()
   localDb.saveTemplates(templates as Template[])
-  if (settings) localDb.saveSettings(settings)
+  // Merge, jangan overwrite — key lokal yang gak dikirim admin (comfy_*, dll) harus selamat
+  if (settings) localDb.saveSettings({ ...localDb.getSettings(), ...settings })
 
   return NextResponse.json({ ok: true, count: (templates as Template[]).length })
 }

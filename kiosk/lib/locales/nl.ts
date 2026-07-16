@@ -5,6 +5,7 @@ const nl: Translations = {
   idle_title: 'Semeta Suites',
   idle_subtitle: 'Klaar om te shinen?\nLaten we een foto maken die je feed waardig is.',
   idle_next: 'Volgende →',
+  legal_recording_notice: 'Door deze kiosk te gebruiken, stem je in met het vastleggen van foto\'s & video voor documentatie- en promotie-/marketingdoeleinden.',
 
   // ── CategoryScreen ───────────────────────────────────────────────────────────
   category_title: 'Kies de Vibe',
@@ -15,6 +16,11 @@ const nl: Translations = {
   // ── TemplateScreen ───────────────────────────────────────────────────────────
   template_title: 'Jouw Stijl',
   template_subtitle: "Kies degene die echt 'jij' schreeuwt.",
+  template_multi_counter: 'geselecteerd',
+
+  // ── ResultChooserScreen ──────────────────────────────────────────────────────
+  resultchooser_title: 'Kies je favoriet',
+  resultchooser_subtitle: 'Tik op één resultaat om door te gaan',
 
   // ── Shared navigation buttons ────────────────────────────────────────────────
   nav_back: '← Vorige',
@@ -40,6 +46,15 @@ const nl: Translations = {
   liveview_error_retry: 'Opnieuw proberen',
   liveview_rotate_aria: 'Camera draaien',
 
+  // ── MultiCaptureScreen (Photo Print) ─────────────────────────────────────────
+  multicapture_title: 'Fotosessie ✦',
+  multicapture_subtitle: 'Poseer maar — de camera schiet vanzelf.\nKlaar voor de start!',
+  multicapture_counter: 'Foto',
+  multicapture_get_ready: 'Nieuwe pose!',
+  multicapture_start: '⊙ Start',
+  multicapture_review_title: 'Tevreden?',
+  multicapture_retake: '↻ Opnieuw',
+
   // ── ProcessingScreen ─────────────────────────────────────────────────────────
   processing_title: 'Masterpiece in de maak ✦',
   processing_subtitle: 'Hou vol, bijna klaar...',
@@ -47,6 +62,7 @@ const nl: Translations = {
   processing_error_subtitle: 'Foto verwerken mislukt.\nLaten we het nog eens proberen!',
   processing_start_over: 'Opnieuw beginnen',
   processing_try_again: 'Opnieuw proberen',
+  processing_multi: 'Verwerken',
   processing_copy: [
     'Onze AI bestudeerde duizenden foto\'s om te leren hoe je mensen schildert',
     'Elke pixel wordt meer dan 50 keer opnieuw berekend voordat het beeld verschijnt',
@@ -84,7 +100,6 @@ const nl: Translations = {
   preview_btn_video_ready: 'Video klaar',
   preview_btn_rechoose: 'Opnieuw kiezen',
   preview_btn_restart: 'Opnieuw starten',
-  preview_btn_next: 'Volgende →',
   delivery_title: 'Dit is het resultaat! ✨',
   delivery_subtitle: "Scan de QR om hem op te slaan — of print 'm meteen uit.",
   delivery_qr_uploading: 'QR wordt voorbereid…',
@@ -180,14 +195,12 @@ const nl: Translations = {
   // ── SettingsPanel (operator panel) ───────────────────────────────────────────
   set_header: 'Kioskinstellingen',
   set_close_aria: 'Sluiten',
-  set_done: 'Klaar',
+  set_done: 'Opslaan & toepassen',
   set_saving: 'Opslaan…',
   set_save_error: 'Opslaan mislukt. Probeer opnieuw.',
-  set_sec_license: 'Licentie',
   set_secret_label: 'Kiosk Secret',
   set_secret_installed: '● Geïnstalleerd — direct actief, geen herstart nodig',
   set_secret_empty_hint: 'Niet ingesteld — vraag de beheerder',
-  set_secret_state_godmode: '⚡ GOD MODE GEACTIVEERD',
   set_secret_state_active: '✓ Actief',
   set_secret_state_expired: '⏳ Huur verlopen',
   set_secret_placeholder_empty: 'Niet ingesteld',
@@ -196,7 +209,6 @@ const nl: Translations = {
   set_secret_save: 'Opslaan',
   set_secret_saved: '✓ Opgeslagen',
   set_secret_cancel: 'Annuleren',
-  set_secret_saved_note: 'Secret opgeslagen. Actief bij de volgende handshake (automatisch ~10s) — geen herstart nodig.',
   set_time_remaining: 'Resterende tijd',
   set_resume: 'Hervatten',
   set_resume_need_conn: 'Verbinding vereist',
@@ -208,18 +220,13 @@ const nl: Translations = {
   set_pause_quota_exhausted_badge: 'Opgebruikt',
   set_pause_quota_exhausted_note: 'Het pauzequotum is opgebruikt — de sessie blijft doorlopen en kan niet meer worden gepauzeerd.',
   set_pause_quota_low_note: 'Pauzequotum raakt op.',
-  set_sec_identity: 'Kioskidentiteit',
   set_kiosk_name: 'Kiosknaam',
   set_kiosk_no: 'Kiosknr.',
-  set_sec_event: 'Evenement',
   set_event_name: 'Evenementnaam',
-  set_sec_language: 'Taal',
   set_display_language: 'Weergavetaal',
-  set_sec_output: 'Uitvoer',
   set_folder: 'Map',
   set_pb_data: 'Epicyoung PB-gegevens',
   set_pb_data_note: 'Alleen-lezen — beheerd door Epicyoung PB',
-  set_sec_templates: 'Sjablonen',
   set_source: 'Bron',
   set_pb_url: 'Epicyoung PB-URL',
   set_status: 'Status',
@@ -234,11 +241,12 @@ const nl: Translations = {
   set_badge_checking: 'Controleren…',
   set_badge_connected: '● Verbonden',
   set_badge_offline: '✗ Offline',
-  set_sec_engine: 'Engine',
   set_mode: 'Modus',
   set_api_model: 'API-model',
-  set_sec_camera: 'Camera',
-  set_sec_system: 'Systeem',
+  set_max_templates: 'Max. sjablonen per gast',
+  set_max_templates_hint: 'Stel ALLEEN >1 in voor high-end pc\'s & VIP-evenementen (laag volume). Verhoogt de verwerkingstijd.',
+  set_magic_catcher: 'Magic Catcher (Reaction Cam)',
+  set_magic_catcher_hint: 'Neem de reactie van de gast op tijdens de AI-onthulling (geen audio, lokaal opgeslagen). Vereist zichtbare disclaimer.',
   set_version_label: 'Versie',
   set_update_check: 'Controleer op updates',
   set_update_checking: 'Controleren…',
@@ -249,7 +257,6 @@ const nl: Translations = {
   set_update_failed: 'Update mislukt',
   set_update_restart_note: 'Update geïnstalleerd. Sluit en heropen LAUNCHER.bat om toe te passen.',
   set_update_disabled_note: 'Automatische update niet beschikbaar (geen git-installatie).',
-  set_sec_branding: 'Branding',
   set_logo: 'Logo',
   set_logo_hint: 'PNG/SVG · 100px hoogte · 72 dpi',
   set_bg: 'Achtergrond',

@@ -5,6 +5,7 @@ const ar: Translations = {
   idle_title: 'Semeta Suites',
   idle_subtitle: 'جاهز تسرق الأضواء؟\nخلنا نصور لقطة تكسر السوشيال ميديا.',
   idle_next: 'التالي ←',
+  legal_recording_notice: 'باستخدامك لهذا الكشك، فإنك توافق على التقاط الصور والفيديو لأغراض التوثيق والترويج والتسويق.',
 
   // ── CategoryScreen ───────────────────────────────────────────────────────────
   category_title: 'حدد الجو',
@@ -15,6 +16,11 @@ const ar: Translations = {
   // ── TemplateScreen ───────────────────────────────────────────────────────────
   template_title: 'اختار الستايل',
   template_subtitle: 'نقي التصميم اللي يمثلك.',
+  template_multi_counter: 'محدد',
+
+  // ── ResultChooserScreen ──────────────────────────────────────────────────────
+  resultchooser_title: 'اختر المفضلة لديك',
+  resultchooser_subtitle: 'اضغط على نتيجة واحدة للمتابعة',
 
   // ── Shared navigation buttons ────────────────────────────────────────────────
   nav_back: '→ السابق',
@@ -40,6 +46,15 @@ const ar: Translations = {
   liveview_error_retry: 'حاول مرة أخرى',
   liveview_rotate_aria: 'تدوير الكاميرا',
 
+  // ── MultiCaptureScreen (Photo Print) ─────────────────────────────────────────
+  multicapture_title: 'جلسة تصوير ✦',
+  multicapture_subtitle: 'خذ وضعيتك — الكاميرا تلتقط تلقائيًا.\nاستعد!',
+  multicapture_counter: 'لقطة',
+  multicapture_get_ready: 'وضعية جديدة!',
+  multicapture_start: '⊙ ابدأ',
+  multicapture_review_title: 'هل أعجبتك؟',
+  multicapture_retake: '↻ إعادة',
+
   // ── ProcessingScreen ─────────────────────────────────────────────────────────
   processing_title: 'جاري الإبداع ✦',
   processing_subtitle: 'ثواني بس، وتجهز...',
@@ -47,6 +62,7 @@ const ar: Translations = {
   processing_error_subtitle: 'ما قدرنا نعالج الصورة.\nخلنا نعيدها!',
   processing_start_over: 'ابدأ من جديد',
   processing_try_again: 'حاول مرة أخرى',
+  processing_multi: 'جارٍ المعالجة',
   processing_copy: [
     'درس ذكاؤنا الاصطناعي آلاف الصور ليتعلّم كيف يرسم الأشخاص',
     'يُعاد حساب كل بكسل أكثر من 50 مرة قبل ظهور الصورة',
@@ -84,7 +100,6 @@ const ar: Translations = {
   preview_btn_video_ready: 'الفيديو جاهز',
   preview_btn_rechoose: 'إعادة الاختيار',
   preview_btn_restart: 'إعادة التشغيل',
-  preview_btn_next: 'التالي ←',
   delivery_title: 'هذي النتيجة! ✨',
   delivery_subtitle: 'امسح الكود عشان تحفظها بجوالك — أو اطبعها الحين.',
   delivery_qr_uploading: 'جارٍ تجهيز رمز QR…',
@@ -180,14 +195,12 @@ const ar: Translations = {
   // ── SettingsPanel (operator panel) ───────────────────────────────────────────
   set_header: 'إعدادات الكشك',
   set_close_aria: 'إغلاق',
-  set_done: 'تم',
+  set_done: 'حفظ وتطبيق',
   set_saving: 'جارٍ الحفظ…',
   set_save_error: 'فشل الحفظ. حاول مرة أخرى.',
-  set_sec_license: 'الترخيص',
   set_secret_label: 'الرمز السري للكشك',
   set_secret_installed: '● مُثبَّت — نشط فوراً، دون إعادة تشغيل',
   set_secret_empty_hint: 'غير مُضبَط — اسأل المسؤول',
-  set_secret_state_godmode: '⚡ تم تفعيل GOD MODE',
   set_secret_state_active: '✓ نشط',
   set_secret_state_expired: '⏳ انتهى الاستئجار',
   set_secret_placeholder_empty: 'غير مُضبَط',
@@ -196,7 +209,6 @@ const ar: Translations = {
   set_secret_save: 'حفظ',
   set_secret_saved: '✓ تم الحفظ',
   set_secret_cancel: 'إلغاء',
-  set_secret_saved_note: 'تم حفظ الرمز السري. سيصبح نشطاً عند المصافحة التالية (تلقائياً ~10 ثوانٍ) — لا حاجة لإعادة التشغيل.',
   set_time_remaining: 'الوقت المتبقي',
   set_resume: 'استئناف',
   set_resume_need_conn: 'يحتاج إلى اتصال',
@@ -208,18 +220,13 @@ const ar: Translations = {
   set_pause_quota_exhausted_badge: 'استُنفدت',
   set_pause_quota_exhausted_note: 'استُنفدت حصة الإيقاف المؤقت — تستمر الجلسة في العمل ولا يمكن إيقافها مؤقتاً بعد الآن.',
   set_pause_quota_low_note: 'حصة الإيقاف المؤقت شارفت على النفاد.',
-  set_sec_identity: 'هوية الكشك',
   set_kiosk_name: 'اسم الكشك',
   set_kiosk_no: 'رقم الكشك',
-  set_sec_event: 'الفعالية',
   set_event_name: 'اسم الفعالية',
-  set_sec_language: 'اللغة',
   set_display_language: 'لغة العرض',
-  set_sec_output: 'الإخراج',
   set_folder: 'المجلد',
   set_pb_data: 'بيانات Epicyoung PB',
   set_pb_data_note: 'للقراءة فقط — تُدار بواسطة Epicyoung PB',
-  set_sec_templates: 'القوالب',
   set_source: 'المصدر',
   set_pb_url: 'رابط Epicyoung PB',
   set_status: 'الحالة',
@@ -234,11 +241,12 @@ const ar: Translations = {
   set_badge_checking: 'جارٍ الفحص…',
   set_badge_connected: '● متصل',
   set_badge_offline: '✗ غير متصل',
-  set_sec_engine: 'المحرّك',
   set_mode: 'الوضع',
   set_api_model: 'نموذج API',
-  set_sec_camera: 'الكاميرا',
-  set_sec_system: 'النظام',
+  set_max_templates: 'أقصى عدد قوالب لكل ضيف',
+  set_max_templates_hint: 'اضبطه على أكثر من 1 فقط لأجهزة PC عالية الأداء وفعاليات VIP (حجم منخفض). يزيد من وقت المعالجة.',
+  set_magic_catcher: 'Magic Catcher (Reaction Cam)',
+  set_magic_catcher_hint: 'سجّل رد فعل الضيف أثناء ظهور نتيجة الذكاء الاصطناعي (بدون صوت، يُحفظ محلياً). يتطلب إظهار إشعار الموافقة.',
   set_version_label: 'الإصدار',
   set_update_check: 'التحقق من التحديثات',
   set_update_checking: 'جارٍ الفحص…',
@@ -249,7 +257,6 @@ const ar: Translations = {
   set_update_failed: 'فشل التحديث',
   set_update_restart_note: 'تم تثبيت التحديث. أغلِق LAUNCHER.bat وأعِد فتحه لتطبيقه.',
   set_update_disabled_note: 'التحديث التلقائي غير متاح (ليس تثبيتاً عبر git).',
-  set_sec_branding: 'العلامة التجارية',
   set_logo: 'الشعار',
   set_logo_hint: 'PNG/SVG · ارتفاع 100 بكسل · 72 نقطة لكل بوصة',
   set_bg: 'الخلفية',

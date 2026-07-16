@@ -61,6 +61,7 @@ export async function fetchPocketBaseFrames(pbUrl: string): Promise<Frame[]> {
 
 export function mapPbTemplate(pbUrl: string, item: Record<string, unknown>): Template {
   const thumb = item.thumbnail as string | null | undefined
+  const overlay = item.overlay as string | null | undefined
   return {
     id: String(item.id ?? ''),
     name: String(item.name ?? ''),
@@ -75,5 +76,12 @@ export function mapPbTemplate(pbUrl: string, item: Record<string, unknown>): Tem
     video_endpoint: null,
     video_positive_prompt: null,
     video_negative_prompt: null,
+    // PB number field unset = 0 → null (pakai default global); >0 = override per-template
+    denoise: Number(item.denoise) > 0 ? Number(item.denoise) : null,
+    // Engine 'print' only — unset di PB = null (kiosk pakai default 4 shot / 4R).
+    // Clamp ≤6 kayak sidecar — PB Admin bisa diedit tangan, typo 40 jangan jadi 40 jepretan.
+    shot_count: Number(item.shot_count) > 0 ? Math.min(6, Math.trunc(Number(item.shot_count))) : null,
+    print_size: item.print_size === '2R' || item.print_size === '4R' ? item.print_size : null,
+    overlay_url: overlay ? `${pbUrl}/api/files/templates/${String(item.id)}/${overlay}` : null,
   }
 }

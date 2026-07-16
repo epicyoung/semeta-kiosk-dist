@@ -76,6 +76,11 @@ const FALLBACK: KioskConfig = {
   enable_gallery: false,
   template_source: 'pocketbase',
   pocketbase_url: 'http://localhost:8090',
+  comfy_model_family: 'sd15',
+  comfy_checkpoint: 'epicrealism_pureEvolutionV5.safetensors',
+  comfy_controlnet: 'canny',
+  comfy_denoise: 0.65,
+  comfy_face_lock: true,
   video_defaults: {
     default_positive_prompt: 'smile and wave hand, subtle body movement, no camera movement, cinematic',
     default_negative_prompt: 'shaky camera, jump cut, distorted face, blur',
@@ -107,11 +112,20 @@ export async function fetchKioskConfig(): Promise<KioskConfig> {
     const engineMode = localSettings.engine_mode as string | undefined
     // Always derive generation_source from engine_mode — never trust stale stored value
     const generation_source = engineMode?.endsWith('_local') ? 'LOCAL' : 'fal'
+    // Mode = dunia template, jangan campur: FULLBODY (LOCAL) cuma nampilin template
+    // comfy (dari sidecar), PRINT cuma template print (spindonesia ikut kesaring — flow-nya
+    // gak kompatibel: print pilih layout dulu, AI foto dulu), mode lain non-comfy non-print.
+    const all = [...spindonesia, ...templates]
+    const modeTemplates = engineMode === 'print_local'
+      ? all.filter(t => t.engine_type === 'print')
+      : engineMode === 'fullbody_local'
+        ? all.filter(t => t.engine_type === 'comfy')
+        : all.filter(t => t.engine_type !== 'comfy' && t.engine_type !== 'print')
     return {
       ...FALLBACK,
       ...localSettings,
       generation_source,
-      templates: [...spindonesia, ...templates],
+      templates: modeTemplates,
       frames: pbFrames,
       template_local: localDb.getTemplateLocal(),
     }

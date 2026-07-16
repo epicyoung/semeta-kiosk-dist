@@ -1,11 +1,15 @@
 import fs from 'fs'
 import path from 'path'
 
+/** "Fun Run!" → "fun-run"; empty/symbol-only input → "event" */
+export function slugify(name: string): string {
+  return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'event'
+}
+
 /** eventFolder: "Fun Run!" + date → "fun-run-20260625" */
 export function eventFolder(name: string, date = new Date()): string {
-  const slug = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'event'
   const d = date.toISOString().slice(0, 10).replace(/-/g, '')
-  return `${slug}-${d}`
+  return `${slugify(name)}-${d}`
 }
 
 /** Zero-padded 3-digit sequence string */
@@ -25,10 +29,25 @@ export function aiFilename(eventName: string, seq: string, date = new Date()): s
   return `${sessionBase(eventName, date)}-${seq}-full-ai-semeta.jpg`
 }
 
+/** fun-run-20260625-001-video-semeta.mp4 — final 2:3 video, frame+QR burned, local */
+export function videoFilename(eventName: string, seq: string, date = new Date()): string {
+  return `${sessionBase(eventName, date)}-${seq}-video-semeta.mp4`
+}
+
 function sessionBase(eventName: string, date: Date): string {
-  const slug = eventName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'event'
   const d = date.toISOString().slice(0, 10).replace(/-/g, '')
-  return `${slug}-${d}`
+  return `${slugify(eventName)}-${d}`
+}
+
+/** fun-run-20260707-001.webm — muted reaction clip, local only */
+export function reactionFilename(eventName: string, stamp: string): string {
+  const slug = slugify(eventName) || 'event'
+  return `${slug}-${stamp}.webm`
+}
+
+/** Absolute dir for reaction clips. ponytail: flat dir, no per-event subfolder — local only, never uploaded */
+export function reactionsDirPath(): string {
+  return 'C:/semeta/reactions'
 }
 
 function getDataDir(): string {

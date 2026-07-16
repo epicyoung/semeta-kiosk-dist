@@ -12,6 +12,7 @@ GPU (optional):
 """
 
 import os
+import threading
 import time
 
 # Must be before any onnxruntime import (insightface loads it at import time)
@@ -24,7 +25,7 @@ if os.name == "nt":
         if os.path.exists(_cudnn): os.add_dll_directory(_cudnn)
         if os.path.exists(_cublas): os.add_dll_directory(_cublas)
 
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 import json
@@ -36,10 +37,44 @@ import onnxruntime as ort
 from io import BytesIO
 from contextlib import asynccontextmanager
 
+import comfy_client  # graph builder + HTTP ke ComfyUI :8188 (stdlib only, same dir)
+
 face_analyser = None
 face_swapper = None
 codeformer_enhancer = None
 active_provider = "unknown"
+
+# CodeFormer fidelity weight [0..1]. 0.5 = default resmi CodeFormer. Tested 0.5/0.7/1.0 di photobooth:
+# beda tipis, 0.5 dipilih (paling mulus, cukup jaga identitas). Override per-request via form `cf_weight`.
+CF_WEIGHT_DEFAULT = 0.5
+
+
+def _clamp_cf_weight(v):
+    """cf_weight harus float di [0,1]. Invalid/None → default. Bukan angka → default."""
+    if v is None:
+        return CF_WEIGHT_DEFAULT
+    try:
+        f = float(v)
+    except (ValueError, TypeError):
+        return CF_WEIGHT_DEFAULT
+    return min(1.0, max(0.0, f))
+
+
+# Denoise img2img [0.10, 0.95] — di bawah 0.10 nyaris no-op, di atas 0.95 identitas hilang total.
+DENOISE_DEFAULT = 0.65
+DENOISE_MIN = 0.10
+DENOISE_MAX = 0.95
+
+
+def _clamp_denoise(v):
+    """denoise harus float di [0.10, 0.95]. Invalid/None → default. Mirror _clamp_cf_weight."""
+    if v is None:
+        return DENOISE_DEFAULT
+    try:
+        f = float(v)
+    except (ValueError, TypeError):
+        return DENOISE_DEFAULT
+    return min(DENOISE_MAX, max(DENOISE_MIN, f))
 
 
 class CodeFormerEnhancer:
@@ -48,7 +83,7 @@ class CodeFormerEnhancer:
         self.input_name = self.session.get_inputs()[0].name
         self.weight_name = self.session.get_inputs()[1].name
 
-    def enhance(self, img, target_face):
+    def enhance(self, img, target_face, cf_weight=CF_WEIGHT_DEFAULT):
         M = face_align.estimate_norm(target_face.kps, 512)
         crop = cv2.warpAffine(img, M, (512, 512), borderMode=cv2.BORDER_REPLICATE)
 
@@ -57,7 +92,9 @@ class CodeFormerEnhancer:
         crop_rgb = cv2.cvtColor(crop_norm, cv2.COLOR_BGR2RGB)
         crop_chw = np.transpose(crop_rgb, (2, 0, 1))
         input_tensor = np.expand_dims(crop_chw, axis=0)
-        weight = np.array([0.5], dtype=np.double)
+        # CodeFormer fidelity: kecil = mulus tapi identitas melenceng, besar = setia ke wajah.
+        # Face swap photobooth (close-up) → 0.7 default (jaga identitas hasil swap). Riset: sczhou/CodeFormer.
+        weight = np.array([cf_weight], dtype=np.double)
 
         outputs = self.session.run(None, {self.input_name: input_tensor, self.weight_name: weight})
         out_tensor = outputs[0][0]
@@ -109,9 +146,51 @@ def load_models():
     print(f"[semeta] Models ready — provider: {active_provider}")
 
 
+# Kiosk = satu tamu diproses sekaligus (sequential by design). Lock ini serialize SEMUA
+# panggilan ke ComfyUI (warmup + /stylize) — tanpa ini, warmup bisa masih ngantre pas tamu
+# pertama generate: dua job numpuk di satu GPU, /stylize/interrupt jadi nembak job yang
+# salah (ComfyUI /api/interrupt stop yang LAGI JALAN, gak scoped per prompt_id).
+comfy_lock = threading.Lock()
+
+
+def _comfy_warmup():
+    """Cold start ComfyUI ~15s (load checkpoint+VAE+CLIP+ControlNet dari disk) dan itu
+    kena TAMU PERTAMA. Warmup: tunggu ComfyUI hidup (LAUNCHER nyalain barengan), masak
+    1 job mini di background biar semua model udah staged sebelum ada tamu.
+    ponytail: warmup pake checkpoint default doang — operator ganti checkpoint lain =
+    shot pertamanya tetep kena load sekali."""
+    deadline = time.time() + 180
+    while time.time() < deadline:
+        if comfy_client.comfy_alive():
+            break
+        time.sleep(5)
+    else:
+        print("[semeta] comfy warmup skip — :8188 gak hidup dalam 180s")
+        return
+    # Tamu udah keburu generate duluan (operator cepet) → comfy_lock lagi dipegang;
+    # warmup gak ada gunanya lagi (checkpoint pasti udah ke-load oleh job tamu itu), skip.
+    if not comfy_lock.acquire(blocking=False):
+        print("[semeta] comfy warmup skip — tamu pertama udah generate duluan")
+        return
+    try:
+        blank = np.zeros((768, 512, 3), dtype=np.uint8)
+        _, buf = cv2.imencode(".jpg", blank)
+        # denoise 0.3 → cuma ~9 step efektif; yang penting model ke-load, bukan hasilnya
+        comfy_client.stylize(
+            buf.tobytes(), positive="warmup", negative="", family="sd15",
+            checkpoint="epicrealism_pureEvolutionV5.safetensors",
+            controlnet="canny", denoise=0.3)
+        print("[semeta] comfy warmup done — checkpoint staged, tamu pertama bebas cold start")
+    except Exception as e:  # non-fatal — warmup gagal cuma berarti tamu pertama nunggu load
+        print(f"[semeta] comfy warmup gagal (non-fatal): {e}")
+    finally:
+        comfy_lock.release()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     load_models()
+    threading.Thread(target=_comfy_warmup, daemon=True).start()
     yield
 
 
@@ -180,6 +259,22 @@ def _selfcheck_resolve_pairs():
     assert resolve_pairs("[0]", 2, 2) == [0, None]       # short list → rest None
 
 
+def _selfcheck_cf_weight():
+    assert _clamp_cf_weight(None) == CF_WEIGHT_DEFAULT   # kosong → default (0.5)
+    assert _clamp_cf_weight("bad") == CF_WEIGHT_DEFAULT  # invalid → default
+    assert _clamp_cf_weight("0.5") == 0.5                # valid string
+    assert _clamp_cf_weight("1.8") == 1.0                # clamp atas
+    assert _clamp_cf_weight("-0.3") == 0.0               # clamp bawah
+
+
+def _selfcheck_denoise():
+    assert _clamp_denoise(None) == DENOISE_DEFAULT       # kosong → default (0.65)
+    assert _clamp_denoise("bad") == DENOISE_DEFAULT      # invalid → default
+    assert _clamp_denoise("0.5") == 0.5                  # valid string
+    assert _clamp_denoise("2.0") == DENOISE_MAX          # clamp atas (0.95)
+    assert _clamp_denoise("0.01") == DENOISE_MIN         # clamp bawah (0.10)
+
+
 @app.post("/detect")
 async def detect_faces(image: UploadFile = File(...)):
     """Return real face bounding boxes (left-to-right), for the FaceAssign UI.
@@ -210,15 +305,19 @@ async def swap_face(
     template: UploadFile = File(...),
     selfie: UploadFile = File(...),
     mapping: str = Form(None),
+    cf_weight: str = Form(None),
 ):
     """Multi-face swap: tiap muka template (L-R) di-swap sama muka selfie yang di-assign lewat
     `mapping` (dari FaceAssign UI). Tanpa mapping → default swap SEMUA muka urut L-R.
     Filter + sort L-R SAMA PERSIS kayak /detect biar index mapping sinkron sama UI.
 
+    `cf_weight` [0..1] opsional → fidelity CodeFormer buat A/B test (default 0.7). Kosong = default.
+
     Watermark is NOT applied here. The kiosk client burns the local copies (original + AI) in
     one place when unlicensed (lib/watermark-canvas.ts) so preview/print/save share one canvas.
     """
     start = time.time()
+    cf_w = _clamp_cf_weight(cf_weight)
 
     template_img = cv2.imdecode(np.frombuffer(await template.read(), np.uint8), cv2.IMREAD_COLOR)
     selfie_img = cv2.imdecode(np.frombuffer(await selfie.read(), np.uint8), cv2.IMREAD_COLOR)
@@ -240,7 +339,7 @@ async def swap_face(
             continue
         result_img = face_swapper.get(result_img, tface, selfie_faces[src_idx], paste_back=True)
         if codeformer_enhancer:
-            result_img = codeformer_enhancer.enhance(result_img, tface)
+            result_img = codeformer_enhancer.enhance(result_img, tface, cf_w)
         swapped += 1
 
     # Semua slot ke-skip (mapping nyasar) → jangan balikin template mentah; fallback biggest<->biggest.
@@ -249,18 +348,150 @@ async def swap_face(
         s = max(selfie_faces, key=_bbox_area)
         result_img = face_swapper.get(template_img, t, s, paste_back=True)
         if codeformer_enhancer:
-            result_img = codeformer_enhancer.enhance(result_img, t)
+            result_img = codeformer_enhancer.enhance(result_img, t, cf_w)
 
     _, buf = cv2.imencode(".jpg", result_img, [cv2.IMWRITE_JPEG_QUALITY, 92])
-    print(f"[semeta] swap done in {round(time.time() - start, 2)}s, {swapped}/{len(template_faces)} faces ({active_provider})")
+    print(f"[semeta] swap done in {round(time.time() - start, 2)}s, {swapped}/{len(template_faces)} faces, cf_weight={cf_w} ({active_provider})")
 
     io = BytesIO(buf.tobytes())
     io.seek(0)
     return StreamingResponse(io, media_type="image/jpeg")
 
 
+@app.get("/capabilities")
+def capabilities():
+    """Kiosk nanya kemampuan stylize — kiosk gak perlu tau ComfyUI ada di baliknya.
+    def (bukan async): probe urllib blocking (timeout 2s) jalan di threadpool FastAPI."""
+    try:
+        families = comfy_client.list_checkpoints()
+        controlnets = comfy_client.list_controlnets()  # canny + depth kalau modelnya ada
+        alive = True
+    except (OSError, ValueError):  # URLError subclass OSError; ValueError = JSON rusak
+        families, controlnets, alive = {}, [], False
+    return {
+        "stylize": alive,
+        "families": families,
+        "controlnets": controlnets,
+        "face_lock": face_swapper is not None,
+    }
+
+
+def _apply_face_lock(selfie_img, result_img):
+    """Swap muka tamu (dari selfie ASLI) balik ke hasil stylize — pengganti node ReActor
+    (custom node, bukan comfy-core). MULTI-FACE: urut kiri→kanan di dua sisi, pasangkan
+    per-index (konvensi L-R yang sama dengan resolve_pairs di /swap) — grup 3-5 orang
+    ke-lock semua. Jumlah timpang → swap sebanyak min(n), sisanya dibiarin (hasil stylize
+    kadang 'ngilangin' muka; jangan maksa pasangan salah). Muka gak ketemu di salah satu
+    sisi → skip graceful. -> (img, locked_count)"""
+    guest_faces = filter_real_faces(face_analyser.get(selfie_img))
+    if not guest_faces:
+        print("[semeta] face lock skip — no face in selfie")
+        return result_img, 0
+    result_faces = filter_real_faces(face_analyser.get(result_img))
+    if not result_faces:
+        print("[semeta] face lock skip — no face in stylized result")
+        return result_img, 0
+    guest_faces.sort(key=lambda f: f.bbox[0])
+    result_faces.sort(key=lambda f: f.bbox[0])
+    n = min(len(guest_faces), len(result_faces))
+    out = result_img
+    for guest, target in zip(guest_faces[:n], result_faces[:n]):
+        out = face_swapper.get(out, target, guest, paste_back=True)
+        if codeformer_enhancer:
+            out = codeformer_enhancer.enhance(out, target, CF_WEIGHT_DEFAULT)
+    if n < max(len(guest_faces), len(result_faces)):
+        print(f"[semeta] face lock partial — {len(guest_faces)} muka selfie vs "
+              f"{len(result_faces)} di hasil, ke-lock {n}")
+    return out, n
+
+
+@app.post("/stylize")
+def stylize(
+    selfie: UploadFile = File(...),
+    positive: str = Form(""),
+    negative: str = Form(""),
+    family: str = Form("sd15"),
+    checkpoint: str = Form("epicrealism_pureEvolutionV5.safetensors"),
+    controlnet: str = Form("canny"),
+    denoise: str = Form(None),
+    face_lock: str = Form("true"),
+    sampler: str = Form(None),
+    scheduler: str = Form(None),
+    cfg: str = Form(None),
+    steps: str = Form(None),
+    cn_strength: str = Form(None),
+):
+    """Restyle selfie via ComfyUI img2img + face lock post-pass insightface —
+    identitas tamu kejaga walau denoise tinggi. Error = HTTPException {"detail"}.
+    def (bukan async): comfy blocking sampai ~110s — sync route jalan di threadpool
+    FastAPI, /health & /capabilities tetep responsif selama generate."""
+    start = time.time()
+    if family not in ("sd15", "sdxl", "flux"):
+        raise HTTPException(status_code=400, detail=f"Unknown family '{family}'")
+    # Cross-check family vs checkpoint — mismatch (mis. graph flux + ckpt sd15) gak
+    # meledak di ComfyUI, tapi hasilnya rusak diam-diam / error buram di lapangan.
+    # ponytail: heuristik nama (classify_family), bukan inspeksi file — ceiling sama
+    # dengan heuristik dropdown /capabilities, jadi konsisten dua arah.
+    ckpt_family = comfy_client.classify_family(checkpoint)
+    if ckpt_family != family:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Checkpoint '{checkpoint}' kedeteksi {ckpt_family}, bukan {family} — "
+                   f"cek setting Model family / Checkpoint")
+    # depth = MiDaS preprocessor + control_v11f1p_sd15_depth (bb51975). normalize_controlnet
+    # cuma jatuh ke 'canny' kalau nilainya gak dikenal; 'depth' lolos apa adanya. /capabilities
+    # gak nawarin depth kalau model/node-nya gak ada di mesin, jadi UI gak bisa milih yang absen.
+    controlnet = comfy_client.normalize_controlnet(controlnet)
+    denoise_f = _clamp_denoise(denoise)
+    lock = face_lock.strip().lower() != "false"
+
+    selfie_bytes = selfie.file.read()
+    selfie_img = cv2.imdecode(np.frombuffer(selfie_bytes, np.uint8), cv2.IMREAD_COLOR)
+    if selfie_img is None:
+        raise HTTPException(status_code=400, detail="Invalid selfie image")
+
+    # Serialize semua job ke ComfyUI (kiosk = satu GPU, satu tamu diproses sekaligus) —
+    # kalau warmup masih jalan pas tamu generate, tunggu di sini alih-alih numpuk 2 job
+    # (numpuk bikin /stylize/interrupt nembak job yang salah, lihat comfy_lock di atas).
+    with comfy_lock:
+        try:
+            result_bytes = comfy_client.stylize(
+                selfie_bytes, positive=positive, negative=negative, family=family,
+                checkpoint=checkpoint, controlnet=controlnet, denoise=denoise_f,
+                sampler=sampler, scheduler=scheduler, cfg=cfg, steps=steps, cn_strength=cn_strength)
+        except (RuntimeError, TimeoutError, OSError) as e:
+            raise HTTPException(status_code=502, detail=f"ComfyUI: {e}")
+
+    # PreviewImage keluarin PNG — decode lalu re-encode jpg (contract: image/jpeg)
+    result_img = cv2.imdecode(np.frombuffer(result_bytes, np.uint8), cv2.IMREAD_COLOR)
+    if result_img is None:
+        raise HTTPException(status_code=502, detail="ComfyUI returned non-image output")
+
+    locked = 0  # jumlah muka yang ke-lock (multi-face L-R)
+    if lock and face_swapper is not None:
+        result_img, locked = _apply_face_lock(selfie_img, result_img)
+
+    _, buf = cv2.imencode(".jpg", result_img, [cv2.IMWRITE_JPEG_QUALITY, 92])
+    print(f"[semeta] stylize done in {round(time.time() - start, 2)}s "
+          f"family={family} cn={controlnet} denoise={denoise_f} face_lock={locked} ({active_provider})")
+
+    io = BytesIO(buf.tobytes())
+    io.seek(0)
+    return StreamingResponse(io, media_type="image/jpeg")
+
+
+@app.post("/stylize/interrupt")
+def stylize_interrupt():
+    """Kiosk abort/timeout → stop job ComfyUI yang lagi jalan, bebasin GPU.
+    (Restore perilaku v1 yang manggil /api/interrupt langsung — sekarang lewat
+    boundary face_server, kiosk tetep gak kenal :8188.) Fire-and-forget semantics."""
+    return {"ok": comfy_client.interrupt()}
+
+
 if __name__ == "__main__":
     import uvicorn
     _selfcheck_resolve_pairs()  # fail-fast kalau logika mapping rusak
+    _selfcheck_cf_weight()      # fail-fast kalau clamp cf_weight rusak
+    _selfcheck_denoise()        # fail-fast kalau clamp denoise rusak
     print("[semeta] Starting Face Server on port 8000...")
     uvicorn.run(app, host="0.0.0.0", port=8000)

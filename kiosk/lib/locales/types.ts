@@ -3,6 +3,7 @@ export interface Translations {
   idle_title: string
   idle_subtitle: string
   idle_next: string
+  legal_recording_notice: string  // Magic Catcher legal disclaimer, shown under Start button
 
   // ── CategoryScreen ───────────────────────────────────────────────────────────
   category_title: string
@@ -13,6 +14,11 @@ export interface Translations {
   // ── TemplateScreen ───────────────────────────────────────────────────────────
   template_title: string
   template_subtitle: string
+  template_multi_counter: string  // "selected" — counter suffix (N/M selected)
+
+  // ── ResultChooserScreen (VIP multi-template) ─────────────────────────────────
+  resultchooser_title: string
+  resultchooser_subtitle: string
 
   // ── Shared navigation buttons ────────────────────────────────────────────────
   nav_back: string      // "← Previous"
@@ -40,6 +46,15 @@ export interface Translations {
   // aria-label for rotate button
   liveview_rotate_aria: string
 
+  // ── MultiCaptureScreen (Photo Print) ────────────────────────────────────────
+  multicapture_title: string
+  multicapture_subtitle: string
+  multicapture_counter: string      // e.g. "Foto" → "Foto 2/4" (angka dari kode)
+  multicapture_get_ready: string    // jeda antar shot — ganti pose
+  multicapture_start: string
+  multicapture_review_title: string // judul review grid setelah semua shot
+  multicapture_retake: string
+
   // ── ProcessingScreen ─────────────────────────────────────────────────────────
   processing_title: string
   processing_subtitle: string
@@ -48,6 +63,7 @@ export interface Translations {
   processing_error_subtitle: string
   processing_start_over: string
   processing_try_again: string
+  processing_multi: string       // "Processing" — prefix for "N/M…" multi-template progress
   // Rotating fun-facts copy (array — cycled every 4 s)
   processing_copy: string[]
 
@@ -88,7 +104,6 @@ export interface Translations {
   preview_btn_video_ready: string
   preview_btn_rechoose: string
   preview_btn_restart: string
-  preview_btn_next: string
 
   // ── DeliveryScreen ───────────────────────────────────────────────────────────
   delivery_title: string
@@ -163,11 +178,9 @@ export interface Translations {
   set_saving: string
   set_save_error: string
   // License section
-  set_sec_license: string
   set_secret_label: string
   set_secret_installed: string        // "● Installed — active immediately, no restart"
   set_secret_empty_hint: string       // "Not set — ask admin"
-  set_secret_state_godmode: string
   set_secret_state_active: string
   set_secret_state_expired: string
   set_secret_placeholder_empty: string // shown in masked box when no secret
@@ -176,7 +189,6 @@ export interface Translations {
   set_secret_save: string
   set_secret_saved: string
   set_secret_cancel: string
-  set_secret_saved_note: string        // "Secret saved. Active on next handshake…"
   // Timer + pause
   set_time_remaining: string
   set_resume: string
@@ -191,22 +203,17 @@ export interface Translations {
   set_pause_quota_exhausted_note: string
   set_pause_quota_low_note: string
   // Identity
-  set_sec_identity: string
   set_kiosk_name: string
   set_kiosk_no: string
   // Event
-  set_sec_event: string
   set_event_name: string
   // Language
-  set_sec_language: string
   set_display_language: string
   // Output
-  set_sec_output: string
   set_folder: string
   set_pb_data: string
   set_pb_data_note: string             // "Read-only — managed by PocketBase"
   // Templates
-  set_sec_templates: string
   set_source: string
   set_pb_url: string
   set_status: string
@@ -223,13 +230,15 @@ export interface Translations {
   set_badge_connected: string
   set_badge_offline: string
   // Engine
-  set_sec_engine: string
   set_mode: string
   set_api_model: string
+  // VIP multi-template + Magic Catcher
+  set_max_templates: string
+  set_max_templates_hint: string
+  set_magic_catcher: string
+  set_magic_catcher_hint: string
   // Camera
-  set_sec_camera: string
   // System / Update
-  set_sec_system: string
   set_version_label: string
   set_update_check: string
   set_update_checking: string
@@ -241,7 +250,6 @@ export interface Translations {
   set_update_restart_note: string
   set_update_disabled_note: string
   // Branding
-  set_sec_branding: string
   set_logo: string
   set_logo_hint: string
   set_bg: string

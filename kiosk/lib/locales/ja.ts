@@ -5,6 +5,7 @@ const ja: Translations = {
   idle_title: 'Semeta Suites',
   idle_subtitle: '盛れる準備はOK？\nSNS映えする一枚を撮ろう。',
   idle_next: '次へ →',
+  legal_recording_notice: 'このキオスクを利用することで、記録および宣伝・マーケティング目的での写真・動画の撮影に同意したものとみなされます。',
 
   // ── CategoryScreen ───────────────────────────────────────────────────────────
   category_title: '雰囲気を選ぶ',
@@ -15,6 +16,11 @@ const ja: Translations = {
   // ── TemplateScreen ───────────────────────────────────────────────────────────
   template_title: 'スタイルを選ぶ',
   template_subtitle: '「自分らしさ」で選ぼう。',
+  template_multi_counter: '選択済み',
+
+  // ── ResultChooserScreen ──────────────────────────────────────────────────────
+  resultchooser_title: 'お気に入りを選択',
+  resultchooser_subtitle: '1つ選んで続行',
 
   // ── Shared navigation buttons ────────────────────────────────────────────────
   nav_back: '← 前へ',
@@ -40,6 +46,15 @@ const ja: Translations = {
   liveview_error_retry: 'もう一度試す',
   liveview_rotate_aria: 'カメラを切り替え',
 
+  // ── MultiCaptureScreen (Photo Print) ─────────────────────────────────────────
+  multicapture_title: 'フォトセッション ✦',
+  multicapture_subtitle: 'ポーズをどうぞ — カメラは自動で撮影します。\n準備はいい？',
+  multicapture_counter: 'ショット',
+  multicapture_get_ready: '次のポーズ！',
+  multicapture_start: '⊙ スタート',
+  multicapture_review_title: 'いい感じ？',
+  multicapture_retake: '↻ 撮り直す',
+
   // ── ProcessingScreen ─────────────────────────────────────────────────────────
   processing_title: 'ただいまレンダリング中 ✦',
   processing_subtitle: 'もうちょっと待っててね...',
@@ -47,6 +62,7 @@ const ja: Translations = {
   processing_error_subtitle: '処理に失敗しました。\nもう一回撮り直そう！',
   processing_start_over: '最初からやり直す',
   processing_try_again: 'もう一度試す',
+  processing_multi: '処理中',
   processing_copy: [
     'このAIは、人物の描き方を学ぶために何千枚もの写真を分析しました',
     '画像が現れる前に、すべてのピクセルが50回以上再計算されています',
@@ -84,7 +100,6 @@ const ja: Translations = {
   preview_btn_video_ready: '動画の準備完了',
   preview_btn_rechoose: '選び直す',
   preview_btn_restart: '最初から',
-  preview_btn_next: '次へ →',
   delivery_title: '完成しました！ ✨',
   delivery_subtitle: 'QRコードでスマホに保存、または今すぐプリントアウト。',
   delivery_qr_uploading: 'QRを準備中…',
@@ -180,14 +195,12 @@ const ja: Translations = {
   // ── SettingsPanel (operator panel) ───────────────────────────────────────────
   set_header: 'キオスク設定',
   set_close_aria: '閉じる',
-  set_done: '完了',
+  set_done: '保存して適用',
   set_saving: '保存中…',
   set_save_error: '保存に失敗しました。もう一度お試しください。',
-  set_sec_license: 'ライセンス',
   set_secret_label: 'キオスクシークレット',
   set_secret_installed: '● 登録済み — 再起動なしで即時有効',
   set_secret_empty_hint: '未設定 — 管理者に確認',
-  set_secret_state_godmode: '⚡ GOD MODE 起動',
   set_secret_state_active: '✓ 有効',
   set_secret_state_expired: '⏳ レンタル期限切れ',
   set_secret_placeholder_empty: '未設定',
@@ -196,7 +209,6 @@ const ja: Translations = {
   set_secret_save: '保存',
   set_secret_saved: '✓ 保存しました',
   set_secret_cancel: 'キャンセル',
-  set_secret_saved_note: 'シークレットを保存しました。次回のハンドシェイク（自動で約10秒）で有効になります — 再起動は不要です。',
   set_time_remaining: '残り時間',
   set_resume: '再開',
   set_resume_need_conn: '接続が必要です',
@@ -208,18 +220,13 @@ const ja: Translations = {
   set_pause_quota_exhausted_badge: '使い切りました',
   set_pause_quota_exhausted_note: '一時停止の枠を使い切りました — セッションは継続され、これ以上一時停止できません。',
   set_pause_quota_low_note: '一時停止の枠が残りわずかです。',
-  set_sec_identity: 'キオスクの識別情報',
   set_kiosk_name: 'キオスク名',
   set_kiosk_no: 'キオスク番号',
-  set_sec_event: 'イベント',
   set_event_name: 'イベント名',
-  set_sec_language: '言語',
   set_display_language: '表示言語',
-  set_sec_output: '出力',
   set_folder: 'フォルダ',
   set_pb_data: 'Epicyoung PB データ',
   set_pb_data_note: '読み取り専用 — Epicyoung PB により管理',
-  set_sec_templates: 'テンプレート',
   set_source: 'ソース',
   set_pb_url: 'Epicyoung PB URL',
   set_status: 'ステータス',
@@ -234,11 +241,12 @@ const ja: Translations = {
   set_badge_checking: '確認中…',
   set_badge_connected: '● 接続済み',
   set_badge_offline: '✗ オフライン',
-  set_sec_engine: 'エンジン',
   set_mode: 'モード',
   set_api_model: 'API モデル',
-  set_sec_camera: 'カメラ',
-  set_sec_system: 'システム',
+  set_max_templates: 'ゲストごとの最大テンプレート数',
+  set_max_templates_hint: 'ハイエンドPCおよびVIPイベント（少人数）でのみ2以上に設定してください。処理時間が増加します。',
+  set_magic_catcher: 'Magic Catcher (Reaction Cam)',
+  set_magic_catcher_hint: 'AI結果の公開中にゲストの反応を録画します（音声なし、ローカル保存）。免責事項の表示が必要です。',
   set_version_label: 'バージョン',
   set_update_check: 'アップデートを確認',
   set_update_checking: '確認中…',
@@ -249,7 +257,6 @@ const ja: Translations = {
   set_update_failed: '更新に失敗しました',
   set_update_restart_note: 'アップデートをインストールしました。適用するには LAUNCHER.bat を閉じて再度開いてください。',
   set_update_disabled_note: '自動更新は利用できません（git インストールではありません）。',
-  set_sec_branding: 'ブランディング',
   set_logo: 'ロゴ',
   set_logo_hint: 'PNG/SVG · 高さ100px · 72 dpi',
   set_bg: '背景',

@@ -18,6 +18,11 @@ const mythId: Translations = {
 
   template_title: 'Tempaan Takdir',
   template_subtitle: 'Setiap bingkai membawa takdir berbeda.\nPilih yang paling terasa.',
+  template_multi_counter: 'terikat',
+
+  // ── ResultChooserScreen — nada oracle
+  resultchooser_title: 'Raih Visimu',
+  resultchooser_subtitle: 'Sentuh satu takdir yang ingin kau simpan.',
 
   liveview_title: 'Hadapi Cahayamu ✦',
   liveview_subtitle: 'Berdiri tegak di hadapan cahaya,\ndan melangkahlah ke dalam mimpimu.',
@@ -27,6 +32,7 @@ const mythId: Translations = {
 
   processing_title: 'Menempa Keabadian',
   processing_subtitle: 'Api mistis menyala, roda berputar selaras.\nSabar, sang pejalan — potretmu tengah diukir.',
+  processing_multi: 'Menempa',
 
   preview_title: 'Pilih segel takdirmu ✦',
   preview_subtitle: 'Bingkai mengikat penglihatan.\nKetuk untuk beralih antara bayang dan cahaya.',

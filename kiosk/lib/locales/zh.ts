@@ -5,6 +5,7 @@ const zh: Translations = {
   idle_title: 'Semeta Suites',
   idle_subtitle: '准备好闪耀了吗？\n来拍张刷爆朋友圈的神仙大片吧。',
   idle_next: '开始 →',
+  legal_recording_notice: '使用本机即表示你同意为存档记录及宣传营销目的拍摄照片及视频。',
 
   // ── CategoryScreen ───────────────────────────────────────────────────────────
   category_title: '定制风格',
@@ -15,6 +16,11 @@ const zh: Translations = {
   // ── TemplateScreen ───────────────────────────────────────────────────────────
   template_title: '挑选模版',
   template_subtitle: '选个最懂你的。',
+  template_multi_counter: '已选',
+
+  // ── ResultChooserScreen ──────────────────────────────────────────────────────
+  resultchooser_title: '选择你的最爱',
+  resultchooser_subtitle: '点选一张继续',
 
   // ── Shared navigation buttons ────────────────────────────────────────────────
   nav_back: '← 上一步',
@@ -40,6 +46,15 @@ const zh: Translations = {
   liveview_error_retry: '重试',
   liveview_rotate_aria: '旋转摄像头',
 
+  // ── MultiCaptureScreen (Photo Print) ─────────────────────────────────────────
+  multicapture_title: '拍照环节 ✦',
+  multicapture_subtitle: '摆好姿势 — 相机会自动连拍。\n准备好了吗！',
+  multicapture_counter: '第',
+  multicapture_get_ready: '换个姿势！',
+  multicapture_start: '⊙ 开始',
+  multicapture_review_title: '满意吗？',
+  multicapture_retake: '↻ 重拍',
+
   // ── ProcessingScreen ─────────────────────────────────────────────────────────
   processing_title: '魔法生成中 ✦',
   processing_subtitle: '屏住呼吸，马上就好...',
@@ -47,6 +62,7 @@ const zh: Translations = {
   processing_error_subtitle: '照片生成失败，\n咱们再来一次吧！',
   processing_start_over: '重新开始',
   processing_try_again: '重试',
+  processing_multi: '处理中',
   processing_copy: [
     '我们的 AI 学习了数千张照片，才学会如何描绘人物',
     '在图像呈现之前，每个像素都要被重新计算 50 多次',
@@ -84,7 +100,6 @@ const zh: Translations = {
   preview_btn_video_ready: '视频已就绪',
   preview_btn_rechoose: '重新选择',
   preview_btn_restart: '重新开始',
-  preview_btn_next: '下一步 →',
   delivery_title: '惊艳登场！✨',
   delivery_subtitle: '扫码保存到手机，或者直接打印。',
   delivery_qr_uploading: '正在生成二维码…',
@@ -180,14 +195,12 @@ const zh: Translations = {
   // ── SettingsPanel (operator panel) ───────────────────────────────────────────
   set_header: '拍照亭设置',
   set_close_aria: '关闭',
-  set_done: '完成',
+  set_done: '保存并应用',
   set_saving: '保存中…',
   set_save_error: '保存失败。请重试。',
-  set_sec_license: '许可',
   set_secret_label: '拍照亭密钥',
   set_secret_installed: '● 已安装 — 即时生效，无需重启',
   set_secret_empty_hint: '未设置 — 请咨询管理员',
-  set_secret_state_godmode: '⚡ GOD MODE 已激活',
   set_secret_state_active: '✓ 生效中',
   set_secret_state_expired: '⏳ 租用已到期',
   set_secret_placeholder_empty: '未设置',
@@ -196,7 +209,6 @@ const zh: Translations = {
   set_secret_save: '保存',
   set_secret_saved: '✓ 已保存',
   set_secret_cancel: '取消',
-  set_secret_saved_note: '密钥已保存。将在下次握手时生效（自动约 10 秒）——无需重启。',
   set_time_remaining: '剩余时间',
   set_resume: '恢复',
   set_resume_need_conn: '需要联网',
@@ -208,18 +220,13 @@ const zh: Translations = {
   set_pause_quota_exhausted_badge: '已用尽',
   set_pause_quota_exhausted_note: '暂停配额已用尽 — 会话将持续运行，无法再暂停。',
   set_pause_quota_low_note: '暂停配额即将用尽。',
-  set_sec_identity: '拍照亭标识',
   set_kiosk_name: '拍照亭名称',
   set_kiosk_no: '拍照亭编号',
-  set_sec_event: '活动',
   set_event_name: '活动名称',
-  set_sec_language: '语言',
   set_display_language: '显示语言',
-  set_sec_output: '输出',
   set_folder: '文件夹',
   set_pb_data: 'Epicyoung PB 数据',
   set_pb_data_note: '只读 — 由 Epicyoung PB 管理',
-  set_sec_templates: '模板',
   set_source: '来源',
   set_pb_url: 'Epicyoung PB 网址',
   set_status: '状态',
@@ -234,11 +241,12 @@ const zh: Translations = {
   set_badge_checking: '检查中…',
   set_badge_connected: '● 已连接',
   set_badge_offline: '✗ 离线',
-  set_sec_engine: '引擎',
   set_mode: '模式',
   set_api_model: 'API 模型',
-  set_sec_camera: '摄像头',
-  set_sec_system: '系统',
+  set_max_templates: '每位访客最大模板数',
+  set_max_templates_hint: '仅在高端 PC 及 VIP 活动（低流量）时才设为 >1。会增加处理时间。',
+  set_magic_catcher: 'Magic Catcher (Reaction Cam)',
+  set_magic_catcher_hint: '在 AI 结果揭晓时录下访客反应（无音频，本地保存）。需启用免责声明。',
   set_version_label: '版本',
   set_update_check: '检查更新',
   set_update_checking: '检查中…',
@@ -249,7 +257,6 @@ const zh: Translations = {
   set_update_failed: '更新失败',
   set_update_restart_note: '更新已安装。请关闭并重新打开 LAUNCHER.bat 以应用。',
   set_update_disabled_note: '自动更新不可用（非 git 安装）。',
-  set_sec_branding: '品牌',
   set_logo: '标志',
   set_logo_hint: 'PNG/SVG · 高度 100px · 72 dpi',
   set_bg: '背景',

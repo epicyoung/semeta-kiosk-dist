@@ -6,7 +6,10 @@ import type { KioskAction, KioskState, KioskConfig } from '@/lib/types'
 import { findOverlayForOrientation, loadImageDims, orientationOf, type OrientedFrame } from '@/lib/frames'
 import { printPhoto } from '@/lib/print'
 import { compositeFrame } from '@/lib/frame-composite'
+import { to2UpSheet } from '@/lib/print-layout'
 import { uploadAsset } from '@/lib/upload'
+import { animateImage, finalizeVideo } from '@/lib/video'
+import { buildVideoOverlay } from '@/lib/video-overlay'
 import { useT } from '@/lib/i18n'
 
 type Props = {
@@ -15,7 +18,7 @@ type Props = {
   state: Extract<KioskState, { screen: 'preview' | 'framechooser' }>
   dispatch: Dispatch<KioskAction>
   frames: OrientedFrame[]
-  config: Pick<KioskConfig, 'enable_email' | 'enable_print' | 'enable_video' | 'has_secret'>
+  config: Pick<KioskConfig, 'enable_email' | 'enable_print' | 'enable_video' | 'enable_video_engine' | 'video_provider' | 'has_secret'>
   licensed: boolean
   eventName: string
   onAction?: (action: 'printed' | 'emailed' | 'shared') => void
@@ -55,6 +58,11 @@ const VIDEO_QR_URL = process.env.NEXT_PUBLIC_KIOSK_URL ? `${process.env.NEXT_PUB
 export function PreviewScreen({ mode, state, dispatch, frames, config, licensed, eventName, onAction }: Props) {
   const isChoose = mode === 'choose'
   const isFinal = mode === 'final'
+  // Photo Print: composite udah final (overlay kebakar) — no frame, no video, no toggle AI/Asli.
+  const isPrintSession = state.screen === 'preview' && !!state.printSize
+  // Video di preview = keputusan VENDOR (toggle "Enable Video Engine" di Settings) AND flag
+  // admin enable_video (DB). Vendor OFF → nol UI video (tab + tombol) di preview akhir.
+  const videoAllowed = !!config.enable_video && (config.enable_video_engine ?? false) && !isPrintSession
   const t = useT()
   const [showOriginal, setShowOriginal] = useState(false)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
@@ -75,8 +83,14 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
   const [showVideoConfirm, setShowVideoConfirm] = useState(false)
   const [videoLoading, setVideoLoading] = useState(false)
   const [videoProgress, setVideoProgress] = useState(0)
-  const [videoUrl, setVideoUrl] = useState<string | null>(null)
+  // Auto video engine (img2vid): video udah jadi di ProcessingScreen, kebawa lewat state.
+  // Seed dari sini → tab Video langsung nyala. Manual "Make Video" (freemium) tetep jalan sendiri.
+  const preVideo = state.videoUrl ?? null
+  const [videoUrl, setVideoUrl] = useState<string | null>(preVideo)
   const [activeTab, setActiveTab] = useState<'photo' | 'video'>('photo')
+  const [finalizing, setFinalizing] = useState(false)
+  const finalizedBase = useRef<string | null>(null) // cegah finalize dobel per foto
+  const qrHiddenRef = useRef<HTMLDivElement>(null)   // sumber SVG QR buat di-burn ke video
   const inputRef = useRef<HTMLInputElement>(null)
   const progressRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -107,9 +121,12 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
   // saat match. Ga ada frame seorientasi = null → Original polos (foto tetap uncrop).
   const origOrientation = origDims ? orientationOf(origDims.w, origDims.h) : 'portrait'
   const mismatchOverlay = findOverlayForOrientation(frames, currentFrame, origOrientation)
-  const visibleFrame = showOriginal && mismatch ? mismatchOverlay : currentFrame
+  // Print: mismatch pool bisa nyodorin frame AI ke composite — nol-kan semua frame.
+  const visibleFrame = isPrintSession ? null : (showOriginal && mismatch ? mismatchOverlay : currentFrame)
   // Box Original-mismatch snap ke aspect ASLI foto -> object-cover = exact fit, zero crop
   const showNative = showOriginal && mismatch && activeTab === 'photo'
+  // Panel 2R landscape (1050×750) di box 2:3 bakal ke-crop — snap box ke aspect panel.
+  const printNative = isPrintSession && !!aiDims && aiDims.w > aiDims.h
 
   const printUrl = showOriginal ? state.originalUrl : state.aiUrl
 
@@ -121,6 +138,15 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
       out = await compositeFrame(url, frameUrl)
     } catch (err) {
       console.warn('[print] composite frame gagal, print foto polos:', err)
+    }
+    // 2R: konten digital = satu panel landscape — kertas fisik dibangun 2-up di 4R
+    // pas mau print aja (printer selamanya mikir dia nyetak 4R).
+    if (state.screen === 'preview' && state.printSize === '2R') {
+      try {
+        out = await to2UpSheet(out)
+      } catch (err) {
+        console.warn('[print] 2-up sheet gagal, print panel polos:', err)
+      }
     }
     await printPhoto(out, copies)
   }
@@ -154,35 +180,49 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
     setTimeout(() => setEmailSent(false), 4000)
   }
 
-  function handleVideoConfirmOk() {
+  // Video BENERAN (dulu stub 4s → /video.mp4): seed = hasil bersih di-upload R2 type S
+  // (pola maybeAnimate — FAL butuh URL publik), lalu img2vid provider pilihan vendor.
+  // Token kepotong server-side sesuai harga dashboard; gagal/402 → fail-safe balik ke
+  // tombol, foto tetep aman. Dipakai buat retry pas auto-video gagal / bikin on-demand.
+  async function handleVideoConfirmOk() {
     setShowVideoConfirm(false)
     setVideoLoading(true)
     setVideoProgress(0)
+    try {
+      const raw = state.rawAiUrl ?? state.aiUrl
+      let seed = raw
+      if (state.base) {
+        try {
+          const { url } = await uploadAsset(raw, 'S', state.base, { eventName })
+          seed = url
+        } catch { /* seed upload gagal → kirim raw; FAL bisa nolak → null → fail-safe */ }
+      }
+      const video = await animateImage(seed, config.video_provider ?? 'PIXVERSE')
+      if (video) {
+        setVideoProgress(100)
+        setVideoUrl(video)
+        setActiveTab('video')
+      }
+    } finally {
+      setVideoLoading(false)
+    }
   }
 
-  // ponytail: fake progress bar + done after 4s, replace with real API polling later
+  // Progress kosmetik selama nunggu FAL (img2vid sync gak ngasih progress asli) — mentok 95%,
+  // 100% di-set pas video beneran dateng di handleVideoConfirmOk.
   useEffect(() => {
     if (!videoLoading) return
     const interval = setInterval(() => {
-      setVideoProgress(p => p >= 95 ? 95 : p + Math.random() * 8)
-    }, 300)
-    const done = setTimeout(() => {
-      clearInterval(interval)
-      setVideoProgress(100)
-      setTimeout(() => {
-        setVideoLoading(false)
-        setVideoUrl('/video.mp4')
-        setActiveTab('video')
-      }, 400)
-    }, 4000)
-    return () => { clearInterval(interval); clearTimeout(done) }
+      setVideoProgress(p => p >= 95 ? 95 : p + Math.random() * 4)
+    }, 500)
+    return () => clearInterval(interval)
   }, [videoLoading])
 
   // R2 upload + QR — frame di-burn dulu ke foto (branding ikut ke share), lalu A+B naik.
   // Ganti frame = re-upload key R2 yang SAMA (overwrite) → URL QR stabil, QR ga kedip.
   // RAW (sourceUrl/rawAiUrl) yang dikirim: worker yang mutusin watermark server-side.
   // Unlicensed: no upload — QR = sinyal sesi berbayar (decoy di JSX bawah).
-  const frameForOriginal = mismatch ? mismatchOverlay : currentFrame
+  const frameForOriginal = isPrintSession ? null : (mismatch ? mismatchOverlay : currentFrame)
   // Upload A(Original)+B(AI) ke R2, dua-duanya frame kepilih di-burn dulu → QR ke microsite.
   // attempts: auto-retry (effect) 2x; manual (tombol Ulangi QR) 1x. Guard uploadSeq = frame
   // paling baru yang menang, QR ga ketimpa hasil upload lama.
@@ -236,8 +276,39 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
 
   const qrValue = activeTab === 'video' ? VIDEO_QR_URL : shareUrl
 
+  // Finalize video: mentah FAL → letterbox 2:3 + burn frame+QR. Jalan cuma di preview final,
+  // sesudah QR (shareUrl) siap → QR yg di-burn = QR asli microsite, bukan placeholder.
+  // FAIL-SAFE: gagal apa pun (ffmpeg/download/offline) → tetep pakai video mentah (preVideo).
+  useEffect(() => {
+    if (!isFinal || !preVideo || !state.base) return
+    if (finalizedBase.current === state.base) return  // udah difinalize buat foto ini
+    if (licensed && !shareUrl) return                 // licensed: tunggu QR asli dulu
+    finalizedBase.current = state.base
+    let live = true
+    ;(async () => {
+      setFinalizing(true)
+      try {
+        // QR SVG dari node hidden (kalau licensed & ada shareUrl). Frame = frame kepilih.
+        const qrSvg = qrHiddenRef.current?.querySelector('svg')?.outerHTML ?? null
+        const overlay = await buildVideoOverlay(currentFrame?.url ?? null, licensed ? qrSvg : null)
+        const finalUrl = await finalizeVideo(preVideo, overlay, eventName, state.base!)
+        if (live && finalUrl) { setVideoUrl(finalUrl); setActiveTab('video') }
+      } finally {
+        if (live) setFinalizing(false)
+      }
+    })()
+    return () => { live = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFinal, preVideo, state.base, shareUrl, licensed])
+
   return (
     <div className="screen-split screen-split--center flex flex-col w-full h-full" style={{ overflow: 'clip' }}>
+      {/* QR tersembunyi — sumber SVG bersih buat di-burn ke video (share URL microsite asli). */}
+      {isFinal && shareUrl && (
+        <div ref={qrHiddenRef} aria-hidden style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden', pointerEvents: 'none' }}>
+          <QRCodeSVG value={shareUrl} size={240} bgColor="white" fgColor="#090135" />
+        </div>
+      )}
       <div className="screen-title text-center px-5 pt-5 pb-4">
         <h1 className="h1-glow" style={{ fontSize: 'clamp(32px,5vw,48px)', fontWeight: 500, letterSpacing: '-0.02em', lineHeight: 1.15, marginBottom: 8 }}>
           {t(isChoose ? 'preview_title' : 'delivery_title') as string}
@@ -248,8 +319,8 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
       </div>
 
       <div className="screen-content">
-        {/* Tab switcher portrait-only — di atas foto, normal flow. Video cuma di preview final. */}
-        {isFinal && (
+        {/* Tab switcher portrait-only — di atas foto, normal flow. Video cuma kalau vendor nyalain. */}
+        {isFinal && videoAllowed && (
           <div className="preview-tab-switcher" style={{ justifyContent: 'center', paddingBottom: 10 }}>
             <TabSwitcher activeTab={activeTab} videoUrl={videoUrl} videoLoading={videoLoading} onSwitch={setActiveTab} />
           </div>
@@ -258,7 +329,7 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
         {/* Media area — position:relative jadi anchor tab switcher landscape */}
         <div className="flex-1 min-h-0 flex items-center justify-center gap-3" style={{ padding: 4, position: 'relative' }}>
           {/* Tab switcher landscape-only — absolute top-center di atas foto, di luar overflow:hidden */}
-          {isFinal && (
+          {isFinal && videoAllowed && (
             <div className="preview-tab-switcher-landscape" style={{ position: 'absolute', top: 35, left: '50%', transform: 'translateX(-50%)', zIndex: 50 }}>
               <TabSwitcher activeTab={activeTab} videoUrl={videoUrl} videoLoading={videoLoading} onSwitch={setActiveTab} />
             </div>
@@ -267,16 +338,20 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
           <button onClick={prevFrame} className="glass-btn" style={{ flexShrink: 0, width: 48, height: 48, fontSize: 'var(--text-xl)', padding: 0 }}>‹</button>
         )}
         <div
-          className={`preview-media${showNative && origDims ? ' preview-media--native' : ''}`}
-          style={showNative && origDims ? { '--native-ratio': `${origDims.w} / ${origDims.h}` } as React.CSSProperties : undefined}
+          className={`preview-media${(showNative && origDims) || printNative ? ' preview-media--native' : ''}`}
+          style={showNative && origDims
+            ? { '--native-ratio': `${origDims.w} / ${origDims.h}` } as React.CSSProperties
+            : printNative && aiDims
+              ? { '--native-ratio': `${aiDims.w} / ${aiDims.h}` } as React.CSSProperties
+              : undefined}
         >
 
           {/* Media layer */}
           {activeTab === 'photo' ? (
             <div
-              className={`absolute inset-0 cursor-pointer${printing ? '' : ' animate-photo-reveal-inner'}`}
+              className={`absolute inset-0${isPrintSession ? '' : ' cursor-pointer'}${printing ? '' : ' animate-photo-reveal-inner'}`}
               style={{ animation: printing ? 'print-eject 1200ms ease-in-out' : undefined }}
-              onClick={() => setShowOriginal(v => !v)}
+              onClick={isPrintSession ? undefined : () => setShowOriginal(v => !v)}
               onAnimationEnd={onPrintAnimEnd}
             >
               {state.aiUrl
@@ -368,11 +443,11 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
 
           {/* AI/Original badge — top left */}
           <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 40, fontSize: 'var(--text-2xs)', letterSpacing: '0.2em', textTransform: 'uppercase', background: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.8)', padding: '4px 10px', borderRadius: 'var(--radius-chip)', backdropFilter: 'blur(8px)' }}>
-            {activeTab === 'video' ? 'Video' : showOriginal ? 'Original' : 'AI'}
+            {activeTab === 'video' ? 'Video' : isPrintSession ? 'Print' : showOriginal ? 'Original' : 'AI'}
           </div>
 
-          {/* Tap hint — bottom center */}
-          {activeTab === 'photo' && (
+          {/* Tap hint — bottom center (print: gak ada toggle AI/Asli) */}
+          {activeTab === 'photo' && !isPrintSession && (
             <div className="absolute bottom-3 inset-x-0 flex justify-center pointer-events-none" style={{ zIndex: 40 }}>
               <span style={{ fontSize: 'var(--text-2xs)', letterSpacing: '0.2em', textTransform: 'uppercase', background: 'rgba(0,0,0,0.55)', color: 'var(--fg-muted)', padding: '6px 14px', borderRadius: 'var(--radius-chip)' }}>
                 {showOriginal ? t('preview_tap_see_ai') as string : t('preview_tap_compare') as string}
@@ -466,7 +541,7 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
           {config.enable_email && (
             <TouchButton onClick={handleEmailBtn} className="flex-1" disabled={printing}>{t('preview_btn_email') as string}</TouchButton>
           )}
-          {config.enable_video && (
+          {videoAllowed && (
             <TouchButton onClick={() => setShowVideoConfirm(true)} className="flex-1" disabled={printing || videoLoading || !!videoUrl}>
               <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.2 }}>
                 <span style={{ fontSize: 'var(--text-sm)' }}>{videoUrl ? t('preview_btn_video_ready') as string : videoLoading ? t('preview_generating') as string : t('preview_btn_make_video') as string}</span>
