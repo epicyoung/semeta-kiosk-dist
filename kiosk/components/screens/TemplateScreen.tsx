@@ -72,8 +72,9 @@ export function TemplateScreen({ state, dispatch, templates, maxTemplates }: Pro
                 >
                   <div className="w-full aspect-[2/3] relative flex items-center justify-center overflow-hidden" style={{ background: selected ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.08)' }}>
                     {tmpl.thumbnail_url
-                      // Print: thumbnail bisa non-2:3 (2R landscape) — contain biar layout keliatan utuh
-                      ? <img src={tmpl.thumbnail_url} alt={tmpl.name} className={`absolute inset-0 w-full h-full ${tmpl.engine_type === 'print' ? 'object-contain' : 'object-cover'}`} />
+                      // Contain (bukan cover): template LANDSCAPE (3:2) & print 2R keliatan UTUH di
+                      // card 2:3 — bukan ke-crop jadi portrait. Portrait 2:3 tetep ngisi penuh.
+                      ? <img src={tmpl.thumbnail_url} alt={tmpl.name} className="absolute inset-0 w-full h-full object-contain" />
                       : <span style={{ fontSize: 'var(--text-2xs)', color: 'var(--fg-muted)', letterSpacing: '0.15em', textTransform: 'uppercase' }}>{tmpl.name}</span>
                     }
                     {tmpl.category === SPINDONESIA_CATEGORY && (

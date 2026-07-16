@@ -17,10 +17,12 @@ export async function checkLicenseGate(): Promise<LicenseGate> {
   if (!workerUrl || !secret) return { ok: true, remaining_sec: 0, licensed: true }
 
   try {
+    // machine_id di handshake PERTAMA (page.tsx, sebelum heartbeat) — TOFU kejadian di sini
+    // duluan, jadi wajib bawa UUID asli. Kosong = TOFU nge-lock "" → mismatch ga pernah trip.
     const res = await fetch(`${workerUrl}/api/kiosk-handshake`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
-      body: JSON.stringify({}),
+      body: JSON.stringify({ machine_id: localDb.getMachineId() }),
       cache: 'no-store',
       signal: AbortSignal.timeout(10_000),
     })

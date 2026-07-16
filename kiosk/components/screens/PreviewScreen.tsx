@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, type Dispatch } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { TouchButton } from '@/components/ui/TouchButton'
 import type { KioskAction, KioskState, KioskConfig } from '@/lib/types'
-import { findOverlayForOrientation, loadImageDims, orientationOf, type OrientedFrame } from '@/lib/frames'
+import { findOverlayForOrientation, loadImageDims, orientationOf, type OrientedFrame, type Orientation } from '@/lib/frames'
 import { printPhoto } from '@/lib/print'
 import { compositeFrame } from '@/lib/frame-composite'
 import { to2UpSheet } from '@/lib/print-layout'
@@ -18,7 +18,7 @@ type Props = {
   state: Extract<KioskState, { screen: 'preview' | 'framechooser' }>
   dispatch: Dispatch<KioskAction>
   frames: OrientedFrame[]
-  config: Pick<KioskConfig, 'enable_email' | 'enable_print' | 'enable_video' | 'enable_video_engine' | 'video_provider' | 'has_secret'>
+  config: Pick<KioskConfig, 'enable_email' | 'enable_print' | 'enable_video' | 'enable_video_engine' | 'video_provider' | 'has_secret' | 'bypassed'>
   licensed: boolean
   eventName: string
   onAction?: (action: 'printed' | 'emailed' | 'shared') => void
@@ -53,8 +53,6 @@ function TabSwitcher({ activeTab, videoUrl, videoLoading, onSwitch }: {
   )
 }
 
-const VIDEO_QR_URL = process.env.NEXT_PUBLIC_KIOSK_URL ? `${process.env.NEXT_PUBLIC_KIOSK_URL}/#liveview-video` : '/#liveview-video'
-
 export function PreviewScreen({ mode, state, dispatch, frames, config, licensed, eventName, onAction }: Props) {
   const isChoose = mode === 'choose'
   const isFinal = mode === 'final'
@@ -62,7 +60,9 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
   const isPrintSession = state.screen === 'preview' && !!state.printSize
   // Video di preview = keputusan VENDOR (toggle "Enable Video Engine" di Settings) AND flag
   // admin enable_video (DB). Vendor OFF → nol UI video (tab + tombol) di preview akhir.
-  const videoAllowed = !!config.enable_video && (config.enable_video_engine ?? false) && !isPrintSession
+  // FEATURE LATER: video terkunci di godmode (config.bypassed) sampai GA. Ini fail-safe
+  // untuk config lama yang terlanjur enable_video_engine:true sebelum toggle dikunci di Settings.
+  const videoAllowed = !!config.bypassed && !!config.enable_video && (config.enable_video_engine ?? false) && !isPrintSession
   const t = useT()
   const [showOriginal, setShowOriginal] = useState(false)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
@@ -114,19 +114,20 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
     return () => { live = false }
   }, [state.originalUrl, state.aiUrl])
 
-  const mismatch = !!origDims && !!aiDims &&
-    orientationOf(origDims.w, origDims.h) !== orientationOf(aiDims.w, aiDims.h)
-  // Pas mismatch, Original butuh overlay seorientasi FOTO ASLI (Ori landscape→landscape frame,
-  // Ori portrait→portrait frame). currentFrame selalu portrait (pool picker), jadi cuma dipakai
-  // saat match. Ga ada frame seorientasi = null → Original polos (foto tetap uncrop).
   const origOrientation = origDims ? orientationOf(origDims.w, origDims.h) : 'portrait'
-  const mismatchOverlay = findOverlayForOrientation(frames, currentFrame, origOrientation)
-  // Print: mismatch pool bisa nyodorin frame AI ke composite — nol-kan semua frame.
-  const visibleFrame = isPrintSession ? null : (showOriginal && mismatch ? mismatchOverlay : currentFrame)
-  // Box Original-mismatch snap ke aspect ASLI foto -> object-cover = exact fit, zero crop
-  const showNative = showOriginal && mismatch && activeTab === 'photo'
-  // Panel 2R landscape (1050×750) di box 2:3 bakal ke-crop — snap box ke aspect panel.
-  const printNative = isPrintSession && !!aiDims && aiDims.w > aiDims.h
+  const aiOrientation = aiDims ? orientationOf(aiDims.w, aiDims.h) : 'portrait'
+  // Orientasi foto yang LAGI tampil (AI atau Original) → box + frame ikut ini. Ini yang bikin
+  // template LANDSCAPE → hasil landscape beneran (dulu native cuma buat Ori-mismatch & print).
+  const shownOrientation = showOriginal ? origOrientation : aiOrientation
+  const shownDims = showOriginal ? origDims : aiDims
+  // Frame buat orientasi tertentu: portrait → currentFrame (pool picker selalu portrait),
+  // landscape → frame landscape pertama. Ga ada frame seorientasi = null (foto polos, uncrop).
+  const frameForOrientation = (o: Orientation): OrientedFrame | null =>
+    o === 'portrait' ? currentFrame : findOverlayForOrientation(frames, currentFrame, 'landscape')
+  // Print: composite di-nol-kan (overlay udah kebakar). AI display ikut orientasi hasil.
+  const visibleFrame = isPrintSession ? null : frameForOrientation(shownOrientation)
+  // Box snap ke aspect asli pas foto tampil landscape → zero crop (AI landscape, Ori mismatch, panel print 2R).
+  const shownNative = activeTab === 'photo' && !!shownDims && shownDims.w > shownDims.h
 
   const printUrl = showOriginal ? state.originalUrl : state.aiUrl
 
@@ -222,7 +223,7 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
   // Ganti frame = re-upload key R2 yang SAMA (overwrite) → URL QR stabil, QR ga kedip.
   // RAW (sourceUrl/rawAiUrl) yang dikirim: worker yang mutusin watermark server-side.
   // Unlicensed: no upload — QR = sinyal sesi berbayar (decoy di JSX bawah).
-  const frameForOriginal = isPrintSession ? null : (mismatch ? mismatchOverlay : currentFrame)
+  const frameForOriginal = isPrintSession ? null : frameForOrientation(origOrientation)
   // Upload A(Original)+B(AI) ke R2, dua-duanya frame kepilih di-burn dulu → QR ke microsite.
   // attempts: auto-retry (effect) 2x; manual (tombol Ulangi QR) 1x. Guard uploadSeq = frame
   // paling baru yang menang, QR ga ketimpa hasil upload lama.
@@ -274,7 +275,9 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFinal, licensed, state.base])
 
-  const qrValue = activeTab === 'video' ? VIDEO_QR_URL : shareUrl
+  // Satu QR = satu halaman microsite (ori/ai/video). Video kini di R2 (_C.mp4) → HP tamu buka
+  // dari cloud, bukan LAN. Nutup lubang keamanan: kiosk aman di-bind 127.0.0.1.
+  const qrValue = shareUrl
 
   // Finalize video: mentah FAL → letterbox 2:3 + burn frame+QR. Jalan cuma di preview final,
   // sesudah QR (shareUrl) siap → QR yg di-burn = QR asli microsite, bukan placeholder.
@@ -292,7 +295,12 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
         const qrSvg = qrHiddenRef.current?.querySelector('svg')?.outerHTML ?? null
         const overlay = await buildVideoOverlay(currentFrame?.url ?? null, licensed ? qrSvg : null)
         const finalUrl = await finalizeVideo(preVideo, overlay, eventName, state.base!)
-        if (live && finalUrl) { setVideoUrl(finalUrl); setActiveTab('video') }
+        if (live && finalUrl) {
+          setVideoUrl(finalUrl); setActiveTab('video')
+          // Cloud copy: microsite serves _C.mp4 di sebelah _A/_B → QR video = shareUrl (no LAN).
+          // Fire-and-forget: gagal = ga ada video di HP, preview on-screen tetep main blob lokal.
+          if (licensed && state.base) uploadAsset(finalUrl, 'C', state.base, { eventName }).catch(() => {})
+        }
       } finally {
         if (live) setFinalizing(false)
       }
@@ -338,12 +346,10 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
           <button onClick={prevFrame} className="glass-btn" style={{ flexShrink: 0, width: 48, height: 48, fontSize: 'var(--text-xl)', padding: 0 }}>‹</button>
         )}
         <div
-          className={`preview-media${(showNative && origDims) || printNative ? ' preview-media--native' : ''}`}
-          style={showNative && origDims
-            ? { '--native-ratio': `${origDims.w} / ${origDims.h}` } as React.CSSProperties
-            : printNative && aiDims
-              ? { '--native-ratio': `${aiDims.w} / ${aiDims.h}` } as React.CSSProperties
-              : undefined}
+          className={`preview-media${shownNative ? ' preview-media--native' : ''}`}
+          style={shownNative && shownDims
+            ? { '--native-ratio': `${shownDims.w} / ${shownDims.h}` } as React.CSSProperties
+            : undefined}
         >
 
           {/* Media layer */}

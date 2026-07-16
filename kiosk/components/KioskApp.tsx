@@ -235,14 +235,14 @@ export function KioskApp({ config: initialConfig }: { config: KioskConfig }) {
     switch (state.screen) {
       case 'idle':        return <IdleScreen dispatch={wrappedDispatch} />
       case 'consent':     return <ConsentScreen dispatch={wrappedDispatch} />
-      case 'liveview':    return <LiveViewScreen state={state} dispatch={wrappedDispatch} />
+      case 'liveview':    return <LiveViewScreen state={state} dispatch={wrappedDispatch} cameraSource={config.camera_source} />
       case 'category':    return <CategoryScreen state={state} dispatch={wrappedDispatch} templates={templates} />
       // Multi-template cuma faceswap LOCAL (butuh face_server :8000 buat sequential swap).
       // Fullbody (comfy) & faceswap API = selalu single-select.
       case 'template':    return <TemplateScreen state={state} dispatch={wrappedDispatch} templates={templates} maxTemplates={config.engine_mode === 'faceswap_local' ? (config.max_templates ?? 1) : 1} />
       case 'faceassign':  return <FaceAssignScreen state={state} dispatch={wrappedDispatch} />
-      case 'multicapture': return <MultiCaptureScreen state={state} dispatch={wrappedDispatch} />
-      case 'processing':  return <ProcessingScreen state={state} dispatch={wrappedDispatch} generationSource={config.generation_source} eventName={config.event_name} licensed={config.licensed ?? false} comfy={comfyCfg} enableMagicCatcher={config.enable_magic_catcher ?? false} enableVideoEngine={config.enable_video_engine ?? false} videoProvider={config.video_provider ?? 'PIXVERSE'} onUploadFailed={(meta) => log('UPLOAD_FAILED', meta)} />
+      case 'multicapture': return <MultiCaptureScreen state={state} dispatch={wrappedDispatch} cameraSource={config.camera_source} />
+      case 'processing':  return <ProcessingScreen state={state} dispatch={wrappedDispatch} generationSource={config.generation_source} eventName={config.event_name} licensed={config.licensed ?? false} bypassed={config.bypassed ?? false} comfy={comfyCfg} enableMagicCatcher={config.enable_magic_catcher ?? false} enableVideoEngine={config.enable_video_engine ?? false} videoProvider={config.video_provider ?? 'PIXVERSE'} onUploadFailed={(meta) => log('UPLOAD_FAILED', meta)} />
       case 'resultchooser': return <ResultChooserScreen state={state} dispatch={wrappedDispatch} />
       case 'framechooser': return <PreviewScreen mode="choose" state={state} dispatch={wrappedDispatch} frames={orientedFrames} config={config} licensed={config.licensed ?? false} eventName={config.event_name} onAction={(a) => log('VISITOR_ACTION', { action: a })} />
       case 'preview':     return <PreviewScreen mode="final" state={state} dispatch={wrappedDispatch} frames={orientedFrames} config={config} licensed={config.licensed ?? false} eventName={config.event_name} onAction={(a) => log('VISITOR_ACTION', { action: a })} />

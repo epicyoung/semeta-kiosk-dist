@@ -13,6 +13,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'event_name, seq, image_base64 required' }, { status: 400 })
   }
   if (kind !== 'original' && kind !== 'ai') return NextResponse.json({ error: 'kind must be original or ai' }, { status: 400 })
+  // seq masuk mentah ke filename → path.join bakal resolve ../ ; digits-only matiin traversal
+  if (!/^\d{1,4}$/.test(seq)) return NextResponse.json({ error: 'seq must be 1-4 digits' }, { status: 400 })
 
   const filename = kind === 'ai'
     ? aiFilename(event_name, seq)

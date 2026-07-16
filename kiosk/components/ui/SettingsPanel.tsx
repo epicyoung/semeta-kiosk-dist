@@ -23,7 +23,7 @@ const API_MODEL_OPTS = [
 ]
 const CAMERA_OPTS = [
   { value: 'webcam', label: 'Webcam (getUserMedia)' },
-  { value: 'canon',  label: 'Canon (EOS Utility)'  },
+  { value: 'canon',  label: 'Canon (digiCamControl)' },
 ]
 // Stylize (face_server) — opsi asli dari GET :8000/capabilities, ini cuma label map.
 const COMFY_FAMILY_LABELS: Record<string, string> = { sd15: 'SD 1.5', sdxl: 'SDXL', flux: 'Flux' }
@@ -168,9 +168,9 @@ function RowHint({ label, hint, children }: { label: string; hint: string; child
   )
 }
 
-function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
+function Toggle({ on, onToggle, disabled = false }: { on: boolean; onToggle: () => void; disabled?: boolean }) {
   return (
-    <button type="button" onClick={onToggle} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+    <button type="button" onClick={disabled ? undefined : onToggle} disabled={disabled} style={{ background: 'none', border: 'none', cursor: disabled ? 'not-allowed' : 'pointer', padding: 0, opacity: disabled ? 0.4 : 1 }}>
       <div style={{ width: 44, height: 24, borderRadius: 12, background: on ? 'var(--brand)' : 'rgba(255,255,255,0.15)', position: 'relative', transition: 'background 0.2s' }}>
         <div style={{ position: 'absolute', top: 3, left: on ? 23 : 3, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }} />
       </div>
@@ -401,7 +401,10 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
     if (!open || camera !== 'canon') { setCameraStatus('idle'); return }
     const ctrl = new AbortController()
     setCameraStatus('checking')
-    fetch('http://localhost:5513/', { signal: ctrl.signal, cache: 'no-store' })
+    // no-cors: digiCamControl webserver ga kirim header CORS → fetch 'cors' biasa ke-reject walau
+    // server HIDUP (browser bisa OPEN 5513, tapi fetch() lintas-origin diblok). Opaque response
+    // cukup buat liveness probe — kita cuma butuh tau reachable/nggak, bukan baca body-nya.
+    fetch('http://localhost:5513/', { signal: ctrl.signal, cache: 'no-store', mode: 'no-cors' })
       .then(() => { if (!ctrl.signal.aborted) setCameraStatus('connected') })
       .catch(() => { if (!ctrl.signal.aborted) setCameraStatus('offline') })
     return () => ctrl.abort()
@@ -1033,19 +1036,29 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
               </>)}
 
               {/* Video engine (img2vid) — img output terakhir jadi seed ke provider video via
-                  Worker. API key hidup di Worker (FAL), gak pernah ke browser. Default OFF. */}
+                  Worker. API key hidup di Worker (FAL), gak pernah ke browser. Default OFF.
+                  FEATURE LATER: terkunci kecuali godmode (config.bypassed). Vendor lihat tapi
+                  ga bisa nyalain — biar ga ada video ke-trigger + token kebakar sebelum GA. */}
+              {(() => { const videoLocked = !(config.bypassed ?? false); return (<>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', gap: 16 }}>
                 <div style={{ minWidth: 0 }}>
-                  <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>Enable Video Engine (img2vid)</span>
+                  <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>
+                    Enable Video Engine (img2vid)
+                    {videoLocked && (
+                      <span style={{ marginLeft: 8, fontSize: 'var(--text-2xs)', fontFamily: 'var(--font-ui)', letterSpacing: '0.04em', color: '#f0c040', border: '1px solid rgba(240,192,64,0.4)', borderRadius: 6, padding: '1px 6px', whiteSpace: 'nowrap' }}>SOON</span>
+                    )}
+                  </span>
                   <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0', lineHeight: 1.4 }}>
-                    Hasil foto terakhir dianimasikan jadi video pendek lewat provider pilihan.
+                    {videoLocked
+                      ? 'Fitur video (img2vid) segera hadir — belum aktif di rilis ini.'
+                      : 'Hasil foto terakhir dianimasikan jadi video pendek lewat provider pilihan.'}
                   </p>
                 </div>
                 <div style={{ flexShrink: 0 }}>
-                  <Toggle on={videoEngine} onToggle={() => setVideoEngine(v => !v)} />
+                  <Toggle on={videoLocked ? false : videoEngine} disabled={videoLocked} onToggle={() => setVideoEngine(v => !v)} />
                 </div>
               </div>
-              {videoEngine && (
+              {!videoLocked && videoEngine && (
                 <RowHint
                   label="Select Video Provider"
                   hint={selectedVideoCost != null
@@ -1057,6 +1070,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                   <Sel value={videoProvider} options={videoProviderOpts} onChange={v => setVideoProvider(v as VideoProvider)} />
                 </RowHint>
               )}
+              </>) })()}
 
               {/* Output folder */}
               <Row label={t('set_folder') as string}>

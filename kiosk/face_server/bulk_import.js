@@ -83,10 +83,11 @@ function getImageDimensions(filepath) {
 }
 
 function isValidRatio(w, h) {
-  // 2:3 = width * 3 === height * 2, allow ±1% tolerance
+  // Terima 2:3 (portrait) ATAU 3:2 (landscape), ±1% tolerance. Frontend ukur orientasi sendiri
+  // dari dimensi gambar (orientationOf) → hasil AI + frame ikut orientasi template otomatis.
   const ratio = w / h
-  const target = 2 / 3
-  return Math.abs(ratio - target) / target < 0.01
+  const near = (target) => Math.abs(ratio - target) / target < 0.01
+  return near(2 / 3) || near(3 / 2)
 }
 
 function buildMultipart(fields, fileField, filePath, boundary) {
@@ -207,7 +208,7 @@ async function main() {
     const dims = getImageDimensions(item.fp)
     if (!dims) { skipped.push({ ...item, reason: 'Tidak bisa baca dimensi' }); continue }
     if (!isValidRatio(dims.w, dims.h)) {
-      skipped.push({ ...item, reason: `Rasio salah ${dims.w}×${dims.h} (butuh 2:3)` })
+      skipped.push({ ...item, reason: `Rasio salah ${dims.w}×${dims.h} (butuh 2:3 atau 3:2)` })
     } else {
       valid.push(item)
     }

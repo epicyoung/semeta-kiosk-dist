@@ -246,6 +246,7 @@ type Props = {
   generationSource: GenerationSource
   eventName: string
   licensed: boolean
+  bypassed: boolean
   comfy: ComfyCfg
   enableMagicCatcher: boolean
   enableVideoEngine: boolean
@@ -253,7 +254,7 @@ type Props = {
   onUploadFailed?: (metadata: Record<string, unknown>) => void
 }
 
-export function ProcessingScreen({ state, dispatch, generationSource, eventName, licensed, comfy, enableMagicCatcher, enableVideoEngine, videoProvider, onUploadFailed }: Props) {
+export function ProcessingScreen({ state, dispatch, generationSource, eventName, licensed, bypassed, comfy, enableMagicCatcher, enableVideoEngine, videoProvider, onUploadFailed }: Props) {
   const t = useT()
   const copy = t('processing_copy') as string[]
   const [copyIndex, setCopyIndex] = useState(0)
@@ -288,7 +289,9 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
     // ga bisa akses → upload dulu sbg seed (type S, bersih, no watermark) ke R2, kirim URL
     // R2 publik ke FAL. base = session id (buat key R2). Gagal upload = skip video (foto aman).
     const maybeAnimate = async (aiUrl: string, base?: string): Promise<string | undefined> => {
-      if (!enableVideoEngine) return undefined
+      // ponytail: video buat godmode dulu (bypassed). Kiosk berbayar biasa ga nyoba → hemat FAL,
+      // ga kena 402. Buka ke token-user nanti = hapus `|| !bypassed` (worker udah gate token).
+      if (!enableVideoEngine || !bypassed) return undefined
       setAnimating(true)
       try {
         let seedUrl = aiUrl

@@ -1,14 +1,15 @@
 'use client'
-import { useEffect, useRef, useState, useCallback, type Dispatch } from 'react'
+import { useEffect, useRef, useState, useCallback, type Dispatch, type CSSProperties } from 'react'
 import { TouchButton } from '@/components/ui/TouchButton'
-import { stopCamera } from '@/lib/camera'
-import { rotatedSize } from '@/components/screens/LiveViewScreen'
+import { stopCamera, triggerCanonCapture, rotateDataUrl } from '@/lib/camera'
+import { rotatedSize, CANON_LIVE, CANON_LIVE_MS } from '@/components/screens/LiveViewScreen'
 import type { KioskAction, KioskState } from '@/lib/types'
 import { useT } from '@/lib/i18n'
 
 type Props = {
   state: Extract<KioskState, { screen: 'multicapture' }>
   dispatch: Dispatch<KioskAction>
+  cameraSource?: string
 }
 
 // Kalibrasi rotasi SHARE sama LiveViewScreen — mode print gak pernah lewat liveview,
@@ -18,8 +19,9 @@ const SHOT_GAP_MS = 900 // jeda "bersiap" antar shot
 
 // ponytail: capture core (getUserMedia + rotasi + countdown) duplikat dari LiveViewScreen —
 // itu screen battle-tested 2 event live, jangan disentuh. Extract hook kalau ada screen ketiga.
-export function MultiCaptureScreen({ state, dispatch }: Props) {
+export function MultiCaptureScreen({ state, dispatch, cameraSource }: Props) {
   const t = useT()
+  const isCanon = cameraSource === 'canon'
   const containerRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
 
@@ -61,6 +63,8 @@ export function MultiCaptureScreen({ state, dispatch }: Props) {
   }, [])
 
   useEffect(() => {
+    // Canon: capture lewat backend (DSLR bukan webcam). Enable; preview = MJPEG best-effort.
+    if (isCanon) { setCameraReady(true); return }
     const el = videoRef.current
     if (!el) return
     let cancelled = false
@@ -74,13 +78,22 @@ export function MultiCaptureScreen({ state, dispatch }: Props) {
       })
       .catch(() => { if (!cancelled) setCameraError(true) })
     return () => { cancelled = true; stopCamera(el) }
-  }, [retry])
+  }, [retry, isCanon])
 
   const retryCamera = useCallback(() => {
     setCameraError(false)
     setCameraReady(false)
     setRetry(n => n + 1)
   }, [])
+
+  // Canon live-ish: bump tiap CANON_LIVE_MS → <img> cache-bust → re-fetch frame proxy. Berhenti
+  // pas done (semua shot udah diambil). Webcam ga kena (pakai <video> stream).
+  const [liveTick, setLiveTick] = useState(0)
+  useEffect(() => {
+    if (!isCanon || done) return
+    const id = setInterval(() => setLiveTick(t => t + 1), CANON_LIVE_MS)
+    return () => clearInterval(id)
+  }, [isCanon, done])
 
   // Satu jepretan: countdown 3-2-1 → flash → canvas (rotasi ikut kalibrasi) → dataURL
   const captureShot = useCallback(async (): Promise<string | null> => {
@@ -92,6 +105,11 @@ export function MultiCaptureScreen({ state, dispatch }: Props) {
     setFlash(true)
     await new Promise(r => setTimeout(r, 200))
     setFlash(false)
+    if (isCanon) {
+      // Rotate ikut tombol — non-faceswap (print) = orientasi kamera nentuin hasil, DSLR ga bisa
+      // diputer fisik. deg 0 = passthrough.
+      try { return await rotateDataUrl(await triggerCanonCapture(), rotation) } catch { setCameraError(true); return null }
+    }
     const video = videoRef.current
     if (!video) return null
     const vw = video.videoWidth
@@ -105,7 +123,7 @@ export function MultiCaptureScreen({ state, dispatch }: Props) {
     ctx.rotate((rotation * Math.PI) / 180)
     ctx.drawImage(video, -vw / 2, -vh / 2)
     return canvas.toDataURL('image/jpeg', 0.92)
-  }, [rotation])
+  }, [rotation, isCanon])
 
   // dispatch (wrappedDispatch KioskApp) identity-nya bisa ganti tiap render — countdown billing
   // re-render KioskApp 1 Hz di sesi berbayar. Kalau dispatch masuk dep array, effect sequence
@@ -132,6 +150,15 @@ export function MultiCaptureScreen({ state, dispatch }: Props) {
     ? 'aspect-[9/16] w-[500px] max-w-full max-h-full h-auto'
     : 'aspect-video w-full max-w-full h-auto max-h-full'
 
+  // Style live-feed dipakai bareng <video> (webcam) & <img> MJPEG (canon).
+  const liveStyle: CSSProperties = {
+    display: done ? 'none' : 'block',
+    width: quarter ? (containerDims ? `${containerDims.h}px` : '100vh') : '100%',
+    height: quarter ? (containerDims ? `${containerDims.w}px` : '100vw') : '100%',
+    objectFit: 'cover',
+    transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+  }
+
   return (
     <div className="screen-split flex flex-col w-full h-full overflow-hidden">
 
@@ -153,18 +180,17 @@ export function MultiCaptureScreen({ state, dispatch }: Props) {
             className={`relative overflow-hidden rounded-2xl shadow-2xl ring-1 ring-white/10 ${boxClass}`}
             style={{ background: '#000' }}
           >
-            <video
-              ref={videoRef}
-              autoPlay playsInline muted
-              className="absolute top-1/2 left-1/2 max-w-none max-h-none"
-              style={{
-                display: done ? 'none' : 'block',
-                width: quarter ? (containerDims ? `${containerDims.h}px` : '100vh') : '100%',
-                height: quarter ? (containerDims ? `${containerDims.w}px` : '100vw') : '100%',
-                objectFit: 'cover',
-                transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
-              }}
-            />
+            {isCanon ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={`${CANON_LIVE}?t=${liveTick}`} alt="" className="absolute top-1/2 left-1/2 max-w-none max-h-none" style={liveStyle} />
+            ) : (
+              <video
+                ref={videoRef}
+                autoPlay playsInline muted
+                className="absolute top-1/2 left-1/2 max-w-none max-h-none"
+                style={liveStyle}
+              />
+            )}
 
             {/* Review: semua jepretan dalam grid — video tetep mounted (stream hidup) biar retake instan */}
             {done && (

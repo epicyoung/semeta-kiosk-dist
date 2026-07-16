@@ -1,13 +1,14 @@
 'use client'
-import { useEffect, useRef, useState, useCallback, type Dispatch } from 'react'
+import { useEffect, useRef, useState, useCallback, type Dispatch, type CSSProperties } from 'react'
 import { TouchButton } from '@/components/ui/TouchButton'
-import { stopCamera } from '@/lib/camera'
+import { stopCamera, triggerCanonCapture, rotateDataUrl } from '@/lib/camera'
 import type { KioskAction, KioskState } from '@/lib/types'
 import { useT } from '@/lib/i18n'
 
 type Props = {
   state: Extract<KioskState, { screen: 'liveview' }>
   dispatch: Dispatch<KioskAction>
+  cameraSource?: string
 }
 
 // pure: source dims + rotasi → ukuran canvas output. Quarter-turn (90/270) tuker w/h.
@@ -17,9 +18,15 @@ export function rotatedSize(vw: number, vh: number, rotation: number) {
 }
 
 const ROT_KEY = 'semeta.cameraRotation'
+// Live preview lewat backend proxy (same-origin, no CORS) — /api/canon-live auto-start liveview
+// + proxy 1 JPEG frame dari digiCamControl. <img> re-fetch tiap CANON_LIVE_MS jadi live-ish.
+// (Dulu nunjuk 5514/live langsung → ERR_CONNECTION_REFUSED + CORS.)
+export const CANON_LIVE = '/api/canon-live'
+export const CANON_LIVE_MS = 200
 
-export function LiveViewScreen({ dispatch }: Props) {
+export function LiveViewScreen({ dispatch, cameraSource }: Props) {
   const t = useT()
+  const isCanon = cameraSource === 'canon'
   const containerRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
 
@@ -66,7 +73,18 @@ export function LiveViewScreen({ dispatch }: Props) {
     return () => observer.disconnect()
   }, [])
 
+  // Canon live-ish: bump tiap CANON_LIVE_MS → <img> src ganti (cache-bust) → re-fetch frame proxy.
+  // Berhenti pas captured (ga perlu live pas review foto). Webcam ga kena (pakai <video> stream).
+  const [liveTick, setLiveTick] = useState(0)
   useEffect(() => {
+    if (!isCanon || captured) return
+    const id = setInterval(() => setLiveTick(t => t + 1), CANON_LIVE_MS)
+    return () => clearInterval(id)
+  }, [isCanon, captured])
+
+  useEffect(() => {
+    // Canon: capture lewat backend (DSLR bukan webcam). Enable tombol; preview = proxy frame.
+    if (isCanon) { setCameraReady(true); return }
     const el = videoRef.current
     if (!el) return
     let cancelled = false
@@ -82,7 +100,7 @@ export function LiveViewScreen({ dispatch }: Props) {
       })
       .catch(() => { if (!cancelled) setCameraError(true) })
     return () => { cancelled = true; stopCamera(el) }
-  }, [retry])
+  }, [retry, isCanon])
 
   // Kamera gagal ≠ layar mati. Reset state + bump retry biar effect getUserMedia jalan lagi.
   const retryCamera = useCallback(() => {
@@ -100,6 +118,13 @@ export function LiveViewScreen({ dispatch }: Props) {
     setFlash(true)
     await new Promise(r => setTimeout(r, 200))
     setFlash(false)
+    if (isCanon) {
+      // DSLR full-res dari backend, lalu rotate ikut tombol (sama kayak webcam) — DSLR ga bisa
+      // diputer fisik, jadi rotasi di canvas. deg 0 = passthrough.
+      try { const url = await rotateDataUrl(await triggerCanonCapture(), rotation); setBrowseAspect(null); setCaptured(url) }
+      catch { setCameraError(true) }
+      return
+    }
     const video = videoRef.current
     if (!video) return
     const vw = video.videoWidth
@@ -116,7 +141,7 @@ export function LiveViewScreen({ dispatch }: Props) {
     ctx.drawImage(video, -vw / 2, -vh / 2)
     setBrowseAspect(null) // capture webcam → box balik ikut rotasi, bukan 2:3/3:2
     setCaptured(canvas.toDataURL('image/jpeg', 0.92))
-  }, [rotation])
+  }, [rotation, isCanon])
 
   const handleBrowse = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -142,6 +167,15 @@ export function LiveViewScreen({ dispatch }: Props) {
     : quarter ? 'aspect-[9/16] w-[500px] max-w-full max-h-full h-auto'
     : 'aspect-video w-full max-w-full h-auto max-h-full'
 
+  // Style live-feed dipakai bareng <video> (webcam) & <img> MJPEG (canon) — sumber beda, layout sama.
+  const liveStyle: CSSProperties = {
+    display: captured ? 'none' : 'block',
+    width: quarter ? (containerDims ? `${containerDims.h}px` : '100vh') : '100%',
+    height: quarter ? (containerDims ? `${containerDims.w}px` : '100vw') : '100%',
+    objectFit: 'cover',
+    transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+  }
+
   return (
     <div className="screen-split flex flex-col w-full h-full overflow-hidden">
 
@@ -161,19 +195,19 @@ export function LiveViewScreen({ dispatch }: Props) {
           className={`relative overflow-hidden rounded-2xl shadow-2xl ring-1 ring-white/10 ${boxClass}`}
           style={{ background: '#000' }}
         >
-          {/* CUMA video yang muter — overlay di bawah ini sibling, jadi tetep tegak */}
-          <video
-            ref={videoRef}
-            autoPlay playsInline muted
-            className="absolute top-1/2 left-1/2 max-w-none max-h-none"
-            style={{
-              display: captured ? 'none' : 'block',
-              width: quarter ? (containerDims ? `${containerDims.h}px` : '100vh') : '100%',
-              height: quarter ? (containerDims ? `${containerDims.w}px` : '100vw') : '100%',
-              objectFit: 'cover',
-              transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
-            }}
-          />
+          {/* CUMA video/live yang muter — overlay di bawah ini sibling, jadi tetep tegak.
+              Canon: MJPEG <img> dari digiCamControl. Webcam: getUserMedia <video>. */}
+          {isCanon ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={`${CANON_LIVE}?t=${liveTick}`} alt="" className="absolute top-1/2 left-1/2 max-w-none max-h-none" style={liveStyle} onLoad={() => setCameraReady(true)} onError={() => {/* frame gagal = best-effort, tombol tetep enable */}} />
+          ) : (
+            <video
+              ref={videoRef}
+              autoPlay playsInline muted
+              className="absolute top-1/2 left-1/2 max-w-none max-h-none"
+              style={liveStyle}
+            />
+          )}
 
           {/* Box udah nge-snap ke orientasi foto → object-cover ngisi penuh (frame look), crop minimal, ga ada bar */}
           {captured && <img src={captured} alt="captured" className="absolute inset-0 w-full h-full object-cover" />}

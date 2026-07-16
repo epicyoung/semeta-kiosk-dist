@@ -10,10 +10,13 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json().catch(() => ({}))
+    // machine_id di-inject SERVER-SIDE (browser ga usah tau). Worker TOFU: simpan first-contact,
+    // mismatch = soft log + lanjut (per-session by design). Tanpa ini machineId="" → lock ga trip.
+    const withMachine = { ...body, machine_id: localDb.getMachineId() }
     const res = await fetch(`${workerUrl}/api/kiosk-handshake`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
-      body: JSON.stringify(body),
+      body: JSON.stringify(withMachine),
       signal: AbortSignal.timeout(10_000),
     })
     // Worker MENJAWAB non-200 = verdict lisensi.

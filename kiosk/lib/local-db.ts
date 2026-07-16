@@ -1,5 +1,7 @@
 import fs from 'fs'
 import path from 'path'
+import { randomUUID } from 'node:crypto'
+import { hostname } from 'node:os'
 import type { Template, KioskConfig } from './types'
 import type { LicenseRecord } from './license'
 
@@ -68,4 +70,22 @@ export const localDb = {
     return process.env.KIOSK_SECRET ?? ''
   },
   setSecret: (raw: string): void => patchConfig({ kiosk_secret: normalizeSecret(raw) }),
+
+  // machine_id: TOFU per-mesin, generate ke disk first-run. UUID (BUKAN hardware fingerprint) —
+  // cukup buat anti-casual-abuse, survive Chrome cache/profile/incognito wipe. WAJIB per-mesin:
+  // baked konstanta = semua mesin identik = TOFU mati (SECURITYEXE.md §1). Worker handshake
+  // udah SOFT: mismatch = log KIOSK_ERROR + lanjut, admin remediate manual via force lock.
+  getMachineId: (): string => {
+    const cfg = readConfig()
+    if (typeof cfg.machine_id === 'string' && cfg.machine_id) return cfg.machine_id
+    try {
+      const id = randomUUID()
+      patchConfig({ machine_id: id })
+      return id
+    } catch {
+      // Disk gagal (read-only/permission) → fallback env/hostname. JANGAN balikin "" —
+      // itu = TOFU mati lagi (semua mesin match string kosong).
+      return process.env.MACHINE_ID ?? hostname()
+    }
+  },
 }
