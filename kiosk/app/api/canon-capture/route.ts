@@ -1,26 +1,43 @@
 import { NextResponse } from 'next/server'
-import fs from 'fs'
-import path from 'path'
-import os from 'os'
+import fs from 'node:fs'
+import path from 'node:path'
+import os from 'node:os'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 // Canon DSLR full-res capture via digiCamControl webserver (port 5513) + baca JPEG hasil dari
-// session folder. SERVER-SIDE sengaja: browser fetch ke 5513 lintas-origin kena CORS (digiCamControl
+// folder output. SERVER-SIDE sengaja: browser fetch ke 5513 lintas-origin kena CORS (digiCamControl
 // ga kirim header CORS). Node ga kena CORS + bisa baca file kamera → full-res, bukan resolusi webcam.
 const DCC = 'http://127.0.0.1:5513'
-// Default output digiCamControl. Override via env kalau Budi ganti folder session di digiCamControl.
-const SESSION_DIR = process.env.CANON_SESSION_DIR
-  ?? path.join(os.homedir(), 'Pictures', 'digiCamControl', 'Session1')
+// Command capture. digiCamControl baru: ?CMD=Capture. Versi LAMA / beda: set env
+// CANON_CAPTURE_CMD (mis. "?slc=capture") tanpa ganti kode.
+const CAPTURE_CMD = process.env.CANON_CAPTURE_CMD ?? '?CMD=Capture'
+// Root output digiCamControl. Default: SEMUA session di-scan rekursif — nama session bebas
+// (Session1 / Session2 / per-tanggal), jadi ga peduli client pakai session apa. Set
+// CANON_SESSION_DIR kalau kamera nyimpen di luar ~/Pictures/digiCamControl.
+const SESSION_ROOT = process.env.CANON_SESSION_DIR
+  ?? path.join(os.homedir(), 'Pictures', 'digiCamControl')
 
-/** File .jpg termuda di dir (by mtime). null kalau kosong. */
-function newestJpeg(dir: string): { file: string; mtimeMs: number } | null {
+const CAPTURE_TIMEOUT_MS = 15_000
+const POLL_MS = 400
+
+/** Newest .jpg di dir + subfolder (default 2 level: digiCamControl/<session>/foto). Nama bebas. */
+function newestJpeg(dir: string, depth = 2): { file: string; mtimeMs: number } | null {
   let best: { file: string; mtimeMs: number } | null = null
-  for (const name of fs.readdirSync(dir)) {
-    if (!/\.jpe?g$/i.test(name)) continue
-    const st = fs.statSync(path.join(dir, name))
-    if (!best || st.mtimeMs > best.mtimeMs) best = { file: path.join(dir, name), mtimeMs: st.mtimeMs }
+  let entries: fs.Dirent[]
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return null }
+  for (const e of entries) {
+    const fp = path.join(dir, e.name)
+    if (e.isDirectory()) {
+      if (depth <= 0) continue
+      const sub = newestJpeg(fp, depth - 1)
+      if (sub && (!best || sub.mtimeMs > best.mtimeMs)) best = sub
+    } else if (/\.jpe?g$/i.test(e.name)) {
+      let st: fs.Stats
+      try { st = fs.statSync(fp) } catch { continue }
+      if (!best || st.mtimeMs > best.mtimeMs) best = { file: fp, mtimeMs: st.mtimeMs }
+    }
   }
   return best
 }
@@ -39,37 +56,34 @@ async function readStable(file: string): Promise<Buffer | null> {
 }
 
 export async function POST() {
-  // Baseline: mtime file terbaru SEBELUM jepret → penanda mana yang "baru".
-  let before = 0
-  try { before = newestJpeg(SESSION_DIR)?.mtimeMs ?? 0 } catch { /* folder belum ada; kebuat pas capture */ }
+  // Baseline: mtime file terbaru SEBELUM jepret → penanda mana yang "baru" (across semua session).
+  const before = newestJpeg(SESSION_ROOT)?.mtimeMs ?? 0
 
-  // Trigger capture (dengan autofocus). digiCamControl webserver: /?CMD=Capture → "OK".
+  // Trigger shutter.
   try {
-    const r = await fetch(`${DCC}/?CMD=Capture`, { cache: 'no-store' })
-    if (!r.ok) return NextResponse.json({ error: `digiCamControl ${r.status}` }, { status: 502 })
+    const r = await fetch(`${DCC}/${CAPTURE_CMD}`, { cache: 'no-store' })
+    if (!r.ok) return NextResponse.json({ error: `digiCamControl HTTP ${r.status} (cmd ${CAPTURE_CMD})` }, { status: 502 })
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'fetch failed'
-    return NextResponse.json({ error: `digiCamControl unreachable (5513): ${msg}` }, { status: 502 })
+    return NextResponse.json({ error: `digiCamControl 5513 unreachable — webserver ON? (${msg})` }, { status: 502 })
   }
 
-  // Poll session folder buat file BARU (mtime > baseline). DSLR jepret + tulis file ~1-3s.
-  const deadline = Date.now() + 12_000
+  // Poll: file BARU (mtime > baseline) di seluruh pohon session. DSLR jepret + tulis ~1-3s.
+  const deadline = Date.now() + CAPTURE_TIMEOUT_MS
   while (Date.now() < deadline) {
-    await new Promise(r => setTimeout(r, 400))
-    let latest: { file: string; mtimeMs: number } | null = null
-    try { latest = newestJpeg(SESSION_DIR) } catch { continue }
+    await new Promise(r => setTimeout(r, POLL_MS))
+    const latest = newestJpeg(SESSION_ROOT)
     if (latest && latest.mtimeMs > before) {
       const buf = await readStable(latest.file)
       if (buf) {
-        return NextResponse.json({
-          dataUrl: `data:image/jpeg;base64,${buf.toString('base64')}`,
-          file: path.basename(latest.file),
-        })
+        return NextResponse.json({ dataUrl: `data:image/jpeg;base64,${buf.toString('base64')}`, file: path.basename(latest.file) })
       }
     }
   }
+  // Sampai sini = shutter ke-trigger tapi ga ada file baru. Biasanya: Transfer mode bukan
+  // "Save to PC", command capture beda versi (set CANON_CAPTURE_CMD), atau folder di luar SESSION_ROOT.
   return NextResponse.json(
-    { error: `foto baru ga muncul di ${SESSION_DIR} (capture timeout). Cek CMD=Capture & folder session digiCamControl.` },
+    { error: `Foto baru ga muncul di ${SESSION_ROOT} (timeout). Cek: Transfer="Save to PC", command capture (CANON_CAPTURE_CMD), atau folder session.` },
     { status: 504 },
   )
 }

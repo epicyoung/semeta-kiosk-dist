@@ -18,7 +18,7 @@ type Props = {
   state: Extract<KioskState, { screen: 'preview' | 'framechooser' }>
   dispatch: Dispatch<KioskAction>
   frames: OrientedFrame[]
-  config: Pick<KioskConfig, 'enable_email' | 'enable_print' | 'enable_video' | 'enable_video_engine' | 'video_provider' | 'has_secret' | 'bypassed'>
+  config: Pick<KioskConfig, 'enable_email' | 'enable_print' | 'enable_video' | 'enable_video_engine' | 'video_provider' | 'video_defaults' | 'has_secret' | 'bypassed'>
   licensed: boolean
   eventName: string
   onAction?: (action: 'printed' | 'emailed' | 'shared') => void
@@ -62,7 +62,9 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
   // admin enable_video (DB). Vendor OFF → nol UI video (tab + tombol) di preview akhir.
   // FEATURE LATER: video terkunci di godmode (config.bypassed) sampai GA. Ini fail-safe
   // untuk config lama yang terlanjur enable_video_engine:true sebelum toggle dikunci di Settings.
-  const videoAllowed = !!config.bypassed && !!config.enable_video && (config.enable_video_engine ?? false) && !isPrintSession
+  // Godmode-only: bypassed + vendor toggle (enable_video_engine) cukup. enable_video (flag admin/DB)
+  // ga ke-set di godmode → dulu nge-block tombol. Buka ke token-user nanti = tambah lagi gate-nya.
+  const videoAllowed = !!config.bypassed && (config.enable_video_engine ?? false) && !isPrintSession
   const t = useT()
   const [showOriginal, setShowOriginal] = useState(false)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
@@ -190,6 +192,7 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
     setVideoLoading(true)
     setVideoProgress(0)
     try {
+      // Seed = AI BERSIH (rawAiUrl, TANPA overlay/frame) → img2video. Frame dibakar BELAKANGAN.
       const raw = state.rawAiUrl ?? state.aiUrl
       let seed = raw
       if (state.base) {
@@ -198,11 +201,22 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
           seed = url
         } catch { /* seed upload gagal → kirim raw; FAL bisa nolak → null → fail-safe */ }
       }
-      const video = await animateImage(seed, config.video_provider ?? 'PIXVERSE')
+      // Prompt gerak dikirim ke FAL (dulu ke-skip → PixVerse bisa 422). Default "smile & wave"
+      // dari video_defaults; override per-template (video_positive_prompt) nyusul plumbing state.
+      const positive = config.video_defaults?.default_positive_prompt
+      const negative = config.video_defaults?.default_negative_prompt
+      const video = await animateImage(seed, config.video_provider ?? 'PIXVERSE', { positive, negative })
       if (video) {
+        // Baru DI SINI: overlay = frame KEPILIH (+ QR) di-burn ke video (letterbox 2:3, ffmpeg server).
+        // Gagal finalize → fallback video mentah (tamu ga kehilangan video).
+        const qrSvg = qrHiddenRef.current?.querySelector('svg')?.outerHTML ?? null
+        const overlay = await buildVideoOverlay(currentFrame?.url ?? null, licensed ? qrSvg : null)
+        const finalUrl = (state.base ? await finalizeVideo(video, overlay, eventName, state.base) : null) ?? video
         setVideoProgress(100)
-        setVideoUrl(video)
+        setVideoUrl(finalUrl)
         setActiveTab('video')
+        // Cloud copy → microsite serve _C.mp4 di sebelah _A/_B: SATU QR (ori/ai/video). Fire-and-forget.
+        if (licensed && state.base) uploadAsset(finalUrl, 'C', state.base, { eventName }).catch(() => {})
       }
     } finally {
       setVideoLoading(false)

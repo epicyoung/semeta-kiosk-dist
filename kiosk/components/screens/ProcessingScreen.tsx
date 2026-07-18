@@ -102,6 +102,9 @@ async function localSwap(
 const MOCK = false
 const MOCK_MS = 10_000
 const MOCK_AI_URL = '/photo-1488426862026-3ee34a7d66df.jpg'
+// Video img2vid = MANUAL via tombol "Make Video" di preview (hemat FAL: cuma generate kalau
+// tamu minta). Auto-generate OFF. Flip true kalau mau balik auto (maybeAnimate jalan lagi).
+const AUTO_VIDEO = false
 
 const STEPS = ['Detect', 'Process', 'Finishing']
 
@@ -289,9 +292,9 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
     // ga bisa akses → upload dulu sbg seed (type S, bersih, no watermark) ke R2, kirim URL
     // R2 publik ke FAL. base = session id (buat key R2). Gagal upload = skip video (foto aman).
     const maybeAnimate = async (aiUrl: string, base?: string): Promise<string | undefined> => {
-      // ponytail: video buat godmode dulu (bypassed). Kiosk berbayar biasa ga nyoba → hemat FAL,
-      // ga kena 402. Buka ke token-user nanti = hapus `|| !bypassed` (worker udah gate token).
-      if (!enableVideoEngine || !bypassed) return undefined
+      // Video MANUAL via tombol preview (AUTO_VIDEO=false) → hemat FAL, cuma pas tamu minta.
+      // Godmode-only (bypassed) selama masih testing. Auto path ditinggal utuh buat flip nanti.
+      if (!AUTO_VIDEO || !enableVideoEngine || !bypassed) return undefined
       setAnimating(true)
       try {
         let seedUrl = aiUrl

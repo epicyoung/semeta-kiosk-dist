@@ -4,9 +4,10 @@ export const HEADROOM_RATIO = 0.10
 
 const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.min(v, hi))
 
-// 2:3 window height for a given full width (width stays, height is trimmed).
-export function computeTargetHeight(width: number): number {
-  return Math.round(width * 3 / 2)
+// Target window height for a given full width (width stays, height is trimmed).
+// ratio = target aspect (w/h): 2/3 portrait (default), 3/2 landscape. h = w / ratio.
+export function computeTargetHeight(width: number, ratio = 2 / 3): number {
+  return Math.round(width / ratio)
 }
 
 // Vertical crop offset. faceY = top of topmost face bbox (ubun-ubun), or null (no face → center).
@@ -22,10 +23,11 @@ export function computeCropTop(
   return clamp(faceY - headroom, 0, imageH - targetH)
 }
 
-// 2:3 window width for a given full height (height stays, width is trimmed).
-// Used when the image is WIDER than 2:3 (ratio > 2/3): trim left/right, full height kept.
-export function computeTargetWidth(height: number): number {
-  return Math.round(height * 2 / 3)
+// Target window width for a given full height (height stays, width is trimmed).
+// ratio = target aspect (w/h): 2/3 portrait (default), 3/2 landscape. w = h * ratio.
+// Used when the image is WIDER than target: trim left/right, full height kept.
+export function computeTargetWidth(height: number, ratio = 2 / 3): number {
+  return Math.round(height * ratio)
 }
 
 // Horizontal crop offset. faceCenterX = center X of the face to keep centered, or null (→ center).

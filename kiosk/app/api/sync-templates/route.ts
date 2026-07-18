@@ -93,29 +93,31 @@ async function normalizeJpeg(pipeline: ReturnType<typeof sharp>): Promise<Buffer
     .toBuffer()
 }
 
-// Produce a normalized 2:3 JPEG buffer for upload. Always re-encodes to JPEG (PNG→JPEG, size-capped).
-// Already-2:3 → no crop, just normalize. Else face-aware crop THEN normalize.
-// TALLER than 2:3 (ratio < 2/3) → vertical crop, face-aware headroom 10% above topmost head.
-// WIDER than 2:3 (ratio > 2/3, e.g. 896x1280) → horizontal crop, topmost face centered X.
-async function cropTo23(fp: string, w: number, h: number):
+// Normalized JPEG cropped ke aspect target sesuai ORIENTASI: portrait → 2:3, landscape → 3:2.
+// (Dulu semua dipaksa 2:3 → template landscape jadi sliver portrait.) Always re-encode JPEG.
+// Sudah pas target → no crop. Else face-aware crop:
+//   Lebih TINGGI dari target (ratio < target) → trim atas/bawah, headroom 10% di atas kepala.
+//   Lebih LEBAR dari target (ratio > target) → trim kiri/kanan, muka teratas di-center X.
+async function cropToAspect(fp: string, w: number, h: number):
   Promise<{ buf: Buffer; mime: string; cropped: boolean; detectDown: boolean }> {
   const mime = 'image/jpeg' // ponytail: output selalu JPEG, apa pun input
+  const targetRatio = w > h ? 3 / 2 : 2 / 3 // landscape 3:2, else portrait 2:3 (w/h)
   const ratio = w / h
-  if (Math.abs(ratio - (2 / 3)) / (2 / 3) < 0.01) {
+  if (Math.abs(ratio - targetRatio) / targetRatio < 0.01) {
     const buf = await normalizeJpeg(sharp(fp))
     return { buf, mime, cropped: false, detectDown: false }
   }
   const { faceY, faceCenterX, detectDown } = await detectFace(fp)
-  if (ratio < 2 / 3) {
-    // taller than 2:3 → trim top/bottom, keep full width
-    const targetH = computeTargetHeight(w)
+  if (ratio < targetRatio) {
+    // lebih tinggi dari target → trim atas/bawah, lebar penuh
+    const targetH = computeTargetHeight(w, targetRatio)
     const headroom = Math.round(targetH * HEADROOM_RATIO)
     const top = computeCropTop(h, targetH, faceY, headroom)
     const buf = await normalizeJpeg(sharp(fp).extract({ top, left: 0, width: w, height: targetH }))
     return { buf, mime, cropped: true, detectDown }
   }
-  // wider than 2:3 → trim left/right, keep full height, center on face X
-  const targetW = computeTargetWidth(h)
+  // lebih lebar dari target → trim kiri/kanan, tinggi penuh, center di muka
+  const targetW = computeTargetWidth(h, targetRatio)
   const left = computeCropLeft(w, targetW, faceCenterX)
   const buf = await normalizeJpeg(sharp(fp).extract({ top: 0, left, width: targetW, height: h }))
   return { buf, mime, cropped: true, detectDown }
@@ -234,7 +236,7 @@ export async function POST() {
     // Empty folder → skip semua delete. Buat clear total pakai CLI: manage-templates.js delete --all
     const toDelete = folderFiles.length === 0 ? [] : pbTemplates.filter(t => !folderKeys.has(key(t.category, t.name)))
 
-    // Crop tiap kandidat ke 2:3 (face-aware) lalu upload. Non-2:3 di-crop, bukan di-reject.
+    // Crop tiap kandidat ke aspect orientasinya (portrait 2:3 / landscape 3:2, face-aware) lalu upload.
     let added = 0, cropped = 0, deleted = 0, anyDetectDown = false
     const skipped: { name: string; reason: string }[] = []
 
@@ -246,7 +248,7 @@ export async function POST() {
         // (2R landscape kepotong jadi sliver). Cukup resize+flatten putih buat thumbnail grid.
         const out = f.sidecar?.engine_type === 'print'
           ? { buf: await normalizeJpeg(sharp(f.fp)), mime: 'image/jpeg', cropped: false, detectDown: false }
-          : await cropTo23(f.fp, dims.w, dims.h)
+          : await cropToAspect(f.fp, dims.w, dims.h)
         if (out.detectDown) anyDetectDown = true
         const ok = await uploadTemplate(token, f, out.buf, out.mime)
         if (ok) { added++; if (out.cropped) cropped++ }
