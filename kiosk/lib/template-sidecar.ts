@@ -9,6 +9,8 @@ export type TemplateSidecar = {
   engine_type?: string
   positive_prompt?: string
   negative_prompt?: string
+  video_positive_prompt?: string
+  video_negative_prompt?: string
   denoise?: number
   shot_count?: number
   print_size?: '4R' | '2R'
@@ -30,6 +32,8 @@ export function parseSidecar(raw: string): TemplateSidecar | null {
     if (typeof o.engine_type === 'string' && KNOWN_ENGINES.includes(o.engine_type)) out.engine_type = o.engine_type
     if (typeof o.positive_prompt === 'string') out.positive_prompt = o.positive_prompt
     if (typeof o.negative_prompt === 'string') out.negative_prompt = o.negative_prompt
+    if (typeof o.video_positive_prompt === 'string') out.video_positive_prompt = o.video_positive_prompt
+    if (typeof o.video_negative_prompt === 'string') out.video_negative_prompt = o.video_negative_prompt
     if (typeof o.denoise === 'number' && Number.isFinite(o.denoise)) out.denoise = o.denoise
     if (typeof o.shot_count === 'number' && Number.isInteger(o.shot_count) && o.shot_count >= 1 && o.shot_count <= MAX_SHOTS) out.shot_count = o.shot_count
     if (o.print_size === '4R' || o.print_size === '2R') out.print_size = o.print_size

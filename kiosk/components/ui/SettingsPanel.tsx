@@ -69,14 +69,14 @@ const COMFY_CN_STRENGTH_OPTS = [
 const COMFY_CONTROLNET_STRENGTH = 0.8 // fixed di face_server — hanya buat recipe line
 // Video engine (img2vid) providers — semua lewat FAL, bedanya endpoint FAL per provider (Worker).
 const VIDEO_PROVIDER_OPTS: { value: VideoProvider; label: string }[] = [
-  { value: 'SEEDANCE',   label: 'Seedance 2.0'    },
-  { value: 'LTX',        label: 'LTX 2.3'         },
-  { value: 'WAN',        label: 'WAN 2.7'         },
-  { value: 'VEO',        label: 'Veo 3.1'         },
-  { value: 'KLING',      label: 'Kling v3 Pro'    },
-  { value: 'PIXVERSE',   label: 'PixVerse V6'     },
-  { value: 'HAPPYHORSE', label: 'Happy Horse 1.1' },
-  { value: 'VIDU',       label: 'Vidu Q2 Pro'     },
+  { value: 'LTX',        label: 'LTX 2.3'         },       // 15 token
+  { value: 'PIXVERSE',   label: 'PixVerse V6'     },       // 15 token
+  { value: 'VIDU',       label: 'Vidu Q2 Pro'     },       // 20 token
+  { value: 'VEO',        label: 'Veo 3.1'         },       // 35 token
+  { value: 'WAN',        label: 'WAN 2.7'         },       // 35 token
+  { value: 'KLING',      label: 'Kling v3 Pro'    },       // 40 token
+  { value: 'HAPPYHORSE', label: 'Happy Horse 1.1' },       // 50 token
+  { value: 'SEEDANCE',   label: 'Seedance 2.0'    },       // 110 token
 ]
 
 type StylizeCaps = {
@@ -246,8 +246,8 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   const [maxTemplates,    setMaxTemplates]    = useState(config.max_templates ?? 1)
   const [magicCatcher,    setMagicCatcher]    = useState(config.enable_magic_catcher ?? false)
   const [videoEngine,     setVideoEngine]     = useState(config.enable_video_engine ?? false)
-  // Default PIXVERSE — HPP termurah (±Rp4rb/5s vs Seedance ±Rp27rb). Seedance = flagship, pilih sadar.
-  const [videoProvider,   setVideoProvider]   = useState<VideoProvider>(config.video_provider ?? 'PIXVERSE')
+  // Default LTX — 1080p native, murah & tajam.
+  const [videoProvider,   setVideoProvider]   = useState<VideoProvider>(config.video_provider ?? 'LTX')
   // Default 720p (hemat). 1080p pakai tarif cost_1080; provider tanpa tarif itu tetep dicharge+render 720p.
   const [videoResolution, setVideoResolution] = useState<'720p' | '1080p'>(config.video_resolution ?? '720p')
 
@@ -272,11 +272,32 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   // Footnote harga video ala SaaS — harga dari dashboard admin (app_settings), bukan hardcode.
   // 1080p: tarif <PROVIDER>_1080 kalau ada; gak ada = provider tsb dicharge 720p (fail-safe Worker).
   const has1080Rate = videoCosts[`${videoProvider}_1080`] != null
+  const DEFAULT_VIDEO_COSTS: Record<string, number> = {
+    PIXVERSE: 10, PIXVERSE_1080: 20,
+    LTX: 9, LTX_1080: 9,
+    VIDU: 14, VIDU_1080: 30,
+    VEO: 22, VEO_1080: 22,
+    WAN: 22, WAN_1080: 33,
+    KLING: 25,
+    SEEDANCE: 57, HAPPYHORSE: 30
+  }
   const selectedVideoCost = (videoResolution === '1080p' && has1080Rate
-    ? videoCosts[`${videoProvider}_1080`]
-    : videoCosts[videoProvider]) as number | undefined
-  const videoProviderOpts = VIDEO_PROVIDER_OPTS.map(o =>
-    videoCosts[o.value] != null ? { ...o, label: `${o.label} — ${videoCosts[o.value]} token` } : o)
+    ? (videoCosts[`${videoProvider}_1080`] ?? DEFAULT_VIDEO_COSTS[`${videoProvider}_1080`])
+    : (videoCosts[videoProvider] ?? DEFAULT_VIDEO_COSTS[videoProvider])) as number | undefined
+  const videoProviderOpts = VIDEO_PROVIDER_OPTS.filter(o => {
+    // Filter provider yang di-disable dari Admin UI. Server cuma ngirim yang enabled.
+    if (Object.keys(videoCosts).length > 0 && videoCosts[o.value] == null) return false;
+    return true;
+  }).map(o => {
+    const cost720 = videoCosts[o.value] ?? DEFAULT_VIDEO_COSTS[o.value]
+    const cost1080 = videoCosts[`${o.value}_1080`] ?? DEFAULT_VIDEO_COSTS[`${o.value}_1080`]
+    if (cost720 == null) return o
+    let priceStr = ''
+    if (o.value === 'LTX') priceStr = `FHD ${cost720} Tok`
+    else if (cost1080 != null) priceStr = `HD ${cost720} Tok / FHD ${cost1080} Tok`
+    else priceStr = `HD ${cost720} Tok`
+    return { ...o, label: `${o.label} (${priceStr})` }
+  })
   const [comfyStatus,     setComfyStatus]     = useState<PbStatus>('idle')
   const [comfyCaps,       setComfyCaps]       = useState<StylizeCaps | null>(null)
   const [logoFile,        setLogoFile]        = useState<File | null>(null)
@@ -947,6 +968,15 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
 
             {/* ── GROUP 3: AI ENGINE & TEMPLATES ────────────────────────── */}
             <AccordionGroup id="engine" icon="🧠" title="AI Engine & Templates" open={openGroup === 'engine'} onToggle={toggleGroup}>
+              <Row label="Token Balance">
+                <span style={{
+                  fontFamily: 'var(--font-ui)', fontSize: 'var(--text-sm)', fontWeight: 600, letterSpacing: '0.02em',
+                  color: tokenBalance == null ? 'rgba(255,255,255,0.25)' : tokenBalance > 50 ? '#a3be8c' : tokenBalance > 0 ? '#f0c040' : '#ff6b6b',
+                  background: 'rgba(0,0,0,0.2)', padding: '4px 10px', borderRadius: 'var(--radius-glass)', border: '1px solid rgba(255,255,255,0.05)'
+                }}>
+                  {tokenBalance == null ? '—' : `${tokenBalance.toLocaleString('id-ID')} token`}
+                </span>
+              </Row>
               {/* Engine Mode */}
               <Row label={t('set_mode') as string}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -954,7 +984,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                   <Sel value={engine} options={ENGINE_OPTS} onChange={v => {
                     const newEngine = v as EngineKey
                     setEngine(newEngine)
-                    if (newEngine === 'print_local') setTemplateSource('json')
+                    setTemplateSource(newEngine === 'print_local' ? 'json' : 'pocketbase')
                   }} />
                 </div>
               </Row>
@@ -1077,7 +1107,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                 <RowHint
                   label="Select Video Provider"
                   hint={selectedVideoCost != null
-                    ? `Tiap video (8 detik, ${videoResolution === '1080p' && has1080Rate ? '1080p' : '720p'}) motong ${selectedVideoCost} token dari saldo.`
+                    ? `Tiap video (8 detik, ${videoProvider === 'LTX' ? '1080p' : (videoResolution === '1080p' && has1080Rate ? '1080p' : '720p')}) motong ${selectedVideoCost} token dari saldo.`
                     : Object.keys(videoCosts).length > 0
                       ? '❗ Provider ini nonaktif di dashboard admin — request video bakal ditolak.'
                       : 'Harga token per provider tampil saat online.'}
@@ -1086,15 +1116,17 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                 </RowHint>
                 <RowHint
                   label="Video Resolution"
-                  hint={videoResolution === '1080p' && !has1080Rate
-                    ? 'Provider ini gak punya tarif 1080p — otomatis dihitung & render 720p.'
-                    : '720p hemat token; 1080p lebih tajem, tarif beda per provider.'}
+                  hint={videoProvider === 'LTX' 
+                    ? 'LTX otomatis dirender 1080p (FHD) secara native — hemat token.'
+                    : videoResolution === '1080p' && !has1080Rate
+                      ? 'Provider ini gak punya tarif 1080p — otomatis dihitung & render 720p.'
+                      : '720p hemat token; 1080p lebih tajem, tarif beda per provider.'}
                 >
                   <Sel
                     value={videoResolution}
                     options={[
-                      { value: '720p',  label: videoCosts[videoProvider] != null ? `720p — ${videoCosts[videoProvider]} token` : '720p (hemat)' },
-                      { value: '1080p', label: has1080Rate ? `1080p — ${videoCosts[`${videoProvider}_1080`]} token` : '1080p' },
+                      { value: '720p',  label: `720p — ${videoCosts[videoProvider] ?? DEFAULT_VIDEO_COSTS[videoProvider]} token` },
+                      { value: '1080p', label: `1080p — ${videoCosts[`${videoProvider}_1080`] ?? DEFAULT_VIDEO_COSTS[`${videoProvider}_1080`] ?? (videoCosts[videoProvider] ?? DEFAULT_VIDEO_COSTS[videoProvider])} token` },
                     ]}
                     onChange={v => setVideoResolution(v as '720p' | '1080p')}
                   />
@@ -1134,16 +1166,6 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
               </div>
 
               {/* Templates */}
-              <Row label={t('set_source') as string}>
-                <Sel
-                  value={templateSource}
-                  options={[
-                    { value: 'pocketbase', label: 'Epicyoung PB (localhost)' },
-                    { value: 'json', label: 'Local File (C:/semeta)' }
-                  ]}
-                  onChange={v => setTemplateSource(v as TemplateSource)}
-                />
-              </Row>
               {templateSource === 'pocketbase' && (
                 <>
                   <Row label={t('set_pb_url') as string}>

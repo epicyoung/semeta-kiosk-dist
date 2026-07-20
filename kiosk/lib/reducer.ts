@@ -59,7 +59,7 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
       // Multi-template: tamu pilih 1 hasil di grid → collapse ke framechooser (flow single lama).
       if (state.screen !== 'resultchooser') return state
       const r = action.result
-      return { screen: 'framechooser', aiUrl: r.aiUrl, originalUrl: r.originalUrl, sourceUrl: r.sourceUrl, rawAiUrl: r.rawAiUrl, base: r.base, processingSec: r.processingSec }
+      return { screen: 'framechooser', aiUrl: r.aiUrl, originalUrl: r.originalUrl, sourceUrl: r.sourceUrl, rawAiUrl: r.rawAiUrl, base: r.base, processingSec: r.processingSec, templateId: r.templateId }
     }
 
     case 'GO_FACE_ASSIGN':
@@ -111,14 +111,14 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
       // direct (Photo Print): overlay udah dibakar di composite — skip framechooser yang
       // auto-preselect frame (bakal numpuk PNG kedua di print+upload). selectedFrame null.
       if (action.direct)
-        return { screen: 'preview', aiUrl: action.aiUrl, originalUrl: action.originalUrl, sourceUrl: action.sourceUrl, rawAiUrl: action.rawAiUrl, base: action.base, processingSec: action.processingSec, selectedFrame: null, videoUrl: action.videoUrl, printSize: action.printSize }
+        return { screen: 'preview', aiUrl: action.aiUrl, originalUrl: action.originalUrl, sourceUrl: action.sourceUrl, rawAiUrl: action.rawAiUrl, base: action.base, processingSec: action.processingSec, selectedFrame: null, videoUrl: action.videoUrl, printSize: action.printSize, templateId: action.templateId }
       // Landing di frame chooser dulu — tamu pilih frame, baru NEXT ke preview (upload+print).
       // videoUrl = hasil video engine (opsional) — kebawa terus sampai preview buat tab Video.
-      return { screen: 'framechooser', aiUrl: action.aiUrl, originalUrl: action.originalUrl, sourceUrl: action.sourceUrl, rawAiUrl: action.rawAiUrl, base: action.base, processingSec: action.processingSec, videoUrl: action.videoUrl }
+      return { screen: 'framechooser', aiUrl: action.aiUrl, originalUrl: action.originalUrl, sourceUrl: action.sourceUrl, rawAiUrl: action.rawAiUrl, base: action.base, processingSec: action.processingSec, videoUrl: action.videoUrl, templateId: action.templateId }
 
     case 'CONFIRM_FRAME':
       if (state.screen !== 'framechooser') return state
-      return { screen: 'preview', aiUrl: state.aiUrl, originalUrl: state.originalUrl, sourceUrl: state.sourceUrl, rawAiUrl: state.rawAiUrl, base: state.base, processingSec: state.processingSec, selectedFrame: action.frame, videoUrl: state.videoUrl }
+      return { screen: 'preview', aiUrl: state.aiUrl, originalUrl: state.originalUrl, sourceUrl: state.sourceUrl, rawAiUrl: state.rawAiUrl, base: state.base, processingSec: state.processingSec, selectedFrame: action.frame, videoUrl: state.videoUrl, templateId: state.templateId }
 
     case 'GO_DELIVERY':
       if (state.screen !== 'preview') return state

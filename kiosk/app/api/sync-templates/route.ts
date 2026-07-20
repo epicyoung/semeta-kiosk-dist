@@ -179,6 +179,8 @@ async function uploadTemplate(token: string, f: FolderFile, buf: Buffer, mime: s
   fd.append('engine_type', f.sidecar?.engine_type ?? 'faceswap')
   if (f.sidecar?.positive_prompt) fd.append('positive_prompt', f.sidecar.positive_prompt)
   if (f.sidecar?.negative_prompt) fd.append('negative_prompt', f.sidecar.negative_prompt)
+  if (f.sidecar?.video_positive_prompt) fd.append('video_positive_prompt', f.sidecar.video_positive_prompt)
+  if (f.sidecar?.video_negative_prompt) fd.append('video_negative_prompt', f.sidecar.video_negative_prompt)
   if (f.sidecar?.denoise != null) fd.append('denoise', String(f.sidecar.denoise))
   fd.append('gender_filter', 'ALL')
   // Photo Print: nol AI call → nol token. Overlay PNG mentah masuk field 'overlay'

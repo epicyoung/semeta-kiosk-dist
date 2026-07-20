@@ -18,7 +18,7 @@ type Props = {
   state: Extract<KioskState, { screen: 'preview' | 'framechooser' }>
   dispatch: Dispatch<KioskAction>
   frames: OrientedFrame[]
-  config: Pick<KioskConfig, 'enable_email' | 'enable_print' | 'enable_video' | 'enable_video_engine' | 'video_provider' | 'video_resolution' | 'video_defaults' | 'has_secret' | 'bypassed'>
+  config: Pick<KioskConfig, 'enable_email' | 'enable_print' | 'enable_video' | 'enable_video_engine' | 'video_provider' | 'video_resolution' | 'video_defaults' | 'has_secret' | 'bypassed' | 'templates'>
   licensed: boolean
   eventName: string
   onAction?: (action: 'printed' | 'emailed' | 'shared') => void
@@ -202,8 +202,9 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
       }
       // Prompt gerak dikirim ke FAL (dulu ke-skip → PixVerse bisa 422). Default "smile & wave"
       // dari video_defaults; override per-template (video_positive_prompt) nyusul plumbing state.
-      const positive = config.video_defaults?.default_positive_prompt
-      const negative = config.video_defaults?.default_negative_prompt
+      const tmpl = config.templates.find(t => t.id === state.templateId)
+      const positive = tmpl?.video_positive_prompt || config.video_defaults?.default_positive_prompt
+      const negative = tmpl?.video_negative_prompt || config.video_defaults?.default_negative_prompt
       const video = await animateImage(seed, config.video_provider ?? 'PIXVERSE', { positive, negative, resolution: config.video_resolution ?? '720p' })
       if (video) {
         // Baru DI SINI: overlay = frame KEPILIH (+ QR) di-burn ke video (letterbox 2:3, ffmpeg server).

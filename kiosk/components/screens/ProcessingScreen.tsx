@@ -279,7 +279,7 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
       const done = setTimeout(async () => {
         const local = await localCopies(MOCK_AI_URL, state.imageUrl || MOCK_AI_URL, licensed)
         await new Promise(r => setTimeout(r, REVEAL_DWELL_MS)) // let the crisp reveal paint first
-        dispatch({ type: 'SHOW_PREVIEW', aiUrl: local.ai, originalUrl: local.original, sourceUrl: state.imageUrl || MOCK_AI_URL })
+        dispatch({ type: 'SHOW_PREVIEW', aiUrl: local.ai, originalUrl: local.original, sourceUrl: state.imageUrl || MOCK_AI_URL, templateId: state.templates[0].id })
         // MOCK: skip upload — no real image data available
       }, MOCK_MS)
       return () => { clearInterval(tick); clearTimeout(done); clearInterval(interval) }
@@ -313,7 +313,7 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
           type: 'SHOW_PREVIEW', aiUrl: local.ai, originalUrl: local.original,
           sourceUrl: printShots[0], rawAiUrl: sheet, base: base ?? undefined,
           processingSec: Math.round((performance.now() - genStart) / 1000),
-          direct: true, printSize: tmpl.print_size ?? '4R_PORTRAIT',
+          direct: true, printSize: tmpl.print_size ?? '4R_PORTRAIT', templateId: tmpl.id,
         })
       })()
         .catch(() => { if (!controller.signal.aborted) setTimedOut(true) })
@@ -341,7 +341,7 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
           dispatch({
             type: 'SHOW_PREVIEW', aiUrl: local.ai, originalUrl: local.original,
             sourceUrl: state.imageUrl, rawAiUrl: aiUrl, base: base ?? undefined,
-            processingSec: Math.round((performance.now() - genStart) / 1000), videoUrl,
+            processingSec: Math.round((performance.now() - genStart) / 1000), videoUrl, templateId: state.templates[0].id,
           })
         })
         .catch(() => { if (!controller.signal.aborted) setTimedOut(true) })
@@ -384,7 +384,7 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
           const videoUrl = await maybeAnimate(r.rawAiUrl ?? r.aiUrl, r.base)
           dispatch({
             type: 'SHOW_PREVIEW', aiUrl: r.aiUrl, originalUrl: r.originalUrl,
-            sourceUrl: r.sourceUrl, rawAiUrl: r.rawAiUrl, base: r.base, processingSec: r.processingSec, videoUrl,
+            sourceUrl: r.sourceUrl, rawAiUrl: r.rawAiUrl, base: r.base, processingSec: r.processingSec, videoUrl, templateId: r.templateId,
           })
         } else {
           // Multi = tamu pilih 1 dulu di grid chooser, baru masuk flow frame/preview.
@@ -425,7 +425,7 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
         dispatch({
           type: 'SHOW_PREVIEW', aiUrl: local.ai, originalUrl: local.original,
           sourceUrl: state.imageUrl, rawAiUrl: url, base: base ?? undefined,
-          processingSec: Math.round((performance.now() - genStart) / 1000), videoUrl,
+          processingSec: Math.round((performance.now() - genStart) / 1000), videoUrl, templateId: state.templates[0].id,
         })
       })
       .catch((err) => { if (err.name !== 'AbortError') setTimedOut(true) })

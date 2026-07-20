@@ -74,8 +74,8 @@ export function mapPbTemplate(pbUrl: string, item: Record<string, unknown>): Tem
     negative_prompt: (item.negative_prompt as string | null) ?? null,
     api_endpoint: null,
     video_endpoint: null,
-    video_positive_prompt: null,
-    video_negative_prompt: null,
+    video_positive_prompt: (item.video_positive_prompt as string | null) ?? null,
+    video_negative_prompt: (item.video_negative_prompt as string | null) ?? null,
     // PB number field unset = 0 → null (pakai default global); >0 = override per-template
     denoise: Number(item.denoise) > 0 ? Number(item.denoise) : null,
     // Engine 'print' only — unset di PB = null (kiosk pakai default 4 shot / 4R).

@@ -87,6 +87,20 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource }: Props) {
     setRetry(n => n + 1)
   }, [])
 
+  // Browse: pilih file dari disk → isi 1 slot (dispatch SHOT_TAKEN, sama kayak 1 shot kamera).
+  // Reducer clamp di target → ga bisa overfill. Cuma aktif pre-start (biar ga balapan auto-sequence).
+  const handleBrowse = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const url = ev.target?.result as string
+      if (url) dispatch({ type: 'SHOT_TAKEN', imageUrl: url })
+    }
+    reader.readAsDataURL(file)
+    e.target.value = ''
+  }
+
   // Canon live-ish: bump tiap CANON_LIVE_MS → <img> cache-bust → re-fetch frame proxy. Berhenti
   // pas done (semua shot udah diambil). Webcam ga kena (pakai <video> stream).
   const [liveTick, setLiveTick] = useState(0)
@@ -275,6 +289,10 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource }: Props) {
             <TouchButton variant="secondary" onClick={() => dispatch({ type: 'BACK' })} className="flex-1">
               {t('nav_back') as string}
             </TouchButton>
+            <label className="glass-btn h-[72px] flex-1 cursor-pointer" style={{ background: 'rgba(255,255,255,0.08)', color: '#ffffff', boxShadow: 'inset 1px 1px 0 rgba(255,255,255,0.15), inset -1px -1px 0 rgba(0,0,0,0.15)' }}>
+              <input type="file" accept="image/*" className="sr-only" onChange={handleBrowse} />
+              {t('liveview_browse') as string}
+            </label>
             <TouchButton onClick={() => setRunning(true)} disabled={!cameraReady} className="flex-1">
               {t('multicapture_start') as string}
             </TouchButton>
