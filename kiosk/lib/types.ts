@@ -116,6 +116,7 @@ export type KioskConfig = {
   // Video engine (img2vid) — routing di Worker. undefined ⇒ OFF.
   enable_video_engine?: boolean
   video_provider?: VideoProvider  // dipakai kalau enable_video_engine true. undefined ⇒ PIXVERSE (HPP termurah).
+  video_resolution?: '720p' | '1080p'  // undefined ⇒ 720p (hemat). 1080p = tarif cost_1080 (kalau provider punya).
   template_local?: string
   template_source?: TemplateSource
   pocketbase_url?: string

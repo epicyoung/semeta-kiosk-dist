@@ -248,6 +248,8 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   const [videoEngine,     setVideoEngine]     = useState(config.enable_video_engine ?? false)
   // Default PIXVERSE — HPP termurah (±Rp4rb/5s vs Seedance ±Rp27rb). Seedance = flagship, pilih sadar.
   const [videoProvider,   setVideoProvider]   = useState<VideoProvider>(config.video_provider ?? 'PIXVERSE')
+  // Default 720p (hemat). 1080p pakai tarif cost_1080; provider tanpa tarif itu tetep dicharge+render 720p.
+  const [videoResolution, setVideoResolution] = useState<'720p' | '1080p'>(config.video_resolution ?? '720p')
 
   // Dompet token — fetch pas panel dibuka (fresh, gak nunggu heartbeat 60s). Pola sama
   // kayak verifySecret: /api/heartbeat pakai secret tersimpan server-side. Freeware/
@@ -267,8 +269,12 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
       .catch(() => {/* offline → biarin '—' */})
     return () => { live = false }
   }, [open])
-  // Footnote harga video ala SaaS — harga dari dashboard admin (app_settings), bukan hardcode
-  const selectedVideoCost = videoCosts[videoProvider] as number | undefined
+  // Footnote harga video ala SaaS — harga dari dashboard admin (app_settings), bukan hardcode.
+  // 1080p: tarif <PROVIDER>_1080 kalau ada; gak ada = provider tsb dicharge 720p (fail-safe Worker).
+  const has1080Rate = videoCosts[`${videoProvider}_1080`] != null
+  const selectedVideoCost = (videoResolution === '1080p' && has1080Rate
+    ? videoCosts[`${videoProvider}_1080`]
+    : videoCosts[videoProvider]) as number | undefined
   const videoProviderOpts = VIDEO_PROVIDER_OPTS.map(o =>
     videoCosts[o.value] != null ? { ...o, label: `${o.label} — ${videoCosts[o.value]} token` } : o)
   const [comfyStatus,     setComfyStatus]     = useState<PbStatus>('idle')
@@ -703,6 +709,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         enable_magic_catcher: magicCatcher,
         enable_video_engine: videoEngine,
         video_provider:      videoProvider,
+        video_resolution:    videoResolution,
       }
       if (logo_url) patch.logo_url = logo_url
       if (bg_url)   patch.bg_url   = bg_url
@@ -738,6 +745,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         enable_magic_catcher: magicCatcher,
         enable_video_engine: videoEngine,
         video_provider:      videoProvider,
+        video_resolution:    videoResolution,
         ...(logo_url ? { logo_url } : {}),
         ...(bg_url   ? { bg_url   } : {}),
       } as Partial<KioskConfig>)
@@ -1065,18 +1073,33 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                   <Toggle on={videoLocked ? false : videoEngine} disabled={videoLocked} onToggle={() => setVideoEngine(v => !v)} />
                 </div>
               </div>
-              {!videoLocked && videoEngine && (
+              {!videoLocked && videoEngine && (<>
                 <RowHint
                   label="Select Video Provider"
                   hint={selectedVideoCost != null
-                    ? `Tiap video motong ${selectedVideoCost} token dari saldo.`
+                    ? `Tiap video (8 detik, ${videoResolution === '1080p' && has1080Rate ? '1080p' : '720p'}) motong ${selectedVideoCost} token dari saldo.`
                     : Object.keys(videoCosts).length > 0
                       ? '❗ Provider ini nonaktif di dashboard admin — request video bakal ditolak.'
                       : 'Harga token per provider tampil saat online.'}
                 >
                   <Sel value={videoProvider} options={videoProviderOpts} onChange={v => setVideoProvider(v as VideoProvider)} />
                 </RowHint>
-              )}
+                <RowHint
+                  label="Video Resolution"
+                  hint={videoResolution === '1080p' && !has1080Rate
+                    ? 'Provider ini gak punya tarif 1080p — otomatis dihitung & render 720p.'
+                    : '720p hemat token; 1080p lebih tajem, tarif beda per provider.'}
+                >
+                  <Sel
+                    value={videoResolution}
+                    options={[
+                      { value: '720p',  label: videoCosts[videoProvider] != null ? `720p — ${videoCosts[videoProvider]} token` : '720p (hemat)' },
+                      { value: '1080p', label: has1080Rate ? `1080p — ${videoCosts[`${videoProvider}_1080`]} token` : '1080p' },
+                    ]}
+                    onChange={v => setVideoResolution(v as '720p' | '1080p')}
+                  />
+                </RowHint>
+              </>)}
               </>) })()}
 
               {/* Output folder */}

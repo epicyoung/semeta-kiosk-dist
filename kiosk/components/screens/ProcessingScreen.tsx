@@ -209,10 +209,11 @@ type Props = {
   enableMagicCatcher: boolean
   enableVideoEngine: boolean
   videoProvider: VideoProvider
+  videoResolution: '720p' | '1080p'
   onUploadFailed?: (metadata: Record<string, unknown>) => void
 }
 
-export function ProcessingScreen({ state, dispatch, generationSource, eventName, licensed, videoUnlocked, comfy, enableMagicCatcher, enableVideoEngine, videoProvider, onUploadFailed }: Props) {
+export function ProcessingScreen({ state, dispatch, generationSource, eventName, licensed, videoUnlocked, comfy, enableMagicCatcher, enableVideoEngine, videoProvider, videoResolution, onUploadFailed }: Props) {
   const t = useT()
   const copy = t('processing_copy') as string[]
   const [copyIndex, setCopyIndex] = useState(0)
@@ -262,7 +263,7 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
             console.error('[video] seed upload gagal, kirim url asli (mungkin ditolak FAL):', e)
           }
         }
-        const video = await animateImage(seedUrl, videoProvider)
+        const video = await animateImage(seedUrl, videoProvider, { resolution: videoResolution })
         return video ?? undefined
       } finally {
         setAnimating(false)
