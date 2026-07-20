@@ -15,27 +15,23 @@ type Props = {
 
 export function FaceAssignScreen({ state, dispatch }: Props) {
   const t = useT()
-  // Multi-template share ONE selfie mapping → slots detected from templates[0] (representative).
-  const { templates, faces, templateSlots } = state
-  const template = templates[0] ?? null
+  const { templates, faces, templateSlots, currentTemplateIndex = 0, allMappings = [] } = state
+  const template = templates[currentTemplateIndex] ?? null
   const [assignments, setAssignments] = useState<Record<string, string>>({})
   const [expanded, setExpanded] = useState(true)
   const [face, setFace] = useState(80)
   const [slotCrops, setSlotCrops] = useState<Record<string, string>>({})
-  const [detecting, setDetecting] = useState(faces.length === 0 && templateSlots.length === 0)
+  const [detecting, setDetecting] = useState(true)
   const rowRef = useRef<HTMLDivElement>(null)
 
-  // Detect faces on mount when state is empty (real flow, not dev nav)
   useEffect(() => {
-    if (faces.length > 0 || templateSlots.length > 0) { setDetecting(false); return }
+    if (templateSlots.length > 0) { setDetecting(false); return }
 
     async function detect() {
-      const [userFaces, slots] = await Promise.all([
-        detectUserFaces(state.imageUrl),
-        template?.thumbnail_url ? detectTemplateSlots(template.thumbnail_url) : Promise.resolve([]),
-      ])
+      setDetecting(true)
+      const userFaces = faces.length > 0 ? faces : await detectUserFaces(state.imageUrl)
+      const slots = template?.thumbnail_url ? await detectTemplateSlots(template.thumbnail_url) : []
 
-      // Crop template slot previews into local state (FaceSlot type stays clean)
       if (template?.thumbnail_url && slots.length > 0) {
         const crops: Record<string, string> = {}
         await Promise.all(slots.map(async s => {
@@ -50,7 +46,7 @@ export function FaceAssignScreen({ state, dispatch }: Props) {
     }
 
     detect()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentTemplateIndex, templateSlots.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useLayoutEffect(() => {
     const el = rowRef.current
@@ -99,6 +95,11 @@ export function FaceAssignScreen({ state, dispatch }: Props) {
         <p style={{ fontSize: 'var(--text-base)', fontWeight: 300, color: 'var(--fg-muted)', lineHeight: 1.618, whiteSpace: 'pre-line' }}>
           {t('faceassign_subtitle') as string}
         </p>
+        {templates.length > 1 && (
+          <p style={{ marginTop: 4, fontSize: 'var(--text-xs)', color: '#a78bfa', letterSpacing: '0.05em' }}>
+            Template {currentTemplateIndex + 1} of {templates.length}
+          </p>
+        )}
       </div>
 
       <div className="screen-content">
@@ -182,8 +183,19 @@ export function FaceAssignScreen({ state, dispatch }: Props) {
         <TouchButton variant="secondary" onClick={() => dispatch({ type: 'BACK' })} className="flex-1">
           {t('nav_back') as string}
         </TouchButton>
-        <TouchButton onClick={() => dispatch({ type: 'START_PROCESSING', faceMapping: buildFaceMapping() })} disabled={!canProceed} className="flex-1">
-          {t('nav_next') as string}
+        <TouchButton 
+          onClick={() => {
+            const mapping = buildFaceMapping()
+            if (currentTemplateIndex < templates.length - 1) {
+              dispatch({ type: 'NEXT_FACE_ASSIGN', mappings: mapping })
+            } else {
+              dispatch({ type: 'START_PROCESSING', faceMappings: [...allMappings, mapping] })
+            }
+          }} 
+          disabled={!canProceed} 
+          className="flex-1"
+        >
+          {currentTemplateIndex < templates.length - 1 ? 'Next' : (t('nav_next') as string)}
         </TouchButton>
       </div>
     </div>

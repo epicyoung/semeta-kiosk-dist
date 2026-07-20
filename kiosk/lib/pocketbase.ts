@@ -1,4 +1,4 @@
-import type { Frame, Template } from './types'
+import type { Frame, PrintSize, Template } from './types'
 
 const TIMEOUT_MS = 3000
 // ponytail: fetch template pakai timeout longgar — thumbnail banyak/gede bikin 3s putus di tengah (cuma sebagian kedetek)
@@ -81,7 +81,7 @@ export function mapPbTemplate(pbUrl: string, item: Record<string, unknown>): Tem
     // Engine 'print' only — unset di PB = null (kiosk pakai default 4 shot / 4R).
     // Clamp ≤6 kayak sidecar — PB Admin bisa diedit tangan, typo 40 jangan jadi 40 jepretan.
     shot_count: Number(item.shot_count) > 0 ? Math.min(6, Math.trunc(Number(item.shot_count))) : null,
-    print_size: item.print_size === '2R' || item.print_size === '4R' ? item.print_size : null,
+    print_size: (['4R_PORTRAIT', '4R_LANDSCAPE', '2R_STRIP'] as const).includes(String(item.print_size) as PrintSize) ? (item.print_size as PrintSize) : null,
     overlay_url: overlay ? `${pbUrl}/api/files/templates/${String(item.id)}/${overlay}` : null,
   }
 }

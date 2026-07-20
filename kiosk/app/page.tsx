@@ -12,6 +12,10 @@ export default async function Page() {
   config.remaining_sec = gate.ok ? gate.remaining_sec : 0
   config.licensed = gate.ok ? gate.licensed : false
   config.bypassed = gate.ok ? (gate.bypassed ?? false) : false
+  // Izin video per-kiosk = verdict Worker (kiosks.enable_video), BUKAN config lokal —
+  // toggle super admin di Supabase nyampe tiap page load. Offline/dev = false (fail-closed);
+  // godmode tetep kebuka via bypassed (isVideoUnlocked).
+  config.enable_video = gate.ok ? (gate.video_unlocked ?? false) : false
   if (gate.ok) {
     config.kiosk_name = gate.kiosk_name
     config.kiosk_no = gate.kiosk_no

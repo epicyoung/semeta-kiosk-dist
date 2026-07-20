@@ -4,7 +4,7 @@ export type EngineType = 'faceswap' | 'fullbody' | 'api' | 'comfy' | 'print'
 export type GenderFilter = 'MAN' | 'WOMEN' | 'HIJAB' | 'ALL'
 
 // Photo Print (non-AI). 2R selalu dicetak 2-up di kertas 4R — printer gak pernah ganti media.
-export type PrintSize = '4R' | '2R'
+export type PrintSize = '4R_PORTRAIT' | '4R_LANDSCAPE' | '2R_STRIP'
 
 export type ComfyModelFamily = 'sd15' | 'sdxl' | 'flux'
 export type ComfyControlnetMode = 'canny' | 'depth' | 'off'
@@ -32,8 +32,9 @@ export type Template = {
   denoise?: number | null // override kreatif per-template; null = pakai default global settings
   // Engine 'print' only — semua null/undefined buat engine lain
   shot_count?: number | null   // jumlah jepretan per sesi; null ⇒ 4
-  print_size?: PrintSize | null // null ⇒ '4R'
+  print_size?: PrintSize | null // null ⇒ '4R_PORTRAIT'
   overlay_url?: string | null  // PNG transparan (alpha utuh) dibakar di atas slot foto
+  layout_config?: { slots: { x: number; y: number; w: number; h: number; r?: number }[] } | null
 }
 
 export type Face = {
@@ -139,15 +140,15 @@ export type KioskState =
   | { screen: 'idle' }
   | { screen: 'consent' }
   | { screen: 'liveview' }
-  | { screen: 'category'; imageUrl: string }
+  | { screen: 'category'; imageUrl: string; selected?: Template[] }
   | { screen: 'template'; selected: Template[]; category: string; imageUrl: string }
-  | { screen: 'faceassign'; imageUrl: string; templates: Template[]; category: string; faces: Face[]; templateSlots: FaceSlot[]; assignments: FaceAssignments }
+  | { screen: 'faceassign'; imageUrl: string; templates: Template[]; category: string; faces: Face[]; currentTemplateIndex: number; templateSlots: FaceSlot[]; assignments: FaceAssignments; allMappings: (number | null)[][] }
   // Photo Print: layout dipilih dulu → jepret N kali di sini (kebalikan flow AI yang foto duluan)
   | { screen: 'multicapture'; template: Template; shots: string[] }
   // faceMapping[i] = index selfie face (L-R) buat slot template ke-i (L-R). null = slot dilewat.
   // templates: 1 (biasa) atau 2-4 (VIP multi). Swap sequential, 1 selfie mapping dipakai semua.
   // shots: engine 'print' only — N jepretan buat compose layout, imageUrl = shots[0]
-  | { screen: 'processing'; progress: number; step: 1 | 2 | 3; imageUrl: string; templates: Template[]; assignments: FaceAssignments; faceMapping?: (number | null)[]; shots?: string[] }
+  | { screen: 'processing'; progress: number; step: 1 | 2 | 3; imageUrl: string; templates: Template[]; faceMappings?: (number | null)[][]; shots?: string[]; assignments?: FaceAssignments }
   // Multi-template only: N hasil AI, tamu pilih 1 di grid → PICK_RESULT collapse ke framechooser.
   | { screen: 'resultchooser'; results: SwapResult[]; imageUrl: string }
   // sourceUrl = selfie bersih (pre-watermark) buat BACK/re-edit + upload _A. originalUrl bisa
@@ -175,7 +176,8 @@ export type KioskAction =
   | { type: 'GO_FACE_ASSIGN'; faces: Face[]; templateSlots: FaceSlot[] }
   | { type: 'ASSIGN_FACE'; faceId: string; slotId: string }
   | { type: 'UNASSIGN_FACE'; faceId: string }
-  | { type: 'START_PROCESSING'; faceMapping?: (number | null)[] }
+  | { type: 'NEXT_FACE_ASSIGN'; mappings: (number | null)[] }
+  | { type: 'START_PROCESSING'; faceMappings?: (number | null)[][] }
   | { type: 'SET_PROGRESS'; progress: number }
   // direct = skip framechooser langsung ke preview (Photo Print: overlay udah dibakar, frame dobel haram)
   | { type: 'SHOW_PREVIEW'; aiUrl: string; originalUrl: string; sourceUrl?: string; rawAiUrl?: string; base?: string; processingSec?: number; videoUrl?: string; direct?: boolean; printSize?: PrintSize }

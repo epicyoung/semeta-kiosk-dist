@@ -5,7 +5,7 @@ import { fetchSpindonesiaTemplates } from './spindonesia'
 import { reasonForStatus, withinGrace, offlineLicensedFresh, type LockReason } from './license'
 
 export type LicenseGate =
-  | { ok: true; remaining_sec: number; licensed: boolean; bypassed?: boolean; kiosk_name?: string; kiosk_no?: number; pause_quota_sec?: number; pause_used_sec?: number }
+  | { ok: true; remaining_sec: number; licensed: boolean; bypassed?: boolean; video_unlocked?: boolean; kiosk_name?: string; kiosk_no?: number; pause_quota_sec?: number; pause_used_sec?: number }
   | { ok: false; reason: LockReason; message?: string }
 
 // License gate — dipanggil di page.tsx (server) sebelum render. Worker = otoritas.
@@ -33,7 +33,7 @@ export async function checkLicenseGate(): Promise<LicenseGate> {
         const fw = await res.json().catch(() => ({} as Record<string, unknown>))
         // Admin bisa takeover kiosk freeware → force_lock menang walau belum ada sewa.
         if (fw.force_locked === true) return { ok: false, reason: 'force_locked', message: (fw.lock_message as string) ?? undefined }
-        return { ok: true, remaining_sec: 0, licensed: false, kiosk_name: fw.kiosk_name as string | undefined, kiosk_no: fw.kiosk_no as number | undefined }
+        return { ok: true, remaining_sec: 0, licensed: false, video_unlocked: fw.video_unlocked === true, kiosk_name: fw.kiosk_name as string | undefined, kiosk_no: fw.kiosk_no as number | undefined }
       }
       return { ok: false, reason: reasonForStatus(res.status) }
     }
@@ -51,6 +51,7 @@ export async function checkLicenseGate(): Promise<LicenseGate> {
     localDb.saveLicense({ session_id: data.session_id ?? '', remaining_sec: remaining, lastOkAt: Date.now() })
     return {
       ok: true, remaining_sec: remaining, licensed,
+      video_unlocked: data.video_unlocked === true,
       kiosk_name: data.kiosk_name, kiosk_no: data.kiosk_no,
       pause_quota_sec: typeof data.pause_quota_sec === 'number' ? data.pause_quota_sec : undefined,
       pause_used_sec: typeof data.pause_used_sec === 'number' ? data.pause_used_sec : undefined,
@@ -74,7 +75,9 @@ const FALLBACK: KioskConfig = {
   frames: [],
   enable_email: true,
   enable_print: true,
-  enable_video: true,
+  // Video = opt-in super admin (bakar token). Default TERKUNCI — kebuka cuma dari
+  // handshake (video_unlocked, di-overwrite page.tsx) atau godmode.
+  enable_video: false,
   enable_gallery: false,
   template_source: 'pocketbase',
   pocketbase_url: 'http://localhost:8090',

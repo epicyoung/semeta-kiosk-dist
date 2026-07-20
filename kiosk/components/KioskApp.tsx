@@ -21,13 +21,14 @@ import type { ComfyCfg } from '@/lib/comfy'
 import type { KioskConfig, KioskState } from '@/lib/types'
 import { SPINDONESIA_CATEGORY } from '@/lib/spindonesia-category'
 import { useOrientedFrames } from '@/lib/frames'
+import { isVideoUnlocked } from '@/lib/video'
 
 const SCREEN_ORDER: KioskState['screen'][] = [
   'idle', 'consent', 'liveview', 'category', 'template', 'multicapture', 'faceassign', 'processing', 'resultchooser', 'framechooser', 'preview',
 ]
 
 const DUMMY_TEMPLATE = { id: 'd1', name: 'Template 1', category: 'faceswap', token_cost: 1, thumbnail_url: null, gender_filter: 'ALL' as const, engine_type: 'faceswap' as const, positive_prompt: null, negative_prompt: null, api_endpoint: null, video_endpoint: null, video_positive_prompt: null, video_negative_prompt: null }
-const DUMMY_PRINT_TEMPLATE = { ...DUMMY_TEMPLATE, id: 'p1', name: 'Layout 1', engine_type: 'print' as const, token_cost: 0, shot_count: 4, print_size: '4R' as const, overlay_url: null }
+const DUMMY_PRINT_TEMPLATE = { ...DUMMY_TEMPLATE, id: 'p1', name: 'Layout 1', engine_type: 'print' as const, token_cost: 0, shot_count: 4, print_size: '4R_PORTRAIT' as const, overlay_url: null }
 
 const SCREEN_INIT: Partial<Record<KioskState['screen'], KioskState>> = {
   idle:       { screen: 'idle' },
@@ -47,6 +48,8 @@ const SCREEN_INIT: Partial<Record<KioskState['screen'], KioskState>> = {
       { id: 'slot_2', x: 0, y: 0, w: 80, h: 80 },
     ],
     assignments: {},
+    currentTemplateIndex: 0,
+    allMappings: [],
   },
   multicapture: { screen: 'multicapture', template: DUMMY_PRINT_TEMPLATE, shots: [] },
   processing: { screen: 'processing', progress: 0, step: 1, imageUrl: '', templates: [DUMMY_TEMPLATE], assignments: {} },
@@ -236,13 +239,13 @@ export function KioskApp({ config: initialConfig }: { config: KioskConfig }) {
       case 'idle':        return <IdleScreen dispatch={wrappedDispatch} />
       case 'consent':     return <ConsentScreen dispatch={wrappedDispatch} />
       case 'liveview':    return <LiveViewScreen state={state} dispatch={wrappedDispatch} cameraSource={config.camera_source} />
-      case 'category':    return <CategoryScreen state={state} dispatch={wrappedDispatch} templates={templates} />
+      case 'category':    return <CategoryScreen state={state} dispatch={wrappedDispatch} templates={templates} eventName={config.event_name} licensed={config.licensed ?? false} />
       // Multi-template cuma faceswap LOCAL (butuh face_server :8000 buat sequential swap).
       // Fullbody (comfy) & faceswap API = selalu single-select.
       case 'template':    return <TemplateScreen state={state} dispatch={wrappedDispatch} templates={templates} maxTemplates={config.engine_mode === 'faceswap_local' ? (config.max_templates ?? 1) : 1} />
       case 'faceassign':  return <FaceAssignScreen state={state} dispatch={wrappedDispatch} />
       case 'multicapture': return <MultiCaptureScreen state={state} dispatch={wrappedDispatch} cameraSource={config.camera_source} />
-      case 'processing':  return <ProcessingScreen state={state} dispatch={wrappedDispatch} generationSource={config.generation_source} eventName={config.event_name} licensed={config.licensed ?? false} bypassed={config.bypassed ?? false} comfy={comfyCfg} enableMagicCatcher={config.enable_magic_catcher ?? false} enableVideoEngine={config.enable_video_engine ?? false} videoProvider={config.video_provider ?? 'PIXVERSE'} onUploadFailed={(meta) => log('UPLOAD_FAILED', meta)} />
+      case 'processing':  return <ProcessingScreen state={state} dispatch={wrappedDispatch} generationSource={config.generation_source} eventName={config.event_name} licensed={config.licensed ?? false} videoUnlocked={isVideoUnlocked(config)} comfy={comfyCfg} enableMagicCatcher={config.enable_magic_catcher ?? false} enableVideoEngine={config.enable_video_engine ?? false} videoProvider={config.video_provider ?? 'PIXVERSE'} onUploadFailed={(meta) => log('UPLOAD_FAILED', meta)} />
       case 'resultchooser': return <ResultChooserScreen state={state} dispatch={wrappedDispatch} />
       case 'framechooser': return <PreviewScreen mode="choose" state={state} dispatch={wrappedDispatch} frames={orientedFrames} config={config} licensed={config.licensed ?? false} eventName={config.event_name} onAction={(a) => log('VISITOR_ACTION', { action: a })} />
       case 'preview':     return <PreviewScreen mode="final" state={state} dispatch={wrappedDispatch} frames={orientedFrames} config={config} licensed={config.licensed ?? false} eventName={config.event_name} onAction={(a) => log('VISITOR_ACTION', { action: a })} />

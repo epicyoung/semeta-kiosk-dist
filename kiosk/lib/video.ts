@@ -1,5 +1,13 @@
 import type { VideoProvider } from '@/lib/types'
 
+// Video engine kebuka atau engga — SATU sumber buat PreviewScreen, SettingsPanel, dan
+// ProcessingScreen. Kebuka kalau super admin nyalain toggle Video kiosk ini
+// (kiosks.enable_video, nyampe via handshake sebagai video_unlocked) ATAU godmode (testing).
+// Client-side = deterrent doang; kunci asli fail-closed di RPC deduct_video_tokens.
+export function isVideoUnlocked(cfg: { bypassed?: boolean; enable_video?: boolean }): boolean {
+  return !!cfg.bypassed || !!cfg.enable_video
+}
+
 // Video engine (img2vid): hasil image terakhir → /api/generate-video (proxy Worker → FAL).
 // FAIL-SAFE: gagal apa pun (offline/502/timeout/no-url) return null — TAMU TETEP DAPET FOTO.
 // Caller (ProcessingScreen) lanjut SHOW_PREVIEW dengan foto still walau video null.

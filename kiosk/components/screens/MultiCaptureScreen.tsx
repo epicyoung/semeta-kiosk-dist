@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useRef, useState, useCallback, type Dispatch, type CSSProperties } from 'react'
 import { TouchButton } from '@/components/ui/TouchButton'
+import { PrintLayoutPreview } from '@/components/ui/PrintLayoutPreview'
 import { stopCamera, triggerCanonCapture, rotateDataUrl } from '@/lib/camera'
 import { rotatedSize, CANON_LIVE, CANON_LIVE_MS } from '@/components/screens/LiveViewScreen'
 import type { KioskAction, KioskState } from '@/lib/types'
@@ -192,14 +193,10 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource }: Props) {
               />
             )}
 
-            {/* Review: semua jepretan dalam grid — video tetep mounted (stream hidup) biar retake instan */}
+            {/* Review: Preview hasil asli print secara langsung! (CSS representation) */}
             {done && (
-              <div className="absolute inset-0 grid grid-cols-2 gap-2 p-3" style={{ background: '#000' }}>
-                {state.shots.map((shot, i) => (
-                  <div key={i} className="relative overflow-hidden rounded-lg">
-                    <img src={shot} alt={`shot ${i + 1}`} className="absolute inset-0 w-full h-full object-cover" />
-                  </div>
-                ))}
+              <div className="absolute inset-0 p-3" style={{ background: '#111' }}>
+                <PrintLayoutPreview template={state.template} shots={state.shots} />
               </div>
             )}
 

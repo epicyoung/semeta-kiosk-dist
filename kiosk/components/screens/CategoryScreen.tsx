@@ -5,19 +5,31 @@ import { PinBadge } from '@/components/ui/PinBadge'
 import type { KioskAction, KioskState, Template } from '@/lib/types'
 import { useT } from '@/lib/i18n'
 import { SPINDONESIA_CATEGORY } from '@/lib/spindonesia-category'
+import { finalizeLocal, localCopies } from '@/lib/local-finalize'
 
 type Props = {
   state: Extract<KioskState, { screen: 'category' }>
   dispatch: Dispatch<KioskAction>
   templates: Template[]
+  eventName: string
+  licensed: boolean
 }
 
-const skipToPreview = (imageUrl: string, dispatch: Dispatch<KioskAction>) =>
-  dispatch({ type: 'SHOW_PREVIEW', aiUrl: imageUrl, originalUrl: imageUrl })
+const skipToPreview = async (imageUrl: string, dispatch: Dispatch<KioskAction>, eventName: string, licensed: boolean, setSkipping: (v: boolean) => void) => {
+  setSkipping(true)
+  try {
+    const local = await localCopies(imageUrl, imageUrl, licensed)
+    const base = await finalizeLocal(eventName, local.original, local.ai)
+    dispatch({ type: 'SHOW_PREVIEW', aiUrl: local.ai, originalUrl: local.original, sourceUrl: imageUrl, rawAiUrl: imageUrl, base: base ?? undefined })
+  } finally {
+    setSkipping(false)
+  }
+}
 
-export function CategoryScreen({ state, dispatch, templates }: Props) {
+export function CategoryScreen({ state, dispatch, templates, eventName, licensed }: Props) {
   const t = useT()
   const [selected, setSelected] = useState<string | null>(null)
+  const [skipping, setSkipping] = useState(false)
 
   const counts = templates.reduce<Record<string, number>>((acc, tmpl) => {
     acc[tmpl.category] = (acc[tmpl.category] ?? 0) + 1
@@ -75,15 +87,15 @@ export function CategoryScreen({ state, dispatch, templates }: Props) {
 
       {/* Nav */}
       <div className="screen-actions shrink-0 p-5 flex gap-3">
-        <TouchButton variant="secondary" onClick={() => dispatch({ type: 'BACK' })} className="flex-1">
+        <TouchButton variant="secondary" onClick={() => dispatch({ type: 'BACK' })} className="flex-1" disabled={skipping}>
           {t('nav_back') as string}
         </TouchButton>
-        <TouchButton variant="secondary" onClick={() => skipToPreview(state.imageUrl, dispatch)} className="flex-1">
-          {t('category_skip') as string}
+        <TouchButton variant="secondary" onClick={() => skipToPreview(state.imageUrl, dispatch, eventName, licensed, setSkipping)} className="flex-1" disabled={skipping}>
+          {skipping ? '...' : (t('category_skip') as string)}
         </TouchButton>
         <TouchButton
           onClick={() => selected && dispatch({ type: 'SELECT_CATEGORY', category: selected })}
-          disabled={!selected}
+          disabled={!selected || skipping}
           className="flex-1"
         >
           {t('nav_next') as string}

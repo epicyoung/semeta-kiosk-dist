@@ -6,56 +6,11 @@ import { proxied } from '@/lib/facedetect'
 import type { GenerationSource, KioskAction, KioskState, SwapResult, VideoProvider } from '@/lib/types'
 import { animateImage } from '@/lib/video'
 import { uploadAsset } from '@/lib/upload'
-import { burnWatermark } from '@/lib/watermark-canvas'
+import { compositeFrame } from '@/lib/frame-composite'
 import { composePrintLayout } from '@/lib/print-layout'
 import { useMagicCatcher } from '@/lib/use-magic-catcher'
 import { useT } from '@/lib/i18n'
-
-// Write one full-res photo to disk (server route owns fs + naming convention)
-// Local print files are always full-res. Web-sized copies only exist in R2 (Original + AI,
-// both resized on upload, keyed _A/_B — a separate naming contract with the microsite).
-async function saveLocal(eventName: string, seq: string, kind: 'original' | 'ai', imageUrl: string) {
-  await fetch('/api/save-local', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ event_name: eventName, seq, kind, image_base64: imageUrl }),
-  })
-}
-
-// Finalize LOKAL saja: real persistent seq → save A+AI full-res ke disk (print/arsip).
-// Upload R2 + QR pindah ke DeliveryScreen (frame di-burn dulu di titik commit — spec 2026-07-04).
-// Return base (eventFolder-paddedSeq) buat konsistensi nama file lokal ↔ key R2.
-// Gagal = null + onFail (log UPLOAD_FAILED stage finalize) — preview jalan terus,
-// Delivery fallback next-seq sendiri.
-async function finalizeLocal(
-  eventName: string,
-  localOriginalUrl: string, localAiUrl: string,
-  onFail?: (err: unknown) => void,
-): Promise<string | null> {
-  try {
-    const res = await fetch('/api/next-seq', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ event_name: eventName }),
-    })
-    const { paddedSeq, eventFolder } = await res.json()
-    await Promise.all([
-      saveLocal(eventName, paddedSeq, 'original', localOriginalUrl),
-      saveLocal(eventName, paddedSeq, 'ai', localAiUrl),
-    ])
-    return `${eventFolder}-${paddedSeq}`
-  } catch (err) {
-    console.error('finalize local failed:', err)
-    try { onFail?.(err) } catch { /* analytics ga boleh matiin kiosk */ }
-    return null
-  }
-}
-
-// Burn both images ONCE when unlicensed → single source for preview + print + save.
-// Licensed → pass through untouched. Returns {original, ai} dataURLs.
-async function localCopies(originalUrl: string, aiUrl: string, licensed: boolean) {
-  if (licensed) return { original: originalUrl, ai: aiUrl }
-  const [original, ai] = await Promise.all([burnWatermark(originalUrl), burnWatermark(aiUrl)])
-  return { original, ai }
-}
+import { finalizeLocal, localCopies } from '@/lib/local-finalize'
 
 // dataUrl or regular URL → Blob
 async function toBlob(url: string): Promise<Blob> {
@@ -249,7 +204,7 @@ type Props = {
   generationSource: GenerationSource
   eventName: string
   licensed: boolean
-  bypassed: boolean
+  videoUnlocked: boolean
   comfy: ComfyCfg
   enableMagicCatcher: boolean
   enableVideoEngine: boolean
@@ -257,7 +212,7 @@ type Props = {
   onUploadFailed?: (metadata: Record<string, unknown>) => void
 }
 
-export function ProcessingScreen({ state, dispatch, generationSource, eventName, licensed, bypassed, comfy, enableMagicCatcher, enableVideoEngine, videoProvider, onUploadFailed }: Props) {
+export function ProcessingScreen({ state, dispatch, generationSource, eventName, licensed, videoUnlocked, comfy, enableMagicCatcher, enableVideoEngine, videoProvider, onUploadFailed }: Props) {
   const t = useT()
   const copy = t('processing_copy') as string[]
   const [copyIndex, setCopyIndex] = useState(0)
@@ -293,8 +248,9 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
     // R2 publik ke FAL. base = session id (buat key R2). Gagal upload = skip video (foto aman).
     const maybeAnimate = async (aiUrl: string, base?: string): Promise<string | undefined> => {
       // Video MANUAL via tombol preview (AUTO_VIDEO=false) → hemat FAL, cuma pas tamu minta.
-      // Godmode-only (bypassed) selama masih testing. Auto path ditinggal utuh buat flip nanti.
-      if (!AUTO_VIDEO || !enableVideoEngine || !bypassed) return undefined
+      // videoUnlocked = izin admin per-kiosk ATAU godmode (isVideoUnlocked di KioskApp).
+      // Auto path ditinggal utuh buat flip nanti.
+      if (!AUTO_VIDEO || !enableVideoEngine || !videoUnlocked) return undefined
       setAnimating(true)
       try {
         let seedUrl = aiUrl
@@ -339,7 +295,7 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
       const timeout = setTimeout(() => { controller.abort(); setTimedOut(true) }, 120_000)
       ;(async () => {
         dispatch({ type: 'SET_PROGRESS', progress: 30 })
-        const sheet = await composePrintLayout(printShots, tmpl.overlay_url ?? null, tmpl.print_size ?? '4R')
+        const sheet = await composePrintLayout(printShots, tmpl)
         if (controller.signal.aborted) return
         dispatch({ type: 'SET_PROGRESS', progress: 70 })
         // Watermark freemium tetep berlaku: display di-burn saat unlicensed, raw bersih
@@ -356,7 +312,7 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
           type: 'SHOW_PREVIEW', aiUrl: local.ai, originalUrl: local.original,
           sourceUrl: printShots[0], rawAiUrl: sheet, base: base ?? undefined,
           processingSec: Math.round((performance.now() - genStart) / 1000),
-          direct: true, printSize: tmpl.print_size ?? '4R',
+          direct: true, printSize: tmpl.print_size ?? '4R_PORTRAIT',
         })
       })()
         .catch(() => { if (!controller.signal.aborted) setTimedOut(true) })
@@ -408,7 +364,7 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
           const templateUrl = tmpl.thumbnail_url ?? ''
           // Scale per-template pct ke rentang penuh 0-100 → bar ga reset tiap template (multi).
           // Single (total=1) → identik pct lama.
-          const aiUrl = await localSwap(templateUrl, state.imageUrl, (pct) => dispatch({ type: 'SET_PROGRESS', progress: Math.round((i * 100 + pct) / total) }), state.faceMapping)
+          const aiUrl = await localSwap(templateUrl, state.imageUrl, (pct) => dispatch({ type: 'SET_PROGRESS', progress: Math.round((i * 100 + pct) / total) }), state.faceMappings?.[i])
           const local = await localCopies(state.imageUrl, aiUrl, licensed)
           const base = await finalizeLocal(eventName, local.original, local.ai,
             (err) => onUploadFailed?.({ stage: 'finalize', error: String(err).slice(0, 300) }))
@@ -512,11 +468,11 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
           className="h1-glow"
           style={{ fontSize: 'clamp(32px,5vw,48px)', fontWeight: 500, letterSpacing: '-0.02em', lineHeight: 1.15, marginBottom: 8 }}
         >
-          {t('processing_title') as string}
+          {state.templates[0]?.engine_type === 'print' ? 'Crafting Layout' : t('processing_title') as string}
         </h1>
         <p style={{ fontSize: 'var(--text-base)', fontWeight: 300, color: 'var(--fg-muted)', lineHeight: 1.618, whiteSpace: 'pre-line' }}>
           {/* ponytail: string inline — i18n buat status video YAGNI sampai diminta translate */}
-          {animating ? 'Foto jadi! Lagi bikin videonya...' : (t('processing_subtitle') as string)}
+          {state.templates[0]?.engine_type === 'print' ? 'Please wait while we prepare your print layout...' : animating ? 'Foto jadi! Lagi bikin videonya...' : (t('processing_subtitle') as string)}
         </p>
       </div>
 

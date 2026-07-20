@@ -20,7 +20,7 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
 
     case 'SELECT_CATEGORY':
       if (state.screen !== 'category') return state
-      return { screen: 'template', imageUrl: state.imageUrl, category: action.category, selected: [] }
+      return { screen: 'template', imageUrl: state.imageUrl, category: action.category, selected: state.selected || [] }
 
     case 'SELECT_TEMPLATE': {
       if (state.screen !== 'template') return state
@@ -37,7 +37,7 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
       // Flow print (imageUrl '' — belum ada selfie): FaceAssign gak punya bahan → block.
       // Kejadian cuma kalau print_local nyala tanpa template print (fallback dummy faceswap).
       if (state.imageUrl === '') return state
-      return { screen: 'faceassign', imageUrl: state.imageUrl, category: state.category, templates: state.selected, faces: [], templateSlots: [], assignments: {} }
+      return { screen: 'faceassign', imageUrl: state.imageUrl, category: state.category, templates: state.selected, faces: [], currentTemplateIndex: 0, templateSlots: [], assignments: {}, allMappings: [] }
 
     case 'START_CAPTURE_LOOP':
       // Guard engine_type kayak comfy (defense-in-depth): cuma template print yang boleh ke capture loop.
@@ -76,6 +76,17 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
       return { ...state, assignments: rest }
     }
 
+    case 'NEXT_FACE_ASSIGN': {
+      if (state.screen !== 'faceassign') return state
+      return {
+        ...state,
+        currentTemplateIndex: state.currentTemplateIndex + 1,
+        assignments: {},
+        templateSlots: [], // reset so effect re-detects for the new template
+        allMappings: [...state.allMappings, action.mappings]
+      }
+    }
+
     case 'START_PROCESSING':
       // Template comfy skip FaceAssign — NEXT di TemplateScreen langsung ke processing.
       // Comfy TIDAK pernah multi-select → cuma jalur single (selected.length === 1).
@@ -88,7 +99,7 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
         return { screen: 'processing', progress: 0, step: 1, imageUrl: state.shots[0], templates: [state.template], assignments: {}, shots: state.shots }
       }
       if (state.screen !== 'faceassign' || state.templates.length === 0) return state
-      return { screen: 'processing', progress: 0, step: 1, imageUrl: state.imageUrl, templates: state.templates, assignments: state.assignments, faceMapping: action.faceMapping }
+      return { screen: 'processing', progress: 0, step: 1, imageUrl: state.imageUrl, templates: state.templates, faceMappings: action.faceMappings }
 
     case 'SET_PROGRESS': {
       if (state.screen !== 'processing') return state
@@ -126,9 +137,14 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
       if (state.screen === 'liveview') return { screen: 'idle' }
       if (state.screen === 'category') return { screen: 'liveview' }
       // Flow print (imageUrl '' — belum ada foto): BACK dari pemilih layout = pulang ke idle
-      if (state.screen === 'template') return state.imageUrl === '' ? { screen: 'idle' } : { screen: 'category', imageUrl: state.imageUrl }
+      if (state.screen === 'template') return state.imageUrl === '' ? { screen: 'idle' } : { screen: 'category', imageUrl: state.imageUrl, selected: state.selected }
       if (state.screen === 'multicapture') return { screen: 'template', imageUrl: '', category: '', selected: [] }
-      if (state.screen === 'faceassign') return { screen: 'template', imageUrl: state.imageUrl, category: state.category, selected: [] }
+      if (state.screen === 'faceassign') {
+        if (state.currentTemplateIndex > 0) {
+          return { ...state, currentTemplateIndex: state.currentTemplateIndex - 1, assignments: {}, templateSlots: [] }
+        }
+        return { screen: 'template', imageUrl: state.imageUrl, category: state.category, selected: state.templates }
+      }
       // resultchooser BACK = restart ke idle — re-run N swap ga aman, hasil udah ke-save lokal.
       if (state.screen === 'resultchooser') return { screen: 'idle' }
       // Re-edit pakai selfie BERSIH — originalUrl bisa ke-watermark (freemium) → face crop di FaceAssign kebawa watermark.

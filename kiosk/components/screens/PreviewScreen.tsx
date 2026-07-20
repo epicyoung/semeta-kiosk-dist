@@ -8,7 +8,7 @@ import { printPhoto } from '@/lib/print'
 import { compositeFrame } from '@/lib/frame-composite'
 import { to2UpSheet } from '@/lib/print-layout'
 import { uploadAsset } from '@/lib/upload'
-import { animateImage, finalizeVideo } from '@/lib/video'
+import { animateImage, finalizeVideo, isVideoUnlocked } from '@/lib/video'
 import { buildVideoOverlay } from '@/lib/video-overlay'
 import { useT } from '@/lib/i18n'
 
@@ -58,13 +58,12 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
   const isFinal = mode === 'final'
   // Photo Print: composite udah final (overlay kebakar) — no frame, no video, no toggle AI/Asli.
   const isPrintSession = state.screen === 'preview' && !!state.printSize
-  // Video di preview = keputusan VENDOR (toggle "Enable Video Engine" di Settings) AND flag
-  // admin enable_video (DB). Vendor OFF → nol UI video (tab + tombol) di preview akhir.
-  // FEATURE LATER: video terkunci di godmode (config.bypassed) sampai GA. Ini fail-safe
-  // untuk config lama yang terlanjur enable_video_engine:true sebelum toggle dikunci di Settings.
-  // Godmode-only: bypassed + vendor toggle (enable_video_engine) cukup. enable_video (flag admin/DB)
-  // ga ke-set di godmode → dulu nge-block tombol. Buka ke token-user nanti = tambah lagi gate-nya.
-  const videoAllowed = !!config.bypassed && (config.enable_video_engine ?? false) && !isPrintSession
+  // Video GA (2026-07-20): kebuka kalau super admin nyalain kiosks.enable_video (nyampe via
+  // handshake) ATAU godmode — isVideoUnlocked. Layer kedua tetep keputusan VENDOR (toggle
+  // "Enable Video Engine" di Settings): vendor OFF → nol UI video (tab + tombol) di preview.
+  // Kunci asli fail-closed di RPC deduct_video_tokens — config lama yang terlanjur
+  // enable_video_engine:true tapi belum diizinin admin bakal ditolak 403 tanpa motong token.
+  const videoAllowed = isVideoUnlocked(config) && (config.enable_video_engine ?? false) && !isPrintSession
   const t = useT()
   const [showOriginal, setShowOriginal] = useState(false)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
@@ -144,7 +143,7 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
     }
     // 2R: konten digital = satu panel landscape — kertas fisik dibangun 2-up di 4R
     // pas mau print aja (printer selamanya mikir dia nyetak 4R).
-    if (state.screen === 'preview' && state.printSize === '2R') {
+    if (state.screen === 'preview' && state.printSize === '2R_STRIP') {
       try {
         out = await to2UpSheet(out)
       } catch (err) {

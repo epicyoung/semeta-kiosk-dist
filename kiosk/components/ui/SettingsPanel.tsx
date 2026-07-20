@@ -2,11 +2,14 @@
 import { useState, useEffect, useRef } from 'react'
 import type { KioskConfig, Template, TemplateSource, Locale, ComfyModelFamily, ComfyControlnetMode, VideoProvider } from '@/lib/types'
 import { fetchPocketBaseTemplates } from '@/lib/pocketbase'
+import { isVideoUnlocked } from '@/lib/video'
 import { useT } from '@/lib/i18n'
 import type { Translations } from '@/lib/locales/types'
 
 type TFn = (key: keyof Translations) => Translations[keyof Translations]
 type EngineKey = 'faceswap_local' | 'fullbody_local' | 'print_local' | 'faceswap_api' | 'fullbody_api'
+
+import { LocalTemplateManager } from './LocalTemplateManager'
 
 const ENGINE_OPTS: { value: EngineKey; label: string; soon?: boolean }[] = [
   { value: 'faceswap_local', label: 'Faceswap (LOCAL)' },
@@ -940,7 +943,11 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
               <Row label={t('set_mode') as string}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   {!isApi && <StatusBadge status={engineStatus} t={t} />}
-                  <Sel value={engine} options={ENGINE_OPTS} onChange={v => setEngine(v as EngineKey)} />
+                  <Sel value={engine} options={ENGINE_OPTS} onChange={v => {
+                    const newEngine = v as EngineKey
+                    setEngine(newEngine)
+                    if (newEngine === 'print_local') setTemplateSource('json')
+                  }} />
                 </div>
               </Row>
               {isApi && (
@@ -1037,20 +1044,20 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
 
               {/* Video engine (img2vid) — img output terakhir jadi seed ke provider video via
                   Worker. API key hidup di Worker (FAL), gak pernah ke browser. Default OFF.
-                  FEATURE LATER: terkunci kecuali godmode (config.bypassed). Vendor lihat tapi
-                  ga bisa nyalain — biar ga ada video ke-trigger + token kebakar sebelum GA. */}
-              {(() => { const videoLocked = !(config.bypassed ?? false); return (<>
+                  Kebuka kalau super admin nyalain toggle Video kiosk ini (isVideoUnlocked)
+                  atau godmode — kunci asli fail-closed di RPC deduct_video_tokens. */}
+              {(() => { const videoLocked = !isVideoUnlocked(config); return (<>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', gap: 16 }}>
                 <div style={{ minWidth: 0 }}>
                   <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>
                     Enable Video Engine (img2vid)
                     {videoLocked && (
-                      <span style={{ marginLeft: 8, fontSize: 'var(--text-2xs)', fontFamily: 'var(--font-ui)', letterSpacing: '0.04em', color: '#f0c040', border: '1px solid rgba(240,192,64,0.4)', borderRadius: 6, padding: '1px 6px', whiteSpace: 'nowrap' }}>SOON</span>
+                      <span style={{ marginLeft: 8, fontSize: 'var(--text-2xs)', fontFamily: 'var(--font-ui)', letterSpacing: '0.04em', color: '#f0c040', border: '1px solid rgba(240,192,64,0.4)', borderRadius: 6, padding: '1px 6px', whiteSpace: 'nowrap' }}>LOCKED</span>
                     )}
                   </span>
                   <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0', lineHeight: 1.4 }}>
                     {videoLocked
-                      ? 'Fitur video (img2vid) segera hadir — belum aktif di rilis ini.'
+                      ? 'Fitur video dikunci — hubungi admin untuk mengaktifkan kiosk ini.'
                       : 'Hasil foto terakhir dianimasikan jadi video pendek lewat provider pilihan.'}
                   </p>
                 </div>
@@ -1107,7 +1114,10 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
               <Row label={t('set_source') as string}>
                 <Sel
                   value={templateSource}
-                  options={[{ value: 'pocketbase', label: 'Epicyoung PB (localhost)' }]}
+                  options={[
+                    { value: 'pocketbase', label: 'Epicyoung PB (localhost)' },
+                    { value: 'json', label: 'Local File (C:/semeta)' }
+                  ]}
                   onChange={v => setTemplateSource(v as TemplateSource)}
                 />
               </Row>
@@ -1180,9 +1190,12 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                 </>
               )}
               {templateSource === 'json' && (
-                <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.28)', marginTop: 6 }}>
-                  {t('set_json_note') as string}
-                </p>
+                <>
+                  <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.28)', marginTop: 6 }}>
+                    {t('set_json_note') as string}
+                  </p>
+                  <LocalTemplateManager onRefreshTemplates={onRefreshTemplates} />
+                </>
               )}
             </AccordionGroup>
 
