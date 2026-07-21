@@ -43,16 +43,42 @@ export function GlassShell({ screenKey, direction, children, config, onLogoClick
     setSyncPhase({ kind: 'syncing' })
     try {
       const res = await fetch('/api/sync-templates', { method: 'POST' })
-      const d = await res.json().catch(() => ({})) as {
-        ok?: boolean; error?: string
-        added?: number; cropped?: number; deleted?: number
-        detectDown?: boolean; skipped?: { name: string; reason: string }[]
-      }
-      if (!res.ok || d.ok === false) {
+      if (!res.ok) {
         setSyncStatus('err')
-        setSyncPhase({ kind: 'error', message: d.error ?? 'Server menolak sync (cek PocketBase & env).' })
+        setSyncPhase({ kind: 'error', message: 'Server menolak sync (cek PocketBase & env).' })
         return
       }
+
+      const reader = res.body?.getReader()
+      if (!reader) throw new Error('No response body')
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let d: any = null
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = JSON.parse(line.substring(6))
+            if (data.kind === 'progress') {
+              setSyncPhase({ kind: 'syncing', message: data.message, current: data.current, total: data.total, name: data.name })
+            } else if (data.ok === false) {
+              setSyncStatus('err')
+              setSyncPhase({ kind: 'error', message: data.error || 'Terjadi kesalahan.' })
+              return
+            } else if (data.ok === true) {
+              d = data
+            }
+          }
+        }
+      }
+
+      if (!d) throw new Error('Incomplete response')
+
       const pbUrl = localConfig.pocketbase_url ?? 'http://localhost:8090'
       const results = await fetchPocketBaseTemplates(pbUrl)
       // ponytail: jangan overwrite list dengan [] kalau fetch gagal/timeout — mending keep yang lama

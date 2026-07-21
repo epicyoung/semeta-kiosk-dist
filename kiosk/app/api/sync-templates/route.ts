@@ -218,52 +218,81 @@ async function deleteTemplate(token: string, id: string): Promise<boolean> {
 // ── handler ────────────────────────────────────────────────────────────────────
 
 export async function POST() {
-  try {
-    if (!EMAIL || !PASSWORD) {
-      return NextResponse.json({ ok: false, error: 'POCKETBASE_EMAIL/PASSWORD belum di-set' }, { status: 500 })
-    }
+  const encoder = new TextEncoder()
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (data: any) => {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
+      }
 
-    const inbox = path.resolve(process.cwd(), 'face_server', 'put-template-here')
-    const folderFiles = scanFolder(inbox)
-
-    const token = await login()
-    const pbTemplates = await listTemplates(token)
-
-    const key = (category: string, name: string) => `${category}||${name}`
-    const folderKeys = new Set(folderFiles.map(f => key(f.category, f.name)))
-    const pbByKey = new Map(pbTemplates.map(t => [key(t.category, t.name), t]))
-
-    const toAdd = folderFiles.filter(f => !pbByKey.has(key(f.category, f.name)))
-    // ponytail: SAFETY FLOOR — folder kosong (fresh bundle / path salah) TIDAK boleh wipe semua PB.
-    // Empty folder → skip semua delete. Buat clear total pakai CLI: manage-templates.js delete --all
-    const toDelete = folderFiles.length === 0 ? [] : pbTemplates.filter(t => !folderKeys.has(key(t.category, t.name)))
-
-    // Crop tiap kandidat ke aspect orientasinya (portrait 2:3 / landscape 3:2, face-aware) lalu upload.
-    let added = 0, cropped = 0, deleted = 0, anyDetectDown = false
-    const skipped: { name: string; reason: string }[] = []
-
-    for (const f of toAdd) {
-      const dims = await readDims(f.fp)
-      if (!dims) { skipped.push({ name: `${f.category}/${f.name}`, reason: 'tidak bisa baca dimensi' }); continue }
       try {
-        // Print: overlay bukan foto — crop 2:3 + face-detect ngerusak preview layout non-2:3
-        // (2R landscape kepotong jadi sliver). Cukup resize+flatten putih buat thumbnail grid.
-        const out = f.sidecar?.engine_type === 'print'
-          ? { buf: await normalizeJpeg(sharp(f.fp)), mime: 'image/jpeg', cropped: false, detectDown: false }
-          : await cropToAspect(f.fp, dims.w, dims.h)
-        if (out.detectDown) anyDetectDown = true
-        const ok = await uploadTemplate(token, f, out.buf, out.mime)
-        if (ok) { added++; if (out.cropped) cropped++ }
-        else skipped.push({ name: `${f.category}/${f.name}`, reason: 'upload gagal' })
-      } catch {
-        skipped.push({ name: `${f.category}/${f.name}`, reason: 'crop/encode gagal (file rusak?)' })
+        if (!EMAIL || !PASSWORD) {
+          send({ ok: false, error: 'POCKETBASE_EMAIL/PASSWORD belum di-set' })
+          controller.close()
+          return
+        }
+
+        const inbox = path.resolve(process.cwd(), 'face_server', 'put-template-here')
+        const folderFiles = scanFolder(inbox)
+
+        send({ kind: 'progress', message: 'Koneksi ke database...' })
+        const token = await login()
+        
+        send({ kind: 'progress', message: 'Membaca data lama...' })
+        const pbTemplates = await listTemplates(token)
+
+        const key = (category: string, name: string) => `${category}||${name}`
+        const folderKeys = new Set(folderFiles.map(f => key(f.category, f.name)))
+        const pbByKey = new Map(pbTemplates.map(t => [key(t.category, t.name), t]))
+
+        const toAdd = folderFiles.filter(f => !pbByKey.has(key(f.category, f.name)))
+        const toDelete = folderFiles.length === 0 ? [] : pbTemplates.filter(t => !folderKeys.has(key(t.category, t.name)))
+
+        let added = 0, cropped = 0, deleted = 0, anyDetectDown = false
+        const skipped: { name: string; reason: string }[] = []
+
+        const total = toAdd.length + toDelete.length
+        let current = 0
+
+        for (const f of toAdd) {
+          current++
+          send({ kind: 'progress', current, total, name: f.name })
+          const dims = await readDims(f.fp)
+          if (!dims) { skipped.push({ name: `${f.category}/${f.name}`, reason: 'tidak bisa baca dimensi' }); continue }
+          try {
+            const out = f.sidecar?.engine_type === 'print'
+              ? { buf: await normalizeJpeg(sharp(f.fp)), mime: 'image/jpeg', cropped: false, detectDown: false }
+              : await cropToAspect(f.fp, dims.w, dims.h)
+            if (out.detectDown) anyDetectDown = true
+            const ok = await uploadTemplate(token, f, out.buf, out.mime)
+            if (ok) { added++; if (out.cropped) cropped++ }
+            else skipped.push({ name: `${f.category}/${f.name}`, reason: 'upload gagal' })
+          } catch {
+            skipped.push({ name: `${f.category}/${f.name}`, reason: 'crop/encode gagal (file rusak?)' })
+          }
+        }
+        
+        for (const t of toDelete) {
+          current++
+          send({ kind: 'progress', current, total, name: t.name, isDelete: true })
+          if (await deleteTemplate(token, t.id)) deleted++
+        }
+
+        send({ ok: true, added, cropped, deleted, detectDown: anyDetectDown, skipped })
+      } catch (e) {
+        const message = e instanceof Error ? e.message : 'Sync gagal'
+        send({ ok: false, error: message })
+      } finally {
+        controller.close()
       }
     }
-    for (const t of toDelete) if (await deleteTemplate(token, t.id)) deleted++
+  })
 
-    return NextResponse.json({ ok: true, added, cropped, deleted, detectDown: anyDetectDown, skipped })
-  } catch (e) {
-    const message = e instanceof Error ? e.message : 'Sync gagal'
-    return NextResponse.json({ ok: false, error: message }, { status: 500 })
-  }
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    }
+  })
 }

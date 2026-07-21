@@ -572,10 +572,29 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
     try {
       const syncRes = await fetch('/api/sync-templates', { method: 'POST' })
       if (!syncRes.ok) { setFetchStatus('err'); setTimeout(() => setFetchStatus('idle'), 2500); return }
-      const d = await syncRes.json() as {
-        added: number; cropped: number; deleted: number
-        detectDown: boolean; skipped: { name: string; reason: string }[]
+      
+      const reader = syncRes.body?.getReader()
+      if (!reader) throw new Error('No body')
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let d: any = null
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = JSON.parse(line.substring(6))
+            if (data.ok === true) d = data
+            else if (data.ok === false) throw new Error(data.error)
+          }
+        }
       }
+      if (!d) throw new Error('Incomplete')
+
       const results = await fetchPocketBaseTemplates(pbUrl)
       onRefreshTemplates?.(results)
       const parts = [`${d.added} masuk`]

@@ -12,7 +12,7 @@ export type SyncResult = {
 }
 
 export type SyncPhase =
-  | { kind: 'syncing' }
+  | { kind: 'syncing'; message?: string; current?: number; total?: number; name?: string }
   | { kind: 'done'; result: SyncResult }
   | { kind: 'error'; message: string }
 
@@ -53,10 +53,18 @@ export function SyncProgress({ phase, onClose }: Props) {
         {phase.kind === 'syncing' && (
           <div style={{ textAlign: 'center', padding: '20px 0' }}>
             <div style={{ display: 'inline-block', fontSize: 40, animation: 'sync-spin 0.9s linear infinite', marginBottom: 16 }}>↻</div>
-            <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 500, marginBottom: 8 }}>Menyinkronkan template…</h2>
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-muted)', lineHeight: 1.5 }}>
-              Membaca folder, crop 2:3, tulis ke database.<br />Jangan tutup jendela ini.
+            <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 500, marginBottom: 8 }}>
+              {phase.total && phase.current ? `Menyinkronkan (${phase.current}/${phase.total})` : 'Menyinkronkan template…'}
+            </h2>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-muted)', lineHeight: 1.5, minHeight: 42 }}>
+              {phase.name ? <span style={{ color: '#fff' }}>{phase.name}</span> : (phase.message || 'Membaca folder, crop 2:3, tulis ke database.')}<br />
+              Jangan tutup jendela ini.
             </p>
+            {phase.total && phase.current && (
+              <div style={{ width: '100%', height: 4, background: 'rgba(255,255,255,0.1)', borderRadius: 2, marginTop: 16, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${(phase.current / phase.total) * 100}%`, background: '#a78bfa', transition: 'width 0.2s' }} />
+              </div>
+            )}
           </div>
         )}
 

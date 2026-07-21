@@ -34,26 +34,23 @@ export function rotatedCanvasSize(w: number, h: number, deg: number): { w: numbe
 // video frame) → rotasi CSS live preview ga ke-apply ke hasil. Ini yang bikin DSLR bisa diputer
 // kayak webcam.
 //
-// ⚠️ EXIF FIX (2026-07-21): Canon DSLR yg dipasang miring/gantung NULIS EXIF orientation tag ke
-// JPEG. Preview <img> di layar AUTO-apply EXIF → keliatan tegak. TAPI <canvas>.drawImage() +
-// new Image() bisa NGABAIN EXIF (atau naturalWidth/Height mentah pre-EXIF) → hasil capture MIRING
-// 90° dari preview, dan canvas STRIP EXIF jadi ga ada tag buat betulin lagi. Foto miring ini yg
-// ke-upload → overlay/frame tegak numpuk di atasnya = "overlay ga masuk".
+// ⚠️ EXIF FIX (2026-07-21) REVISED:
+// digiCamControl live preview (CANON_LIVE) TIDAK punya EXIF → gambarnya pure sensor mentah (miring).
+// Tapi hasil jepretan asli dari kamera ADA EXIF-nya. Kalau kita pakai 'from-image', hasil jepretan
+// bakal otomatis tegak karena EXIF, TAPI Kiosk udah keburu muter Live Preview (rotation=90/270).
+// Akibatnya: Tegak (EXIF) + Diputer (Kiosk) = MIRING LAGI (Double Rotation).
 //
-// Fix: createImageBitmap(blob, {imageOrientation:'from-image'}) MEMAKSA EXIF ter-bake ke pixel
-// bitmap (persis kayak <img> preview) → capture == preview. Rotasi manual operator lalu di-apply
-// DI ATAS orientasi yg udah bener. deg 0 pun WAJIB lewat sini (bake EXIF), bukan passthrough —
-// passthrough dataURL mentah = EXIF masih nempel = tetep miring di konsumen yg ga apply EXIF.
+// Solusi: KITA WAJIB IGNORE EXIF ('none')! Biar hasil jepretan sama-sama mentah/miring kayak
+// Live Preview. Terus kita apply rotasi manual dari Kiosk. Hasilnya: Capture 100% konsisten
+// dengan apa yang dilihat operator di layar Live Preview.
 export async function rotateDataUrl(dataUrl: string, deg: number): Promise<string> {
   const blob = await (await fetch(dataUrl)).blob()
-  // imageOrientation:'from-image' → browser apply EXIF orientation ke pixel. bitmap.width/height
-  // udah POST-orient (dimensi visual bener), beda dari new Image().naturalWidth yg bisa pre-EXIF.
+  // imageOrientation:'none' → browser abaikan EXIF. Dimensi pixel 100% raw dari sensor.
   let bitmap: ImageBitmap
   try {
-    bitmap = await createImageBitmap(blob, { imageOrientation: 'from-image' })
+    bitmap = await createImageBitmap(blob, { imageOrientation: 'none' })
   } catch {
-    // Fallback (browser lama tanpa opsi imageOrientation): decode biasa. Minimal ga crash;
-    // EXIF mungkin ga ter-bake tapi flow tetep jalan.
+    // Fallback (browser lama tanpa opsi imageOrientation): decode biasa. Minimal ga crash.
     bitmap = await createImageBitmap(blob)
   }
   const srcW = bitmap.width
