@@ -344,6 +344,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   const [pauseUsedSec,    setPauseUsedSec]    = useState(config.pause_used_sec ?? 0)
   const pauseStartRef = useRef<number | null>(null)
   const [fetchStatus,     setFetchStatus]     = useState<'idle'|'fetching'|'ok'|'err'>('idle')
+  const [fetchProgress,   setFetchProgress]   = useState<{ current: number; total: number } | null>(null)
   const [fetchSummary,    setFetchSummary]    = useState<string | null>(null)
   const [fetchSkipped,    setFetchSkipped]    = useState<{ name: string; reason: string }[]>([])
   const [engineStatus,    setEngineStatus]    = useState<PbStatus>('idle')
@@ -567,6 +568,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
 
   const handleFetchTemplates = async () => {
     setFetchStatus('fetching')
+    setFetchProgress(null)
     setFetchSummary(null)
     setFetchSkipped([])
     try {
@@ -588,8 +590,13 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         for (const line of lines) {
           if (line.startsWith('data: ')) {
             const data = JSON.parse(line.substring(6))
-            if (data.ok === true) d = data
-            else if (data.ok === false) throw new Error(data.error)
+            if (data.kind === 'progress' && data.current && data.total) {
+              setFetchProgress({ current: data.current, total: data.total })
+            } else if (data.ok === true) {
+              d = data
+            } else if (data.ok === false) {
+              throw new Error(data.error)
+            }
           }
         }
       }
@@ -1254,7 +1261,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                           cursor: fetchStatus === 'fetching' ? 'default' : 'pointer',
                         }}
                       >
-                        {fetchStatus === 'fetching' ? t('set_fetch_loading') as string : fetchStatus === 'ok' ? t('set_fetch_ok') as string : fetchStatus === 'err' ? t('set_fetch_failed') as string : t('set_fetch_idle') as string}
+                        {fetchStatus === 'fetching' ? (fetchProgress ? `Sync (${fetchProgress.current}/${fetchProgress.total})` : t('set_fetch_loading') as string) : fetchStatus === 'ok' ? t('set_fetch_ok') as string : fetchStatus === 'err' ? t('set_fetch_failed') as string : t('set_fetch_idle') as string}
                       </button>
                     </div>
                     {pbCreds && (pbCreds.email || pbCreds.password) && (
