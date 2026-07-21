@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
       body: JSON.stringify(withMachine),
       signal: AbortSignal.timeout(10_000),
+      cache: 'no-store',
     })
     // Worker MENJAWAB non-200 = verdict lisensi.
     // 404 = no active session → freeware (jalan + watermark, bukan lock).

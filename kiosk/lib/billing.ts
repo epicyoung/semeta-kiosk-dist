@@ -19,7 +19,7 @@ export function useHeartbeat(
 
     async function ping() {
       try {
-        const res = await fetch('/api/heartbeat', { method: 'POST', body: JSON.stringify({}), headers: { 'Content-Type': 'application/json' } })
+        const res = await fetch('/api/heartbeat', { method: 'POST', body: JSON.stringify({}), headers: { 'Content-Type': 'application/json' }, cache: 'no-store' })
         if (cancelled) return
         // Worker MENJAWAB non-200 (status 4xx) = verdict lisensi → lock. 503 = offline (callback decide grace).
         if (!res.ok) {

@@ -68,6 +68,8 @@ const COMFY_CN_STRENGTH_OPTS = [
 ]
 const COMFY_CONTROLNET_STRENGTH = 0.8 // fixed di face_server — hanya buat recipe line
 // Video engine (img2vid) providers — semua lewat FAL, bedanya endpoint FAL per provider (Worker).
+// HAPPYHORSE sengaja gak masuk list: OFF permanen (HPP mahal). Kalau mau balik, tambah di sini
+// + isi harga di DEFAULT_VIDEO_COSTS + enable di /dashboard/settings. Server tetap gate via RPC.
 const VIDEO_PROVIDER_OPTS: { value: VideoProvider; label: string }[] = [
   { value: 'LTX',        label: 'LTX 2.3'         },       // 15 token
   { value: 'PIXVERSE',   label: 'PixVerse V6'     },       // 15 token
@@ -75,7 +77,6 @@ const VIDEO_PROVIDER_OPTS: { value: VideoProvider; label: string }[] = [
   { value: 'VEO',        label: 'Veo 3.1'         },       // 35 token
   { value: 'WAN',        label: 'WAN 2.7'         },       // 35 token
   { value: 'KLING',      label: 'Kling v3 Pro'    },       // 40 token
-  { value: 'HAPPYHORSE', label: 'Happy Horse 1.1' },       // 50 token
   { value: 'SEEDANCE',   label: 'Seedance 2.0'    },       // 110 token
 ]
 
@@ -259,7 +260,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   useEffect(() => {
     if (!open) return
     let live = true
-    fetch('/api/heartbeat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+    fetch('/api/heartbeat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}', cache: 'no-store' })
       .then(r => (r.ok ? r.json() : null))
       .then(d => {
         if (!live || !d) return
@@ -272,22 +273,26 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   // Footnote harga video ala SaaS — harga dari dashboard admin (app_settings), bukan hardcode.
   // 1080p: tarif <PROVIDER>_1080 kalau ada; gak ada = provider tsb dicharge 720p (fail-safe Worker).
   const has1080Rate = videoCosts[`${videoProvider}_1080`] != null
+  // Fallback harga token pas offline (ga handshake) — WAJIB mirror app_settings.engines
+  // (harga jual token, bukan HPP dollar). Sumber: pricing 2026-07-20, migration 20260720000002.
+  // Online = videoCosts dari admin nimpa ini. HAPPYHORSE sengaja gak ada = disembunyiin default.
   const DEFAULT_VIDEO_COSTS: Record<string, number> = {
-    PIXVERSE: 10, PIXVERSE_1080: 20,
-    LTX: 9, LTX_1080: 9,
-    VIDU: 14, VIDU_1080: 30,
-    VEO: 22, VEO_1080: 22,
-    WAN: 22, WAN_1080: 33,
-    KLING: 25,
-    SEEDANCE: 57, HAPPYHORSE: 30
+    PIXVERSE: 15, PIXVERSE_1080: 30,
+    LTX: 15, LTX_1080: 15,           // LTX native 1080p, tarif sama
+    VIDU: 20, VIDU_1080: 45,
+    VEO: 35, VEO_1080: 35,           // Veo 1080p harga sama
+    WAN: 35, WAN_1080: 50,
+    KLING: 40,                       // no param resolusi → 1080p fallback 720p
+    SEEDANCE: 110,
   }
   const selectedVideoCost = (videoResolution === '1080p' && has1080Rate
     ? (videoCosts[`${videoProvider}_1080`] ?? DEFAULT_VIDEO_COSTS[`${videoProvider}_1080`])
     : (videoCosts[videoProvider] ?? DEFAULT_VIDEO_COSTS[videoProvider])) as number | undefined
   const videoProviderOpts = VIDEO_PROVIDER_OPTS.filter(o => {
     // Filter provider yang di-disable dari Admin UI. Server cuma ngirim yang enabled.
-    if (Object.keys(videoCosts).length > 0 && videoCosts[o.value] == null) return false;
-    return true;
+    if (Object.keys(videoCosts).length > 0) return videoCosts[o.value] != null;
+    // Fallback saat offline (ga handshake): hanya tampilkan yang ada tarif defaultnya.
+    return DEFAULT_VIDEO_COSTS[o.value] != null || DEFAULT_VIDEO_COSTS[`${o.value}_1080`] != null;
   }).map(o => {
     const cost720 = videoCosts[o.value] ?? DEFAULT_VIDEO_COSTS[o.value]
     const cost1080 = videoCosts[`${o.value}_1080`] ?? DEFAULT_VIDEO_COSTS[`${o.value}_1080`]
@@ -622,7 +627,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   const verifySecret = async (): Promise<'valid' | 'expired' | 'invalid' | 'offline'> => {
     try {
       const res = await fetch('/api/heartbeat', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}', cache: 'no-store'
       })
       if (res.ok) {
         const d = await res.json().catch(() => ({}))
