@@ -273,17 +273,17 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   // Footnote harga video ala SaaS — harga dari dashboard admin (app_settings), bukan hardcode.
   // 1080p: tarif <PROVIDER>_1080 kalau ada; gak ada = provider tsb dicharge 720p (fail-safe Worker).
   const has1080Rate = videoCosts[`${videoProvider}_1080`] != null
-  // Fallback harga token pas offline (ga handshake) — WAJIB mirror app_settings.engines
-  // (harga jual token, bukan HPP dollar). Sumber: pricing 2026-07-20, migration 20260720000002.
-  // Online = videoCosts dari admin nimpa ini. HAPPYHORSE sengaja gak ada = disembunyiin default.
+  // Fallback harga token cuma buat kiosk yang BELUM PERNAH handshake (hari-1, offline total).
+  // Online/freeware = videoCosts dari admin SELALU nimpa ini. WAJIB mirror app_settings.engines
+  // (COST HD/FHD di /dashboard/settings) biar ga mismatch pas fallback kepake.
   const DEFAULT_VIDEO_COSTS: Record<string, number> = {
-    PIXVERSE: 15, PIXVERSE_1080: 30,
-    LTX: 15, LTX_1080: 15,           // LTX native 1080p, tarif sama
-    VIDU: 20, VIDU_1080: 45,
-    VEO: 35, VEO_1080: 35,           // Veo 1080p harga sama
-    WAN: 35, WAN_1080: 50,
-    KLING: 40,                       // no param resolusi → 1080p fallback 720p
-    SEEDANCE: 110,
+    LTX: 9, LTX_1080: 9,             // LTX native 1080p, tarif sama
+    PIXVERSE: 10, PIXVERSE_1080: 20,
+    VIDU: 14, VIDU_1080: 30,
+    VEO: 22, VEO_1080: 22,           // Veo 1080p harga sama
+    WAN: 22, WAN_1080: 33,
+    KLING: 25,                       // no param resolusi → 1080p fallback 720p
+    SEEDANCE: 57, SEEDANCE_1080: 77,
   }
   const selectedVideoCost = (videoResolution === '1080p' && has1080Rate
     ? (videoCosts[`${videoProvider}_1080`] ?? DEFAULT_VIDEO_COSTS[`${videoProvider}_1080`])
@@ -733,7 +733,8 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         comfy_cn_strength:  comfyCnStrength,
         max_templates:      maxTemplates,
         enable_magic_catcher: magicCatcher,
-        enable_video_engine: videoEngine,
+        // Photo Print = non-AI → video selalu OFF, jangan nyimpen state nyangkut dari mode lain.
+        enable_video_engine: engine === 'print_local' ? false : videoEngine,
         video_provider:      videoProvider,
         video_resolution:    videoResolution,
       }
@@ -769,7 +770,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         comfy_cn_strength:  comfyCnStrength,
         max_templates:      maxTemplates,
         enable_magic_catcher: magicCatcher,
-        enable_video_engine: videoEngine,
+        enable_video_engine: engine === 'print_local' ? false : videoEngine,
         video_provider:      videoProvider,
         video_resolution:    videoResolution,
         ...(logo_url ? { logo_url } : {}),
@@ -1088,8 +1089,9 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
               {/* Video engine (img2vid) — img output terakhir jadi seed ke provider video via
                   Worker. API key hidup di Worker (FAL), gak pernah ke browser. Default OFF.
                   Kebuka kalau super admin nyalain toggle Video kiosk ini (isVideoUnlocked)
-                  atau godmode — kunci asli fail-closed di RPC deduct_video_tokens. */}
-              {(() => { const videoLocked = !isVideoUnlocked(config); return (<>
+                  atau godmode — kunci asli fail-closed di RPC deduct_video_tokens.
+                  Photo Print (non-AI) = nol AI → seluruh blok video disembunyiin. */}
+              {engine !== 'print_local' && (() => { const videoLocked = !isVideoUnlocked(config); return (<>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', gap: 16 }}>
                 <div style={{ minWidth: 0 }}>
                   <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>

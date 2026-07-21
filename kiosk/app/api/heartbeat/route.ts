@@ -26,11 +26,15 @@ export async function POST(req: NextRequest) {
     if (!res.ok) {
       if (res.status === 404) {
         // Freeware: teruskan force_lock supaya admin bisa takeover kiosk tanpa sewa aktif.
+        // video_costs + video_unlocked ikut diteruskan — video jalan walau freeware, jadi
+        // harga & izinnya harus sampe ke FE (kalau nggak dropdown jatuh ke fallback & mismatch).
         const fw = await res.json().catch(() => ({} as Record<string, unknown>))
         return NextResponse.json({
           remaining_sec: 0, licensed: false, freeware: true,
           force_locked: fw.force_locked === true,
           lock_message: fw.lock_message ?? null,
+          video_costs: fw.video_costs ?? {},
+          video_unlocked: fw.video_unlocked === true,
         })
       }
       return NextResponse.json({ reason: reasonForStatus(res.status) }, { status: res.status })
