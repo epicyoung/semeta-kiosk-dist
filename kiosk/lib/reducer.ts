@@ -55,13 +55,6 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
       if (state.screen !== 'multicapture') return state
       return { ...state, shots: [] }
 
-    case 'PICK_RESULT': {
-      // Multi-template: tamu pilih 1 hasil di grid → collapse ke framechooser (flow single lama).
-      if (state.screen !== 'resultchooser') return state
-      const r = action.result
-      return { screen: 'framechooser', aiUrl: r.aiUrl, originalUrl: r.originalUrl, sourceUrl: r.sourceUrl, rawAiUrl: r.rawAiUrl, base: r.base, processingSec: r.processingSec, templateId: r.templateId, allResults: state.results }
-    }
-
     case 'GO_FACE_ASSIGN':
       if (state.screen !== 'faceassign') return state
       return { ...state, faces: action.faces, templateSlots: action.templateSlots, assignments: {} }
@@ -114,7 +107,8 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
         return { screen: 'preview', aiUrl: action.aiUrl, originalUrl: action.originalUrl, sourceUrl: action.sourceUrl, rawAiUrl: action.rawAiUrl, base: action.base, processingSec: action.processingSec, selectedFrame: null, videoUrl: action.videoUrl, printSize: action.printSize, templateId: action.templateId }
       // Landing di frame chooser dulu — tamu pilih frame, baru NEXT ke preview (upload+print).
       // videoUrl = hasil video engine (opsional) — kebawa terus sampai preview buat tab Video.
-      return { screen: 'framechooser', aiUrl: action.aiUrl, originalUrl: action.originalUrl, sourceUrl: action.sourceUrl, rawAiUrl: action.rawAiUrl, base: action.base, processingSec: action.processingSec, videoUrl: action.videoUrl, templateId: action.templateId }
+      // allResults = multi-template (2-4 hasil): kebawa langsung ke preview grid TANPA resultchooser.
+      return { screen: 'framechooser', aiUrl: action.aiUrl, originalUrl: action.originalUrl, sourceUrl: action.sourceUrl, rawAiUrl: action.rawAiUrl, base: action.base, processingSec: action.processingSec, videoUrl: action.videoUrl, templateId: action.templateId, allResults: action.allResults }
 
     case 'CONFIRM_FRAME':
       if (state.screen !== 'framechooser') return state
@@ -145,8 +139,6 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
         }
         return { screen: 'template', imageUrl: state.imageUrl, category: state.category, selected: state.templates }
       }
-      // resultchooser BACK = restart ke idle — re-run N swap ga aman, hasil udah ke-save lokal.
-      if (state.screen === 'resultchooser') return { screen: 'idle' }
       // Re-edit pakai selfie BERSIH — originalUrl bisa ke-watermark (freemium) → face crop di FaceAssign kebawa watermark.
       if (state.screen === 'framechooser') return { screen: 'category', imageUrl: state.sourceUrl ?? state.originalUrl }
       // Preview BACK ("Ganti Pilihan") = re-pilih TEMPLATE → balik ke category (pintu pilih template).

@@ -26,8 +26,9 @@ export function TemplateScreen({ state, dispatch, templates, maxTemplates, engin
   const hasReal = templates.length > 0
   const isPrintMode = engineMode === 'print_local'
   const allList = hasReal ? templates : (isPrintMode ? [] : DUMMY_TEMPLATES)
+  // Filter per kategori (single & multi sama). Multi: tamu pilih beberapa di kategori ini, BACK
+  // ganti kategori, pilih lagi — seleksi ga ilang (state.selected persist lintas kategori).
   const filtered = allList.filter(t => t.category === state.category)
-  // Multi-template: filter per kategori (sama kayak single), sesuai request bos.
   const list = filtered.length > 0 ? filtered : allList
   const selectedCount = state.selected.length
 

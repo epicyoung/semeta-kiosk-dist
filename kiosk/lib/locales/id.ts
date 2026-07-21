@@ -18,9 +18,6 @@ const id: Translations = {
   template_subtitle: "Cari yang paling 'kamu banget'.",
   template_multi_counter: 'dipilih',
 
-  // ── ResultChooserScreen ──────────────────────────────────────────────────────
-  resultchooser_title: 'Pilih Favoritmu',
-  resultchooser_subtitle: 'Ketuk satu hasil untuk lanjut',
 
   // ── Shared navigation buttons ────────────────────────────────────────────────
   nav_back: '← Sebelumnya',

@@ -18,9 +18,6 @@ const ko: Translations = {
   template_subtitle: "가장 '나'다운 걸로 골라봐.",
   template_multi_counter: '선택됨',
 
-  // ── ResultChooserScreen ──────────────────────────────────────────────────────
-  resultchooser_title: '마음에 드는 결과 선택',
-  resultchooser_subtitle: '하나를 눌러 계속하세요',
 
   // ── Shared navigation buttons ────────────────────────────────────────────────
   nav_back: '← 이전',

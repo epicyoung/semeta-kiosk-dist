@@ -16,9 +16,6 @@ export interface Translations {
   template_subtitle: string
   template_multi_counter: string  // "selected" — counter suffix (N/M selected)
 
-  // ── ResultChooserScreen (VIP multi-template) ─────────────────────────────────
-  resultchooser_title: string
-  resultchooser_subtitle: string
 
   // ── Shared navigation buttons ────────────────────────────────────────────────
   nav_back: string      // "← Previous"

@@ -20,9 +20,6 @@ const mythEn: Translations = {
   template_subtitle: 'Every frame holds a different fate.\nChoose the one that resonates.',
   template_multi_counter: 'bound',
 
-  // ── ResultChooserScreen — oracle flavor
-  resultchooser_title: 'Claim Thy Vision',
-  resultchooser_subtitle: 'Touch the one fate you would keep.',
 
   liveview_title: 'Face the Light ✦',
   liveview_subtitle: "Stand firm before the oracle's gleam,\nand step into the dream.",

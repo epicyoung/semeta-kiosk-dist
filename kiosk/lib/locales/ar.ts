@@ -18,9 +18,6 @@ const ar: Translations = {
   template_subtitle: 'نقي التصميم اللي يمثلك.',
   template_multi_counter: 'محدد',
 
-  // ── ResultChooserScreen ──────────────────────────────────────────────────────
-  resultchooser_title: 'اختر المفضلة لديك',
-  resultchooser_subtitle: 'اضغط على نتيجة واحدة للمتابعة',
 
   // ── Shared navigation buttons ────────────────────────────────────────────────
   nav_back: '→ السابق',

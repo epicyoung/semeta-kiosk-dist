@@ -46,12 +46,14 @@ export async function animateImage(
 
 // Finalize: video mentah FAL → letterbox 2:3 + burn frame+QR (ffmpeg server) → blob URL lokal.
 // FAIL-SAFE: gagal apa pun return null → caller tetep pakai video mentah (tamu ga kehilangan video).
+// Returns blobUrl (for <video> playback) + localPath (for server-side R2 upload from disk).
+export type FinalizedVideo = { blobUrl: string; localPath: string | null }
 export async function finalizeVideo(
   videoUrl: string,
   overlayPng: string | null,
   eventName: string,
   seq: string,
-): Promise<string | null> {
+): Promise<FinalizedVideo | null> {
   try {
     const res = await fetch('/api/finalize-video', {
       method: 'POST',
@@ -59,8 +61,10 @@ export async function finalizeVideo(
       body: JSON.stringify({ video_url: videoUrl, overlay_png: overlayPng, event_name: eventName, seq }),
     })
     if (!res.ok) return null
+    // finalize-video API returns the local disk path in X-Semeta-Path header
+    const localPath = res.headers.get('X-Semeta-Path')
     const blob = await res.blob()
-    return URL.createObjectURL(blob)
+    return { blobUrl: URL.createObjectURL(blob), localPath }
   } catch {
     return null
   }

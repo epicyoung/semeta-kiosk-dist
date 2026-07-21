@@ -18,9 +18,6 @@ const zh: Translations = {
   template_subtitle: '选个最懂你的。',
   template_multi_counter: '已选',
 
-  // ── ResultChooserScreen ──────────────────────────────────────────────────────
-  resultchooser_title: '选择你的最爱',
-  resultchooser_subtitle: '点选一张继续',
 
   // ── Shared navigation buttons ────────────────────────────────────────────────
   nav_back: '← 上一步',

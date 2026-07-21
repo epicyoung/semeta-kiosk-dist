@@ -18,9 +18,6 @@ const en: Translations = {
   template_subtitle: "Pick the one that screams 'you'.",
   template_multi_counter: 'selected',
 
-  // ── ResultChooserScreen ──────────────────────────────────────────────────────
-  resultchooser_title: 'Pick Your Favorite',
-  resultchooser_subtitle: 'Tap one result to continue',
 
   // ── Shared navigation buttons ────────────────────────────────────────────────
   nav_back: '← Previous',

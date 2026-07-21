@@ -1,4 +1,4 @@
-import type { PointerEvent, ReactNode } from 'react'
+import type { CSSProperties, PointerEvent, ReactNode } from 'react'
 
 function spawnBurst(x: number, y: number) {
   for (let i = 0; i < 12; i++) {
@@ -20,9 +20,12 @@ type Props = {
   variant?: 'primary' | 'secondary' | 'ghost'
   disabled?: boolean
   className?: string
+  // Override sebagian style variant (mis. warna saat PAUSED) — di-MERGE di atas, bukan replace,
+  // biar boxShadow variant tetep kepake kecuali caller sengaja nimpa.
+  style?: CSSProperties
 }
 
-export function TouchButton({ children, onClick, onPointerDown, variant = 'primary', disabled, className = '' }: Props) {
+export function TouchButton({ children, onClick, onPointerDown, variant = 'primary', disabled, className = '', style }: Props) {
   const handlePointerDown = (e: PointerEvent<HTMLButtonElement>) => {
     spawnBurst(e.clientX, e.clientY)
     onPointerDown?.(e)
@@ -32,25 +35,27 @@ export function TouchButton({ children, onClick, onPointerDown, variant = 'prima
     onClick?.()
   }
 
+  const variantStyle: CSSProperties = variant === 'primary' ? {
+    background: 'rgba(255,255,255,0.18)',
+    color: 'rgba(255,255,255,0.9)',
+    boxShadow: 'inset 1px 1px 0 rgba(255,255,255,0.4), inset -1px -1px 0 rgba(0,0,0,0.2)',
+  } : variant === 'secondary' ? {
+    background: 'rgba(255,255,255,0.1)',
+    color: '#ffffff',
+    boxShadow: 'inset 1px 1px 0 rgba(255,255,255,0.2), inset -1px -1px 0 rgba(0,0,0,0.2)',
+  } : {
+    background: 'transparent',
+    color: '#ffffff',
+    boxShadow: 'none',
+  }
+
   return (
     <button
       onClick={disabled ? undefined : handleClick}
       onPointerDown={disabled ? undefined : handlePointerDown}
       disabled={disabled}
       className={['glass-btn h-[72px]', className].join(' ')}
-      style={variant === 'primary' ? {
-        background: 'rgba(255,255,255,0.18)',
-        color: 'rgba(255,255,255,0.9)',
-        boxShadow: 'inset 1px 1px 0 rgba(255,255,255,0.4), inset -1px -1px 0 rgba(0,0,0,0.2)',
-      } : variant === 'secondary' ? {
-        background: 'rgba(255,255,255,0.1)',
-        color: '#ffffff',
-        boxShadow: 'inset 1px 1px 0 rgba(255,255,255,0.2), inset -1px -1px 0 rgba(0,0,0,0.2)',
-      } : {
-        background: 'transparent',
-        color: '#ffffff',
-        boxShadow: 'none',
-      }}
+      style={{ ...variantStyle, ...style }}
     >
       {children}
     </button>

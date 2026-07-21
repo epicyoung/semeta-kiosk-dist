@@ -378,18 +378,16 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
         dispatch({ type: 'SET_PROGRESS', progress: 100 })
         await new Promise(r => setTimeout(r, REVEAL_DWELL_MS)) // let the crisp reveal paint
         if (controller.signal.aborted) return
-        if (results.length === 1) {
-          // Single = jalur lama, byte-identik: langsung ke framechooser via SHOW_PREVIEW.
-          const r = results[0]
-          const videoUrl = await maybeAnimate(r.rawAiUrl ?? r.aiUrl, r.base)
-          dispatch({
-            type: 'SHOW_PREVIEW', aiUrl: r.aiUrl, originalUrl: r.originalUrl,
-            sourceUrl: r.sourceUrl, rawAiUrl: r.rawAiUrl, base: r.base, processingSec: r.processingSec, videoUrl, templateId: r.templateId,
-          })
-        } else {
-          // Multi = tamu pilih 1 dulu di grid chooser, baru masuk flow frame/preview.
-          dispatch({ type: 'SET_STATE', state: { screen: 'resultchooser', results, imageUrl: state.imageUrl } })
-        }
+        // Single & multi sama-sama langsung ke framechooser via SHOW_PREVIEW — NO resultchooser.
+        // Multi bawa semua hasil (allResults) → preview nampilin 4-4nya di grid, flip Ori jadi satu
+        // gede, print/video minta pilih pas ditekan (dialog udah ada). Hasil ke-0 = chosen default.
+        const r = results[0]
+        const videoUrl = await maybeAnimate(r.rawAiUrl ?? r.aiUrl, r.base)
+        dispatch({
+          type: 'SHOW_PREVIEW', aiUrl: r.aiUrl, originalUrl: r.originalUrl,
+          sourceUrl: r.sourceUrl, rawAiUrl: r.rawAiUrl, base: r.base, processingSec: r.processingSec, videoUrl, templateId: r.templateId,
+          allResults: results.length > 1 ? results : undefined,
+        })
       })()
         .catch(() => { if (!controller.signal.aborted) setTimedOut(true) })
         .finally(() => clearTimeout(timeout))

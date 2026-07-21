@@ -7,12 +7,13 @@ import { useT } from '@/lib/i18n'
 import type { Translations } from '@/lib/locales/types'
 
 type TFn = (key: keyof Translations) => Translations[keyof Translations]
-type EngineKey = 'faceswap_local' | 'fullbody_local' | 'print_local' | 'faceswap_api' | 'fullbody_api'
+type EngineKey = 'faceswap_local' | 'gohst_local' | 'fullbody_local' | 'print_local' | 'faceswap_api' | 'fullbody_api'
 
 import { LocalTemplateManager } from './LocalTemplateManager'
 
 const ENGINE_OPTS: { value: EngineKey; label: string; soon?: boolean }[] = [
   { value: 'faceswap_local', label: 'Faceswap (LOCAL)' },
+  { value: 'gohst_local',    label: 'GOHST (LOCAL)' },
   { value: 'fullbody_local', label: 'Fullbody (LOCAL)' }, // = engine comfy stylize via face_server
   { value: 'print_local',    label: 'Photo Print (non-AI)' }, // photobooth klasik: overlay PNG + N shot, nol token
   { value: 'faceswap_api',   label: 'Faceswap (API) — soon',  soon: true },
@@ -1182,7 +1183,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
 
               {/* VIP: max templates per guest — FACESWAP LOCAL only (multi-swap sequential via
                   face_server :8000). Fullbody = comfy single. Faceswap API belum ada impl multi. */}
-              {engine === 'faceswap_local' && (
+              {(engine === 'faceswap_local' || engine === 'gohst_local') && (
                 <div style={{ padding: '12px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{t('set_max_templates') as string}</span>

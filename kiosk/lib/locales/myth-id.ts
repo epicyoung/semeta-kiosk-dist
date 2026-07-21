@@ -20,9 +20,6 @@ const mythId: Translations = {
   template_subtitle: 'Setiap bingkai membawa takdir berbeda.\nPilih yang paling terasa.',
   template_multi_counter: 'terikat',
 
-  // ── ResultChooserScreen — nada oracle
-  resultchooser_title: 'Raih Visimu',
-  resultchooser_subtitle: 'Sentuh satu takdir yang ingin kau simpan.',
 
   liveview_title: 'Hadapi Cahayamu ✦',
   liveview_subtitle: 'Berdiri tegak di hadapan cahaya,\ndan melangkahlah ke dalam mimpimu.',

@@ -11,12 +11,28 @@ export function fitWithin(width: number, height: number, maxPx: number): { w: nu
   return { w: Math.round(width * scale), h: Math.round(height * scale) }
 }
 
+/**
+ * Konversi blob: URL (ephemeral, browser-only) ke data: URL (persistent, serializable).
+ * Penting buat video _C: blob URL bisa invalid kalau state React udah pindah / tab navigate.
+ * Data URL aman di-pass ke uploadAsset kapan aja — ga terikat lifecycle blob store browser.
+ */
+export async function blobUrlToDataUrl(blobUrl: string): Promise<string> {
+  const res = await fetch(blobUrl)
+  const blob = await res.blob()
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
+}
+
 /** Upload a photo/video to R2 via the Next.js API route. Returns { url, key }.
  * S = seed img2vid: image bersih buat FAL (URL R2 publik). Di-resize kayak A/B, no watermark
  * (server skip S). Dipakai supaya FAL bisa akses seed walau hasil AI-nya blob/localhost. */
 export async function uploadAsset(
   dataUrlOrUrl: string,
-  type: "A" | "B" | "C" | "S",
+  type: "A" | "B" | "C" | "S" | `M${number}`,
   sessionId: string,
   meta?: { eventName?: string; durationSec?: number },
 ): Promise<{ url: string; key: string }> {
@@ -73,4 +89,30 @@ async function toBlob(dataUrlOrUrl: string): Promise<Blob> {
   const res = await fetch(dataUrlOrUrl)
   if (!res.ok) throw new Error(`Fetch failed: ${res.status}`)
   return res.blob()
+}
+
+/**
+ * Upload a LOCAL FILE (on the kiosk disk, e.g. C:/semeta/event/.../video.mp4) to R2 via
+ * the Next.js backend → Worker. Reads from disk SERVER-SIDE — no blob URLs, no base64 in
+ * the browser, no memory issues. Critical for video _C.mp4 (FFmpeg output on disk).
+ */
+export async function uploadLocalFile(
+  localPath: string,
+  type: "A" | "B" | "C" | "S" | `M${number}`,
+  sessionId: string,
+  meta?: { eventName?: string },
+): Promise<{ url: string; key: string }> {
+  const res = await fetch("/api/upload-local-file", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      local_path: localPath,
+      type,
+      session_id: sessionId,
+      event_name: meta?.eventName,
+    }),
+  })
+  if (!res.ok) throw new Error(`Upload local file failed: ${res.status}`)
+  const { url, key } = await res.json()
+  return { url, key }
 }

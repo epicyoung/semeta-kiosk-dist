@@ -65,7 +65,7 @@ export type Frame = {
 export type GenerationSource = 'LOCAL' | 'CLOUD' | 'fal'
 
 // One AI result from the multi-template swap loop. Carries everything the frame→preview flow
-// needs so PICK_RESULT can collapse a chosen result straight into framechooser.
+// needs so SHOW_PREVIEW can hand all results straight into the preview grid (no chooser step).
 export type SwapResult = {
   templateId: string
   aiUrl: string
@@ -151,8 +151,6 @@ export type KioskState =
   // templates: 1 (biasa) atau 2-4 (VIP multi). Swap sequential, 1 selfie mapping dipakai semua.
   // shots: engine 'print' only — N jepretan buat compose layout, imageUrl = shots[0]
   | { screen: 'processing'; progress: number; step: 1 | 2 | 3; imageUrl: string; templates: Template[]; faceMappings?: (number | null)[][]; shots?: string[]; assignments?: FaceAssignments }
-  // Multi-template only: N hasil AI, tamu pilih 1 di grid → PICK_RESULT collapse ke framechooser.
-  | { screen: 'resultchooser'; results: SwapResult[]; imageUrl: string }
   // sourceUrl = selfie bersih (pre-watermark) buat BACK/re-edit + upload _A. originalUrl bisa
   // ke-burn watermark (freemium), jangan dipakai sbg sumber re-detect/upload.
   // rawAiUrl = hasil AI bersih (pre-watermark) buat upload _B. base = seq key dari finalizeLocal.
@@ -174,7 +172,6 @@ export type KioskAction =
   | { type: 'SELECT_CATEGORY'; category: string }
   | { type: 'SELECT_TEMPLATE'; template: Template; maxTemplates: number }
   | { type: 'CONFIRM_TEMPLATE' }
-  | { type: 'PICK_RESULT'; result: SwapResult }
   | { type: 'GO_FACE_ASSIGN'; faces: Face[]; templateSlots: FaceSlot[] }
   | { type: 'ASSIGN_FACE'; faceId: string; slotId: string }
   | { type: 'UNASSIGN_FACE'; faceId: string }
@@ -182,7 +179,7 @@ export type KioskAction =
   | { type: 'START_PROCESSING'; faceMappings?: (number | null)[][] }
   | { type: 'SET_PROGRESS'; progress: number }
   // direct = skip framechooser langsung ke preview (Photo Print: overlay udah dibakar, frame dobel haram)
-  | { type: 'SHOW_PREVIEW'; aiUrl: string; originalUrl: string; sourceUrl?: string; rawAiUrl?: string; base?: string; processingSec?: number; videoUrl?: string; direct?: boolean; printSize?: PrintSize; templateId?: string }
+  | { type: 'SHOW_PREVIEW'; aiUrl: string; originalUrl: string; sourceUrl?: string; rawAiUrl?: string; base?: string; processingSec?: number; videoUrl?: string; direct?: boolean; printSize?: PrintSize; templateId?: string; allResults?: SwapResult[] }
   | { type: 'GO_DELIVERY'; aiUrl: string; originalUrl: string; uploadAiUrl: string; uploadOriginalUrl: string }
   | { type: 'SELECT_FRAME'; frame: Frame | null }
   | { type: 'CONFIRM_FRAME'; frame: Frame | null } // framechooser NEXT → preview bawa frame kepilih

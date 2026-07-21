@@ -18,9 +18,6 @@ const ja: Translations = {
   template_subtitle: '「自分らしさ」で選ぼう。',
   template_multi_counter: '選択済み',
 
-  // ── ResultChooserScreen ──────────────────────────────────────────────────────
-  resultchooser_title: 'お気に入りを選択',
-  resultchooser_subtitle: '1つ選んで続行',
 
   // ── Shared navigation buttons ────────────────────────────────────────────────
   nav_back: '← 前へ',

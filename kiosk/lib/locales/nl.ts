@@ -18,9 +18,6 @@ const nl: Translations = {
   template_subtitle: "Kies degene die echt 'jij' schreeuwt.",
   template_multi_counter: 'geselecteerd',
 
-  // ── ResultChooserScreen ──────────────────────────────────────────────────────
-  resultchooser_title: 'Kies je favoriet',
-  resultchooser_subtitle: 'Tik op één resultaat om door te gaan',
 
   // ── Shared navigation buttons ────────────────────────────────────────────────
   nav_back: '← Vorige',

@@ -13,7 +13,6 @@ import { TemplateScreen } from '@/components/screens/TemplateScreen'
 import { FaceAssignScreen } from '@/components/screens/FaceAssignScreen'
 import { MultiCaptureScreen } from '@/components/screens/MultiCaptureScreen'
 import { ProcessingScreen } from '@/components/screens/ProcessingScreen'
-import { ResultChooserScreen } from '@/components/screens/ResultChooserScreen'
 import { PreviewScreen } from '@/components/screens/PreviewScreen'
 import { ExpiredScreen } from '@/components/screens/ExpiredScreen'
 import { ConsentScreen } from '@/components/screens/ConsentScreen'
@@ -24,7 +23,7 @@ import { useOrientedFrames } from '@/lib/frames'
 import { isVideoUnlocked } from '@/lib/video'
 
 const SCREEN_ORDER: KioskState['screen'][] = [
-  'idle', 'consent', 'liveview', 'category', 'template', 'multicapture', 'faceassign', 'processing', 'resultchooser', 'framechooser', 'preview',
+  'idle', 'consent', 'liveview', 'category', 'template', 'multicapture', 'faceassign', 'processing', 'framechooser', 'preview',
 ]
 
 const DUMMY_TEMPLATE = { id: 'd1', name: 'Template 1', category: 'faceswap', token_cost: 1, thumbnail_url: null, gender_filter: 'ALL' as const, engine_type: 'faceswap' as const, positive_prompt: null, negative_prompt: null, api_endpoint: null, video_endpoint: null, video_positive_prompt: null, video_negative_prompt: null }
@@ -53,10 +52,6 @@ const SCREEN_INIT: Partial<Record<KioskState['screen'], KioskState>> = {
   },
   multicapture: { screen: 'multicapture', template: DUMMY_PRINT_TEMPLATE, shots: [] },
   processing: { screen: 'processing', progress: 0, step: 1, imageUrl: '', templates: [DUMMY_TEMPLATE], assignments: {} },
-  resultchooser: { screen: 'resultchooser', imageUrl: '', results: [
-    { templateId: 'd1', aiUrl: '/photo-1488426862026-3ee34a7d66df.jpg', originalUrl: '', sourceUrl: '' },
-    { templateId: 'd2', aiUrl: '/photo-1488426862026-3ee34a7d66df.jpg', originalUrl: '', sourceUrl: '' },
-  ] },
   framechooser: { screen: 'framechooser', aiUrl: '', originalUrl: '' },
   preview:    { screen: 'preview', aiUrl: '', originalUrl: '', selectedFrame: null },
 }
@@ -258,11 +253,10 @@ export function KioskApp({ config: initialConfig }: { config: KioskConfig }) {
       case 'category':    return <CategoryScreen state={state} dispatch={wrappedDispatch} templates={templates} eventName={config.event_name} licensed={config.licensed ?? false} />
       // Multi-template cuma faceswap LOCAL (butuh face_server :8000 buat sequential swap).
       // Fullbody (comfy) & faceswap API = selalu single-select.
-      case 'template':    return <TemplateScreen state={state} dispatch={wrappedDispatch} templates={templates} maxTemplates={config.engine_mode === 'faceswap_local' ? (config.max_templates ?? 1) : 1} engineMode={config.engine_mode} />
+      case 'template':    return <TemplateScreen state={state} dispatch={wrappedDispatch} templates={templates} maxTemplates={(config.engine_mode === 'faceswap_local' || config.engine_mode === 'gohst_local') ? (config.max_templates ?? 1) : 1} engineMode={config.engine_mode} />
       case 'faceassign':  return <FaceAssignScreen state={state} dispatch={wrappedDispatch} />
       case 'multicapture': return <MultiCaptureScreen state={state} dispatch={wrappedDispatch} cameraSource={config.camera_source} />
       case 'processing':  return <ProcessingScreen state={state} dispatch={wrappedDispatch} generationSource={config.generation_source} eventName={config.event_name} licensed={config.licensed ?? false} videoUnlocked={isVideoUnlocked(config)} comfy={comfyCfg} enableMagicCatcher={config.enable_magic_catcher ?? false} enableVideoEngine={config.enable_video_engine ?? false} videoProvider={config.video_provider ?? 'PIXVERSE'} videoResolution={config.video_resolution ?? '720p'} onUploadFailed={(meta) => log('UPLOAD_FAILED', meta)} />
-      case 'resultchooser': return <ResultChooserScreen state={state} dispatch={wrappedDispatch} />
       case 'framechooser': return <PreviewScreen mode="choose" state={state} dispatch={wrappedDispatch} frames={orientedFrames} config={config} licensed={config.licensed ?? false} eventName={config.event_name} onAction={(a) => log('VISITOR_ACTION', { action: a })} />
       case 'preview':     return <PreviewScreen mode="final" state={state} dispatch={wrappedDispatch} frames={orientedFrames} config={config} licensed={config.licensed ?? false} eventName={config.event_name} onAction={(a) => log('VISITOR_ACTION', { action: a })} />
     }
