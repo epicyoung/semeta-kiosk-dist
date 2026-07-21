@@ -22,8 +22,12 @@ function loadImg(url: string): Promise<HTMLImageElement> {
 }
 
 // SVG string (dari QRCodeSVG yang di-serialize) → HTMLImageElement lewat data URI.
+// qrcode.react kadang emit <svg> TANPA xmlns → <img> nolak ("svg load failed"). Inject kalau kurang.
 function loadSvg(svg: string): Promise<HTMLImageElement> {
-  const dataUri = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`
+  const withNs = svg.includes('xmlns')
+    ? svg
+    : svg.replace(/^<svg\b/, '<svg xmlns="http://www.w3.org/2000/svg"')
+  const dataUri = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(withNs)))}`
   return new Promise((resolve, reject) => {
     const im = new Image()
     im.onload = () => resolve(im)
@@ -64,21 +68,28 @@ export async function buildVideoOverlay(
   if (!ctx) return null
 
   if (frameUrl) {
-    const frame = await loadImg(frameUrl)
-    const { dx, dy, dw, dh } = coverFit(frame.naturalWidth, frame.naturalHeight, OVERLAY_W, OVERLAY_H)
-    ctx.drawImage(frame, dx, dy, dw, dh)
+    // Frame gagal load JANGAN matiin overlay (fail-safe) — QR bisa tetep ke-burn tanpa frame.
+    try {
+      const frame = await loadImg(frameUrl)
+      const { dx, dy, dw, dh } = coverFit(frame.naturalWidth, frame.naturalHeight, OVERLAY_W, OVERLAY_H)
+      ctx.drawImage(frame, dx, dy, dw, dh)
+    } catch { /* frame skip — QR-only overlay */ }
   }
   if (qrSvg) {
-    const qr = await loadSvg(qrSvg)
-    // Pojok kanan atas + white plate, sama posisi kayak QR di Preview. Ukuran ~13% lebar kanvas.
-    const qrSize = Math.round(OVERLAY_W * 0.15)
-    const pad = Math.round(OVERLAY_W * 0.03)
-    const plate = qrSize + pad
-    const x = OVERLAY_W - plate - pad
-    const y = pad
-    ctx.fillStyle = '#fff'
-    ctx.fillRect(x, y, plate, plate)
-    ctx.drawImage(qr, x + pad / 2, y + pad / 2, qrSize, qrSize)
+    // QR gagal render (SVG malformed/kosong) JANGAN matiin overlay — skip QR, frame tetep jalan.
+    // Konsisten fail-safe video path: gagal QR ≠ tamu kehilangan video.
+    try {
+      const qr = await loadSvg(qrSvg)
+      // Pojok kanan atas + white plate, sama posisi kayak QR di Preview. Ukuran ~13% lebar kanvas.
+      const qrSize = Math.round(OVERLAY_W * 0.15)
+      const pad = Math.round(OVERLAY_W * 0.03)
+      const plate = qrSize + pad
+      const x = OVERLAY_W - plate - pad
+      const y = pad
+      ctx.fillStyle = '#fff'
+      ctx.fillRect(x, y, plate, plate)
+      ctx.drawImage(qr, x + pad / 2, y + pad / 2, qrSize, qrSize)
+    } catch { /* QR skip — frame-only overlay (atau null di bawah kalau frame juga kosong) */ }
   }
   return toPngDataUrl(canvas)
 }
