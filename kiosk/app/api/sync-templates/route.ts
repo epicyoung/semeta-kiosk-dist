@@ -254,11 +254,19 @@ export async function POST() {
         const total = toAdd.length + toDelete.length
         let current = 0
 
-        for (const f of toAdd) {
-          current++
-          send({ kind: 'progress', current, total, name: f.name })
+        const runWithConcurrency = async (tasks: (() => Promise<void>)[], limit: number) => {
+          const executing = new Set<Promise<void>>()
+          for (const task of tasks) {
+            const p = task().finally(() => executing.delete(p))
+            executing.add(p)
+            if (executing.size >= limit) await Promise.race(executing)
+          }
+          await Promise.all(executing)
+        }
+
+        const addTasks = toAdd.map(f => async () => {
           const dims = await readDims(f.fp)
-          if (!dims) { skipped.push({ name: `${f.category}/${f.name}`, reason: 'tidak bisa baca dimensi' }); continue }
+          if (!dims) { skipped.push({ name: `${f.category}/${f.name}`, reason: 'tidak bisa baca dimensi' }); current++; send({ kind: 'progress', current, total, name: f.name }); return }
           try {
             const out = f.sidecar?.engine_type === 'print'
               ? { buf: await normalizeJpeg(sharp(f.fp)), mime: 'image/jpeg', cropped: false, detectDown: false }
@@ -269,14 +277,24 @@ export async function POST() {
             else skipped.push({ name: `${f.category}/${f.name}`, reason: 'upload gagal' })
           } catch {
             skipped.push({ name: `${f.category}/${f.name}`, reason: 'crop/encode gagal (file rusak?)' })
+          } finally {
+            current++
+            send({ kind: 'progress', current, total, name: f.name })
           }
-        }
+        })
         
-        for (const t of toDelete) {
-          current++
-          send({ kind: 'progress', current, total, name: t.name, isDelete: true })
-          if (await deleteTemplate(token, t.id)) deleted++
-        }
+        await runWithConcurrency(addTasks, 5)
+
+        const deleteTasks = toDelete.map(t => async () => {
+          try {
+            if (await deleteTemplate(token, t.id)) deleted++
+          } finally {
+            current++
+            send({ kind: 'progress', current, total, name: t.name, isDelete: true })
+          }
+        })
+
+        await runWithConcurrency(deleteTasks, 5)
 
         send({ ok: true, added, cropped, deleted, detectDown: anyDetectDown, skipped })
       } catch (e) {

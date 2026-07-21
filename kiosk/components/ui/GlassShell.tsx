@@ -260,6 +260,7 @@ export function GlassShell({ screenKey, direction, children, config, onLogoClick
               pause={pause}
               resume={resume}
               onRefreshTemplates={onRefreshTemplates}
+              onQuickSync={handleQuickSync}
               onConfigSaved={updated => { setLocalConfig(c => ({ ...c, ...updated })); onConfigChange?.(updated) }}
             />
 

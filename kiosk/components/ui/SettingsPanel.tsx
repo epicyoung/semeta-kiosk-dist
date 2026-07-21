@@ -115,6 +115,7 @@ type Props = {
   pause?: () => void
   resume?: () => void
   onRefreshTemplates?: (templates: Template[]) => void
+  onQuickSync?: () => void
 }
 
 // ── Accordion group ──────────────────────────────────────────────────────────
@@ -223,7 +224,7 @@ function StatusBadge({ status, t }: { status: PbStatus; t: TFn }) {
   )
 }
 
-export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, resume, onRefreshTemplates }: Props) {
+export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, resume, onRefreshTemplates, onQuickSync }: Props) {
   const t = useT()
   const [locale,          setLocale]          = useState<Locale>(config.locale ?? 'myth-en')
   const [eventName,       setEventName]       = useState(config.event_name || 'Semeta Event')
@@ -343,10 +344,6 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   const [pauseQuotaSec,   setPauseQuotaSec]   = useState(config.pause_quota_sec ?? 0)
   const [pauseUsedSec,    setPauseUsedSec]    = useState(config.pause_used_sec ?? 0)
   const pauseStartRef = useRef<number | null>(null)
-  const [fetchStatus,     setFetchStatus]     = useState<'idle'|'fetching'|'ok'|'err'>('idle')
-  const [fetchProgress,   setFetchProgress]   = useState<{ current: number; total: number } | null>(null)
-  const [fetchSummary,    setFetchSummary]    = useState<string | null>(null)
-  const [fetchSkipped,    setFetchSkipped]    = useState<{ name: string; reason: string }[]>([])
   const [engineStatus,    setEngineStatus]    = useState<PbStatus>('idle')
   const [cameraStatus,    setCameraStatus]    = useState<PbStatus>('idle')
   const [pbCreds,         setPbCreds]         = useState<{ email: string; password: string } | null>(null)
@@ -564,58 +561,6 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   const applySolidBg = (color: string) => {
     setSolidBgColor(color)
     document.documentElement.style.setProperty('--solid-bg', color)
-  }
-
-  const handleFetchTemplates = async () => {
-    setFetchStatus('fetching')
-    setFetchProgress(null)
-    setFetchSummary(null)
-    setFetchSkipped([])
-    try {
-      const syncRes = await fetch('/api/sync-templates', { method: 'POST' })
-      if (!syncRes.ok) { setFetchStatus('err'); setTimeout(() => setFetchStatus('idle'), 2500); return }
-      
-      const reader = syncRes.body?.getReader()
-      if (!reader) throw new Error('No body')
-      const decoder = new TextDecoder()
-      let buffer = ''
-      let d: any = null
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = JSON.parse(line.substring(6))
-            if (data.kind === 'progress' && data.current && data.total) {
-              setFetchProgress({ current: data.current, total: data.total })
-            } else if (data.ok === true) {
-              d = data
-            } else if (data.ok === false) {
-              throw new Error(data.error)
-            }
-          }
-        }
-      }
-      if (!d) throw new Error('Incomplete')
-
-      const results = await fetchPocketBaseTemplates(pbUrl)
-      onRefreshTemplates?.(results)
-      const parts = [`${d.added} masuk`]
-      if (d.cropped) parts.push(`${d.cropped} di-crop`)
-      if (d.deleted) parts.push(`${d.deleted} dihapus`)
-      if (d.skipped.length) parts.push(`${d.skipped.length} di-skip`)
-      if (d.detectDown) parts.push('face_server mati (crop pakai center)')
-      setFetchSummary(parts.join(' · '))
-      setFetchSkipped(d.skipped)
-      setFetchStatus('ok')
-    } catch {
-      setFetchStatus('err')
-    }
-    setTimeout(() => setFetchStatus('idle'), 2500)
   }
 
   useEffect(() => {
@@ -1252,16 +1197,13 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                         ↗ Admin
                       </a>
                       <button
-                        onClick={handleFetchTemplates}
-                        disabled={fetchStatus === 'fetching'}
+                        onClick={onQuickSync}
                         style={{
                           ...pbActionBtn,
-                          background: fetchStatus === 'ok' ? 'rgba(163,190,140,0.2)' : fetchStatus === 'err' ? 'rgba(255,107,107,0.2)' : pbActionBtn.background,
-                          color: fetchStatus === 'ok' ? '#a3be8c' : fetchStatus === 'err' ? '#ff6b6b' : pbActionBtn.color,
-                          cursor: fetchStatus === 'fetching' ? 'default' : 'pointer',
+                          cursor: 'pointer',
                         }}
                       >
-                        {fetchStatus === 'fetching' ? (fetchProgress ? `Sync (${fetchProgress.current}/${fetchProgress.total})` : t('set_fetch_loading') as string) : fetchStatus === 'ok' ? t('set_fetch_ok') as string : fetchStatus === 'err' ? t('set_fetch_failed') as string : t('set_fetch_idle') as string}
+                        {t('set_fetch_idle') as string}
                       </button>
                     </div>
                     {pbCreds && (pbCreds.email || pbCreds.password) && (
@@ -1285,20 +1227,6 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                     <p style={{ fontSize: 'var(--text-2xs)', fontFamily: 'var(--font-ui)', color: 'rgba(255,255,255,0.18)', margin: '4px 0 0', wordBreak: 'break-all' }}>
                       kiosk/face_server/put-template-here/
                     </p>
-                    {fetchSummary && (
-                      <p style={{ fontSize: 'var(--text-2xs)', fontFamily: 'var(--font-ui)', color: 'rgba(255,255,255,0.5)', margin: '8px 0 0' }}>
-                        {fetchSummary}
-                      </p>
-                    )}
-                    {fetchSkipped.length > 0 && (
-                      <ul style={{ margin: '6px 0 0', padding: 0, listStyle: 'none', maxHeight: 120, overflowY: 'auto' }}>
-                        {fetchSkipped.map((s, i) => (
-                          <li key={i} style={{ fontSize: 'var(--text-2xs)', fontFamily: 'var(--font-ui)', color: '#ff8080', wordBreak: 'break-all' }}>
-                            ✗ {s.name} — {s.reason}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
                   </div>
                 </>
               )}
