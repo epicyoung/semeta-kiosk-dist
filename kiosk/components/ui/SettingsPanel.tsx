@@ -1104,8 +1104,13 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                   Worker. API key hidup di Worker (FAL), gak pernah ke browser. Default OFF.
                   Kebuka kalau super admin nyalain toggle Video kiosk ini (isVideoUnlocked)
                   atau godmode — kunci asli fail-closed di RPC deduct_video_tokens.
-                  Photo Print (non-AI) = nol AI → seluruh blok video disembunyiin. */}
-              {engine !== 'print_local' && (() => { const videoLocked = !isVideoUnlocked(config); return (<>
+                  Photo Print (non-AI) = nol AI → seluruh blok video disembunyiin.
+                  GATE: tanpa sewa aktif (licensed) & bukan godmode → LOCKED, walau admin
+                  nyalain enable_video. Freeware murni (tanpa key/rental) ga boleh video. */}
+              {engine !== 'print_local' && (() => {
+                const hasRental = (config.licensed ?? false) || (config.bypassed ?? false)
+                const videoLocked = !hasRental || !isVideoUnlocked(config)
+                return (<>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', gap: 16 }}>
                 <div style={{ minWidth: 0 }}>
                   <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>
@@ -1115,9 +1120,11 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                     )}
                   </span>
                   <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0', lineHeight: 1.4 }}>
-                    {videoLocked
-                      ? 'Fitur video dikunci — hubungi admin untuk mengaktifkan kiosk ini.'
-                      : 'Hasil foto terakhir dianimasikan jadi video pendek lewat provider pilihan.'}
+                    {!hasRental
+                      ? 'Video butuh sewa aktif — mulai sesi (key + waktu rental) dulu.'
+                      : videoLocked
+                        ? 'Fitur video dikunci — hubungi admin untuk mengaktifkan kiosk ini.'
+                        : 'Hasil foto terakhir dianimasikan jadi video pendek lewat provider pilihan.'}
                   </p>
                 </div>
                 <div style={{ flexShrink: 0 }}>
@@ -1155,13 +1162,13 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                 <RowHint
                   label="Durasi Video"
                   hint={videoProvider === 'LTX'
-                    ? 'LTX minimal 6 detik — pilih 8 biar aman (5 detik bisa ditolak FAL).'
+                    ? 'LTX dikunci 8 detik (FAL nolak 5 detik untuk LTX).'
                     : '5 detik hemat biaya, 8 detik lebih puas. Token dipotong SAMA (5 dtk = margin lebih gede).'}
                 >
                   <Sel
-                    value={String(videoDuration)}
+                    value={String(videoProvider === 'LTX' ? 8 : videoDuration)}
                     options={[
-                      { value: '5', label: '5 detik' },
+                      { value: '5', label: videoProvider === 'LTX' ? '5 detik (LTX ✕)' : '5 detik', soon: videoProvider === 'LTX' },
                       { value: '8', label: '8 detik' },
                     ]}
                     onChange={v => setVideoDuration(Number(v))}

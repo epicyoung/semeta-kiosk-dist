@@ -63,7 +63,9 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
   // "Enable Video Engine" di Settings): vendor OFF → nol UI video (tab + tombol) di preview.
   // Kunci asli fail-closed di RPC deduct_video_tokens — config lama yang terlanjur
   // enable_video_engine:true tapi belum diizinin admin bakal ditolak 403 tanpa motong token.
-  const videoAllowed = isVideoUnlocked(config) && (config.enable_video_engine ?? false) && !isPrintSession
+  // GATE TAMBAHAN: tanpa sewa aktif (licensed) DAN bukan godmode → video DILARANG total,
+  // walau admin nyalain enable_video. Freeware murni (tanpa key/rental) = nol UI video.
+  const videoAllowed = (licensed || !!config.bypassed) && isVideoUnlocked(config) && (config.enable_video_engine ?? false) && !isPrintSession
   const t = useT()
   const [showOriginal, setShowOriginal] = useState(false)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
