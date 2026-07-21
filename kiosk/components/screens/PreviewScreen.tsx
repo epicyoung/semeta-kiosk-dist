@@ -18,7 +18,7 @@ type Props = {
   state: Extract<KioskState, { screen: 'preview' | 'framechooser' }>
   dispatch: Dispatch<KioskAction>
   frames: OrientedFrame[]
-  config: Pick<KioskConfig, 'enable_email' | 'enable_print' | 'enable_video' | 'enable_video_engine' | 'video_provider' | 'video_resolution' | 'video_defaults' | 'has_secret' | 'bypassed' | 'templates'>
+  config: Pick<KioskConfig, 'enable_email' | 'enable_print' | 'enable_video' | 'enable_video_engine' | 'video_provider' | 'video_resolution' | 'video_duration' | 'video_defaults' | 'has_secret' | 'bypassed' | 'templates'>
   licensed: boolean
   eventName: string
   onAction?: (action: 'printed' | 'emailed' | 'shared') => void
@@ -205,7 +205,7 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
       const tmpl = config.templates.find(t => t.id === state.templateId)
       const positive = tmpl?.video_positive_prompt || config.video_defaults?.default_positive_prompt
       const negative = tmpl?.video_negative_prompt || config.video_defaults?.default_negative_prompt
-      const video = await animateImage(seed, config.video_provider ?? 'PIXVERSE', { positive, negative, resolution: config.video_resolution ?? '720p' })
+      const video = await animateImage(seed, config.video_provider ?? 'PIXVERSE', { positive, negative, resolution: config.video_resolution ?? '720p', duration: config.video_duration })
       if (video) {
         // Baru DI SINI: overlay = frame KEPILIH (+ QR) di-burn ke video (letterbox 2:3, ffmpeg server).
         // Gagal finalize → fallback video mentah (tamu ga kehilangan video).

@@ -18,7 +18,7 @@ export function isVideoUnlocked(cfg: { bypassed?: boolean; enable_video?: boolea
 export async function animateImage(
   imageUrl: string,
   provider: VideoProvider,
-  opts?: { positive?: string; negative?: string; resolution?: '720p' | '1080p'; signal?: AbortSignal },
+  opts?: { positive?: string; negative?: string; resolution?: '720p' | '1080p'; duration?: number; signal?: AbortSignal },
 ): Promise<string | null> {
   try {
     const res = await fetch('/api/generate-video', {
@@ -31,6 +31,8 @@ export async function animateImage(
         negative: opts?.negative,
         // undefined = 720p di Worker. 1080p cuma ngefek (dan lebih mahal) kalau provider punya cost_1080.
         resolution: opts?.resolution,
+        // undefined = pin default provider (8 dtk). 5/8 = pilihan operator. Charge tetep flat.
+        duration: opts?.duration,
       }),
       signal: opts?.signal,
     })

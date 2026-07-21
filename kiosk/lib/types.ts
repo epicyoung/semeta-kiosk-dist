@@ -117,6 +117,7 @@ export type KioskConfig = {
   enable_video_engine?: boolean
   video_provider?: VideoProvider  // dipakai kalau enable_video_engine true. undefined ⇒ PIXVERSE (HPP termurah).
   video_resolution?: '720p' | '1080p'  // undefined ⇒ 720p (hemat). 1080p = tarif cost_1080 (kalau provider punya).
+  video_duration?: number  // 5 | 8 detik (operator pilih). undefined ⇒ pin default provider (8). Charge flat.
   template_local?: string
   template_source?: TemplateSource
   pocketbase_url?: string

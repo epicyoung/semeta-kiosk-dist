@@ -161,9 +161,17 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource }: Props) {
   }, [running, done, cameraReady, state.shots.length, captureShot])
 
   const quarter = rotation === 90 || rotation === 270
-  const boxClass = quarter
-    ? 'aspect-[9/16] w-[500px] max-w-full max-h-full h-auto'
-    : 'aspect-video w-full max-w-full h-auto max-h-full'
+  // Review mode (done): switch to the print canvas aspect so preview fills cleanly.
+  // 2R_STRIP 2-up = 2:3 (1200×1800), 4R_PORTRAIT = 2:3, 4R_LANDSCAPE = 3:2.
+  const printSize = state.template.print_size || '4R_PORTRAIT'
+  const isReviewLandscape = done && printSize === '4R_LANDSCAPE'
+  const boxClass = done
+    ? (isReviewLandscape
+        ? 'aspect-[3/2] w-full max-w-full h-auto max-h-full'
+        : 'aspect-[2/3] w-[500px] max-w-full max-h-full h-auto')
+    : quarter
+      ? 'aspect-[9/16] w-[500px] max-w-full max-h-full h-auto'
+      : 'aspect-video w-full max-w-full h-auto max-h-full'
 
   // Style live-feed dipakai bareng <video> (webcam) & <img> MJPEG (canon).
   const liveStyle: CSSProperties = {

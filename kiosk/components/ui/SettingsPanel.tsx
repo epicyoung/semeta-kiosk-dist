@@ -70,14 +70,13 @@ const COMFY_CONTROLNET_STRENGTH = 0.8 // fixed di face_server — hanya buat rec
 // Video engine (img2vid) providers — semua lewat FAL, bedanya endpoint FAL per provider (Worker).
 // HAPPYHORSE sengaja gak masuk list: OFF permanen (HPP mahal). Kalau mau balik, tambah di sini
 // + isi harga di DEFAULT_VIDEO_COSTS + enable di /dashboard/settings. Server tetap gate via RPC.
+// 3 tier doang (build B): Murah/Medium/Mahal. Sisanya (Vidu/Veo/WAN/Kling/HappyHorse) di-off dari
+// UI — endpoint-nya masih di worker (video-provider.ts) kalau suatu saat mau dibalikin. Harga token
+// di-append otomatis di map bawah (videoProviderOpts).
 const VIDEO_PROVIDER_OPTS: { value: VideoProvider; label: string }[] = [
-  { value: 'LTX',        label: 'LTX 2.3'         },       // 15 token
-  { value: 'PIXVERSE',   label: 'PixVerse V6'     },       // 15 token
-  { value: 'VIDU',       label: 'Vidu Q2 Pro'     },       // 20 token
-  { value: 'VEO',        label: 'Veo 3.1'         },       // 35 token
-  { value: 'WAN',        label: 'WAN 2.7'         },       // 35 token
-  { value: 'KLING',      label: 'Kling v3 Pro'    },       // 40 token
-  { value: 'SEEDANCE',   label: 'Seedance 2.0'    },       // 110 token
+  { value: 'LTX',      label: 'Murah — LTX 2.3'       },
+  { value: 'PIXVERSE', label: 'Medium — PixVerse V6'  },
+  { value: 'SEEDANCE', label: 'Mahal — Seedance Fast' },
 ]
 
 type StylizeCaps = {
@@ -247,10 +246,16 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   const [maxTemplates,    setMaxTemplates]    = useState(config.max_templates ?? 1)
   const [magicCatcher,    setMagicCatcher]    = useState(config.enable_magic_catcher ?? false)
   const [videoEngine,     setVideoEngine]     = useState(config.enable_video_engine ?? false)
-  // Default LTX — 1080p native, murah & tajam.
-  const [videoProvider,   setVideoProvider]   = useState<VideoProvider>(config.video_provider ?? 'LTX')
+  // Default LTX — 1080p native, murah & tajam. Provider dipangkas ke 3 tier (LTX/PIXVERSE/SEEDANCE);
+  // config lama yg ke-set VEO/WAN/VIDU/KLING udah ga ada di dropdown → jatuhin ke LTX biar select ga
+  // nampilin option pertama sambil state nyimpen value hantu (operator save-nya jadi salah).
+  const [videoProvider,   setVideoProvider]   = useState<VideoProvider>(() => {
+    const p = config.video_provider
+    return p && VIDEO_PROVIDER_OPTS.some(o => o.value === p) ? p : 'LTX'
+  })
   // Default 720p (hemat). 1080p pakai tarif cost_1080; provider tanpa tarif itu tetep dicharge+render 720p.
   const [videoResolution, setVideoResolution] = useState<'720p' | '1080p'>(config.video_resolution ?? '720p')
+  const [videoDuration,   setVideoDuration]   = useState<number>(config.video_duration ?? 8)
 
   // Dompet token — fetch pas panel dibuka (fresh, gak nunggu heartbeat 60s). Pola sama
   // kayak verifySecret: /api/heartbeat pakai secret tersimpan server-side. Freeware/
@@ -744,6 +749,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         enable_video_engine: engine === 'print_local' ? false : videoEngine,
         video_provider:      videoProvider,
         video_resolution:    videoResolution,
+        video_duration:      videoDuration,
       }
       if (logo_url) patch.logo_url = logo_url
       if (bg_url)   patch.bg_url   = bg_url
@@ -780,6 +786,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         enable_video_engine: engine === 'print_local' ? false : videoEngine,
         video_provider:      videoProvider,
         video_resolution:    videoResolution,
+        video_duration:      videoDuration,
         ...(logo_url ? { logo_url } : {}),
         ...(bg_url   ? { bg_url   } : {}),
       } as Partial<KioskConfig>)
@@ -1143,6 +1150,21 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                       { value: '1080p', label: `1080p — ${videoCosts[`${videoProvider}_1080`] ?? DEFAULT_VIDEO_COSTS[`${videoProvider}_1080`] ?? (videoCosts[videoProvider] ?? DEFAULT_VIDEO_COSTS[videoProvider])} token` },
                     ]}
                     onChange={v => setVideoResolution(v as '720p' | '1080p')}
+                  />
+                </RowHint>
+                <RowHint
+                  label="Durasi Video"
+                  hint={videoProvider === 'LTX'
+                    ? 'LTX minimal 6 detik — pilih 8 biar aman (5 detik bisa ditolak FAL).'
+                    : '5 detik hemat biaya, 8 detik lebih puas. Token dipotong SAMA (5 dtk = margin lebih gede).'}
+                >
+                  <Sel
+                    value={String(videoDuration)}
+                    options={[
+                      { value: '5', label: '5 detik' },
+                      { value: '8', label: '8 detik' },
+                    ]}
+                    onChange={v => setVideoDuration(Number(v))}
                   />
                 </RowHint>
               </>)}

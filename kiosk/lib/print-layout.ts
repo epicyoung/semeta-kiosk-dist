@@ -1,13 +1,13 @@
 // Photo Print — slot math + compose kanvas, semua @300dpi.
-// 4R portrait = 4×6in = 1200×1800. 2R = panel landscape 3.5×2.5in = 1050×750 dan
-// SELALU dicetak 2-up di kertas 4R (dua panel + garis potong) — printer gak pernah
-// ganti media, operator gak perlu utak-atik control panel Windows.
-// ponytail: 2R = 2-up only; @page 2.5x3.5 langsung kalau suatu saat ada media 2R beneran.
+// 4R portrait = 4×6in = 1200×1800. 2R = panel strip 2×6in = 600×1800 dan
+// SELALU dicetak 2-up di kertas 4R (dua panel identik + garis potong tengah) — printer gak
+// pernah ganti media, operator gak perlu utak-atik control panel Windows.
+// ponytail: 2R = 2-up only; @page 2x6 langsung kalau suatu saat ada media 2R beneran.
 //
 // KOORDINAT SLOT BUAT DESAINER OVERLAY (px @300dpi, slot rapet edge-to-edge —
 // gutter/border/branding digambar di overlay PNG yang ditaruh DI ATAS foto):
-//   4R 1200×1800 — 1: full · 2: atas-bawah 1200×900 · 3: strip 1200×600 · 4: grid 2×2 600×900 · 5-6: grid 2×3 600×600
-//   2R 1050×750  — 1: full · 2: kiri-kanan 525×750 · 3: strip 350×750 · 4: grid 2×2 525×375 · 5-6: grid 3×2 350×375
+//   4R 1200×1800 — 1: full · 2: atas-bawah 1200×900 · 3: strip 1200×600 · 4: grid 2×2 600×900
+//   2R 600×1800 (panel strip) — 1: full · 2: atas-bawah 600×900 · 3: 600×600 · 4: 600×450 (grid 1×N vertikal)
 import { coverFit } from './frame-composite'
 import { proxied } from './facedetect'
 import type { PrintSize, Template } from './types'

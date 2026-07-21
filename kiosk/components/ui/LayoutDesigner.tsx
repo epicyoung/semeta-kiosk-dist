@@ -24,7 +24,7 @@ const FG_MUTED = 'rgba(255,255,255,0.6)'
 const SIZE_LABEL: Record<PrintSize, string> = {
   '4R_PORTRAIT': '4R Portrait',
   '4R_LANDSCAPE': '4R Landscape',
-  '2R_STRIP': '2R Strip',
+  '2R_STRIP': '2 Stripe',
 }
 
 export function LayoutDesigner({ template, onSave, onClose }: Props) {
@@ -33,35 +33,47 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
   const [target, setTarget] = useState<HTMLElement | null>(null)
 
   const size: PrintSize = template.print_size || '4R_PORTRAIT'
-  const canvasDims = size === '4R_LANDSCAPE' ? CANVAS_4R_LANDSCAPE :
-                     size === '2R_STRIP' ? PANEL_2R_STRIP :
-                     CANVAS_4R_PORTRAIT
+  const is2Stripe = size === '2R_STRIP'
 
-  const [scale, setScale] = useState(500 / canvasDims.h)
-  const displayW = canvasDims.w * scale
-  const displayH = canvasDims.h * scale
+  // 2 Stripe: edit on the LEFT panel (600×1800) but DISPLAY the full 4R sheet (1200×1800)
+  // with a center dividing line and right side mirrored. Slots saved relative to panel (600w).
+  const editDims = is2Stripe ? PANEL_2R_STRIP :
+                   size === '4R_LANDSCAPE' ? CANVAS_4R_LANDSCAPE :
+                   CANVAS_4R_PORTRAIT
+  // Display: 2 Stripe shows full 4R sheet
+  const displayDims = is2Stripe ? CANVAS_4R_PORTRAIT :
+                      size === '4R_LANDSCAPE' ? CANVAS_4R_LANDSCAPE :
+                      CANVAS_4R_PORTRAIT
+
+  const [scale, setScale] = useState(500 / displayDims.h)
+  const displayW = displayDims.w * scale
+  const displayH = displayDims.h * scale
+  // Panel width for the editable left half (2 Stripe only)
+  const panelW = is2Stripe ? editDims.w * scale : displayW
 
   useEffect(() => {
     // Fit the paper to the viewport, leaving room for header + toolbar chrome.
     const calculateScale = () => {
       const availableHeight = window.innerHeight - 260
       const availableWidth = window.innerWidth - 120
-      setScale(Math.min(availableHeight / canvasDims.h, availableWidth / canvasDims.w))
+      setScale(Math.min(availableHeight / displayDims.h, availableWidth / displayDims.w))
     }
     calculateScale()
     window.addEventListener('resize', calculateScale)
     return () => window.removeEventListener('resize', calculateScale)
-  }, [canvasDims.w, canvasDims.h])
+  }, [displayDims.w, displayDims.h])
 
   const generateDefaultSlots = (): Slot[] => {
     const out: Slot[] = []
     const n = template.shot_count || 4
-    const w = 600
-    const h = 400
+    const cw = editDims.w
+    const ch = editDims.h
+    const w = Math.min(cw - 40, 500)
+    const h = Math.round(w * 0.67)
     const gap = 30
     const totalH = (n * h) + ((n - 1) * gap)
-    const startY = Math.max(50, (canvasDims.h - totalH) / 2)
-    const startX = (canvasDims.w - w) / 2
+    const startY = Math.max(50, (ch - totalH) / 2)
+    const startX = (cw - w) / 2
     for (let i = 0; i < n; i++) {
       out.push({ x: startX, y: startY + (i * (h + gap)), w, h, r: 0 })
     }
@@ -73,7 +85,7 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const handleAddSlot = () => setSlots([...slots, { x: 50, y: 50, w: 600, h: 400, r: 0 }])
+  const handleAddSlot = () => setSlots([...slots, { x: 50, y: 50, w: Math.min(editDims.w - 100, 500), h: 350, r: 0 }])
 
   const handleDeleteSlot = () => {
     if (selectedSlotIndex === null) return
@@ -113,6 +125,13 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
     boxShadow: accent ? `0 8px 24px -8px ${BRAND}` : 'none',
     transition: 'background 140ms ease, opacity 140ms ease',
     WebkitTapHighlightColor: 'transparent',
+  })
+
+  // Mirror a slot from left panel to right panel (2 Stripe only)
+  const mirrorSlot = (slot: Slot): Slot => ({
+    ...slot,
+    x: editDims.w + (editDims.w - slot.x - slot.w), // mirror x position
+    r: slot.r ? -slot.r : 0, // mirror rotation
   })
 
   const content = (
@@ -189,29 +208,61 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
           fontSize: 13, color: FG_MUTED, fontVariantNumeric: 'tabular-nums',
         }}>
           <strong style={{ color: FG, fontWeight: 600 }}>{SIZE_LABEL[size]}</strong>
-          {canvasDims.w} × {canvasDims.h} px
+          {editDims.w} × {editDims.h} px
           <span style={{ color: 'rgba(255,255,255,0.35)' }}>· {slots.length} slot{slots.length === 1 ? '' : 's'}</span>
+          {is2Stripe && (
+            <span style={{ color: 'rgba(124,58,237,0.8)', fontWeight: 600 }}>· mirrored 2-up</span>
+          )}
         </span>
       </div>
 
       {/* Canvas stage */}
       <div style={{ position: 'relative', zIndex: 1, flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: 24 }}>
         <div style={{ position: 'relative' }}>
-          {/* Paper — the signature: a physical print sitting on the bench */}
+          {/* Paper — the full display sheet */}
           <div
             style={{
               width: displayW, height: displayH,
               position: 'relative',
               background: template.overlay_url ? '#1a1140' : '#f4f2ec',
-              backgroundImage: template.overlay_url ? `url(${template.overlay_url})` : 'none',
-              backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center',
               borderRadius: 4,
               boxShadow: '0 40px 80px -24px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.08)',
               outline: `1px solid ${GLASS_LINE}`,
               outlineOffset: 8,
+              overflow: 'hidden',
             }}
             onClick={(e) => { if (e.target === e.currentTarget) clearSelection() }}
           >
+            {/* LEFT panel overlay (or full overlay for 4R) */}
+            {template.overlay_url && (
+              <div style={{
+                position: 'absolute',
+                left: 0, top: 0,
+                width: panelW, height: displayH,
+                backgroundImage: `url(${template.overlay_url})`,
+                backgroundSize: is2Stripe ? `${panelW}px ${displayH}px` : 'contain',
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'center',
+                pointerEvents: 'none', zIndex: 5,
+              }} />
+            )}
+
+            {/* RIGHT panel overlay mirror (2 Stripe only) */}
+            {is2Stripe && template.overlay_url && (
+              <div style={{
+                position: 'absolute',
+                left: panelW, top: 0,
+                width: panelW, height: displayH,
+                backgroundImage: `url(${template.overlay_url})`,
+                backgroundSize: `${panelW}px ${displayH}px`,
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'center',
+                pointerEvents: 'none', zIndex: 5,
+                opacity: 0.45,
+              }} />
+            )}
+
+            {/* ── Editable slots (left panel for 2 Stripe, full canvas for 4R) ── */}
             {slots.map((slot, i) => {
               const isSelected = selectedSlotIndex === i
               return (
@@ -245,6 +296,73 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
               )
             })}
 
+            {/* ── Mirrored ghost slots (2 Stripe right panel) ─────────── */}
+            {is2Stripe && slots.map((slot, i) => {
+              const m = mirrorSlot(slot)
+              return (
+                <div
+                  key={`mirror-${i}`}
+                  style={{
+                    position: 'absolute', left: 0, top: 0,
+                    width: m.w * scale, height: m.h * scale,
+                    transform: `translate(${(m.x + editDims.w) * scale}px, ${m.y * scale}px) rotate(${m.r || 0}deg)`,
+                    background: 'rgba(124,58,237,0.08)',
+                    border: '2px dashed rgba(124,58,237,0.3)',
+                    boxSizing: 'border-box',
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
+                    color: 'rgba(124,58,237,0.5)',
+                    pointerEvents: 'none',
+                  }}
+                >
+                  <span style={{ fontSize: 9, letterSpacing: '0.15em', fontWeight: 700 }}>MIRROR</span>
+                  <span style={{ fontSize: Math.max(16, m.h * scale * 0.22), fontWeight: 700, lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+                    {String(i + 1).padStart(2, '0')}
+                  </span>
+                </div>
+              )
+            })}
+
+            {/* ── Center divider line (2 Stripe only) ────────────────── */}
+            {is2Stripe && (
+              <>
+                <div style={{
+                  position: 'absolute', left: panelW - 1, top: 0,
+                  width: 2, height: displayH,
+                  background: 'rgba(255,255,255,0.35)',
+                  zIndex: 20, pointerEvents: 'none',
+                }} />
+                {/* Cut line label */}
+                <div style={{
+                  position: 'absolute', left: panelW - 28, top: 8,
+                  background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+                  borderRadius: 4, padding: '2px 6px',
+                  fontSize: 8, letterSpacing: '0.15em', textTransform: 'uppercase',
+                  color: 'rgba(255,255,255,0.6)', fontWeight: 700,
+                  zIndex: 21, pointerEvents: 'none', whiteSpace: 'nowrap',
+                }}>
+                  ✂ cut
+                </div>
+                {/* Left panel label */}
+                <div style={{
+                  position: 'absolute', left: 6, bottom: 6,
+                  fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase',
+                  color: 'rgba(255,255,255,0.4)', fontWeight: 700,
+                  zIndex: 21, pointerEvents: 'none',
+                }}>
+                  ← edit this side
+                </div>
+                {/* Right panel label */}
+                <div style={{
+                  position: 'absolute', right: 6, bottom: 6,
+                  fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase',
+                  color: 'rgba(124,58,237,0.5)', fontWeight: 700,
+                  zIndex: 21, pointerEvents: 'none',
+                }}>
+                  auto-mirror →
+                </div>
+              </>
+            )}
+
             {slots.length === 0 && (
               <div style={{
                 position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
@@ -260,7 +378,7 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
               <Moveable
                 target={target}
                 draggable resizable keepRatio rotatable snappable
-                bounds={{ left: 0, top: 0, right: displayW, bottom: displayH }}
+                bounds={{ left: 0, top: 0, right: is2Stripe ? panelW : displayW, bottom: displayH }}
                 onDrag={e => { e.target.style.transform = e.transform }}
                 onDragEnd={e => {
                   const match = e.target.style.transform.match(/translate\(([^px]+)px,\s*([^px]+)px\)/)
@@ -297,7 +415,9 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
         borderTop: `1px solid ${GLASS_LINE}`,
         background: 'rgba(9,1,53,0.4)', backdropFilter: 'blur(12px)',
       }}>
-        Tap a slot to select · drag to move · corner handles resize · slot order = shot order
+        {is2Stripe
+          ? 'Edit the LEFT panel only — right side auto-mirrors · cut line marks the fold'
+          : 'Tap a slot to select · drag to move · corner handles resize · slot order = shot order'}
       </footer>
     </div>
   )
