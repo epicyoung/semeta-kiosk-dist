@@ -256,7 +256,10 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   // kayak verifySecret: /api/heartbeat pakai secret tersimpan server-side. Freeware/
   // bypassed/offline gak bawa saldo → null → tampil '—'.
   const [tokenBalance, setTokenBalance] = useState<number | null>(null)
-  const [videoCosts, setVideoCosts] = useState<Record<string, number>>({})
+  // Cache harga terakhir dari handshake → offline pake ini, BUKAN hardcoded (nyegah drift admin).
+  const [videoCosts, setVideoCosts] = useState<Record<string, number>>(() => {
+    try { return JSON.parse(localStorage.getItem('lastVideoCosts') || '{}') } catch { return {} }
+  })
   useEffect(() => {
     if (!open) return
     let live = true
@@ -265,17 +268,21 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
       .then(d => {
         if (!live || !d) return
         setTokenBalance(typeof d.tenant_token_balance === 'number' ? d.tenant_token_balance : null)
-        setVideoCosts(d.video_costs ?? {})
+        // Cuma timpa cache kalau handshake beneran bawa harga — respons kosong ga ngehapus cache.
+        if (d.video_costs && Object.keys(d.video_costs).length > 0) {
+          setVideoCosts(d.video_costs)
+          try { localStorage.setItem('lastVideoCosts', JSON.stringify(d.video_costs)) } catch {}
+        }
       })
-      .catch(() => {/* offline → biarin '—' */})
+      .catch(() => {/* offline → pake cache terakhir */})
     return () => { live = false }
   }, [open])
   // Footnote harga video ala SaaS — harga dari dashboard admin (app_settings), bukan hardcode.
   // 1080p: tarif <PROVIDER>_1080 kalau ada; gak ada = provider tsb dicharge 720p (fail-safe Worker).
   const has1080Rate = videoCosts[`${videoProvider}_1080`] != null
-  // Fallback harga token cuma buat kiosk yang BELUM PERNAH handshake (hari-1, offline total).
-  // Online/freeware = videoCosts dari admin SELALU nimpa ini. WAJIB mirror app_settings.engines
-  // (COST HD/FHD di /dashboard/settings) biar ga mismatch pas fallback kepake.
+  // Seed hari-1 DOANG: kepake cuma kalau localStorage 'lastVideoCosts' masih kosong (kiosk
+  // belum pernah handshake sekali pun). Sekali handshake sukses, cache nimpa ini selamanya —
+  // jadi ini bukan lagi sumber drift. Angka boleh basi dikit, ga kritis (ke-overwrite cepat).
   const DEFAULT_VIDEO_COSTS: Record<string, number> = {
     LTX: 9, LTX_1080: 9,             // LTX native 1080p, tarif sama
     PIXVERSE: 10, PIXVERSE_1080: 20,
