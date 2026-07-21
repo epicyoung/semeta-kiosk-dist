@@ -1,14 +1,18 @@
-const MAX_PX = 1200 // longest edge for R2 uploads — fits IG/WA story portrait, phones top out ~1440px
+const MAX_PX = 1200; // longest edge for R2 uploads — fits IG/WA story portrait, phones top out ~1440px
 
 /**
  * Scale dims so the longest edge ≤ maxPx. Returns null if already small enough (skip resize).
  * Pure — the money path: Canon shoots 6000px, this MUST shrink it before R2 upload or every
  * photo costs ~5MB of bandwidth + storage instead of ~200KB. Exported for the unit check.
  */
-export function fitWithin(width: number, height: number, maxPx: number): { w: number; h: number } | null {
-  if (width <= maxPx && height <= maxPx) return null
-  const scale = maxPx / Math.max(width, height)
-  return { w: Math.round(width * scale), h: Math.round(height * scale) }
+export function fitWithin(
+  width: number,
+  height: number,
+  maxPx: number,
+): { w: number; h: number } | null {
+  if (width <= maxPx && height <= maxPx) return null;
+  const scale = maxPx / Math.max(width, height);
+  return { w: Math.round(width * scale), h: Math.round(height * scale) };
 }
 
 /**
@@ -17,14 +21,14 @@ export function fitWithin(width: number, height: number, maxPx: number): { w: nu
  * Data URL aman di-pass ke uploadAsset kapan aja — ga terikat lifecycle blob store browser.
  */
 export async function blobUrlToDataUrl(blobUrl: string): Promise<string> {
-  const res = await fetch(blobUrl)
-  const blob = await res.blob()
+  const res = await fetch(blobUrl);
+  const blob = await res.blob();
   return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result as string)
-    reader.onerror = reject
-    reader.readAsDataURL(blob)
-  })
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 }
 
 /** Upload a photo/video to R2 via the Next.js API route. Returns { url, key }.
@@ -34,61 +38,67 @@ export async function uploadAsset(
   dataUrlOrUrl: string,
   type: "A" | "B" | "C" | "S" | `M${number}`,
   sessionId: string,
-  meta?: { eventName?: string; durationSec?: number },
+  meta?: { eventName?: string; durationSec?: number; mCount?: number },
 ): Promise<{ url: string; key: string }> {
-  const blob = type === "C"
-    ? await toBlob(dataUrlOrUrl)
-    : await resizeBlob(dataUrlOrUrl, MAX_PX)
+  // framed images (from compositeFrame) are already 1200px data URLs.
+  // Bypass resizeBlob to prevent concurrent memory crashes.
+  const isDataUrl = dataUrlOrUrl.startsWith("data:");
+  const blob =
+    type === "C" || isDataUrl
+      ? await toBlob(dataUrlOrUrl)
+      : await resizeBlob(dataUrlOrUrl, MAX_PX);
 
-  const ext = type === "C" ? "mp4" : "jpg"
-  const form = new FormData()
-  form.append("type", type)
-  form.append("session_id", sessionId)
-  form.append("file", blob, `photo.${ext}`)
-  if (meta?.eventName) form.append("event_name", meta.eventName)
-  if (meta?.durationSec != null) form.append("processing_duration_sec", String(meta.durationSec))
+  const ext = type === "C" ? "mp4" : "jpg";
+  const form = new FormData();
+  form.append("type", type);
+  form.append("session_id", sessionId);
+  form.append("file", blob, `photo.${ext}`);
+  if (meta?.eventName) form.append("event_name", meta.eventName);
+  if (meta?.durationSec != null)
+    form.append("processing_duration_sec", String(meta.durationSec));
+  if (meta?.mCount !== undefined) form.append("m_count", String(meta.mCount));
 
   // Watermark is decided server-side from the rental session — client has no say.
   const res = await fetch("/api/upload-asset", {
     method: "POST",
     body: form,
-  })
-  if (!res.ok) throw new Error(`Upload failed: ${res.status}`)
-  const { url, key } = await res.json()
-  return { url, key }
+  });
+  if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+  const { url, key } = await res.json();
+  return { url, key };
 }
 
 /** Resize image so longest edge ≤ maxPx, returns JPEG blob. Skips resize if already small enough. */
 async function resizeBlob(dataUrlOrUrl: string, maxPx: number): Promise<Blob> {
-  const src = await toBlob(dataUrlOrUrl)
-  const bitmap = await createImageBitmap(src)
-  const fit = fitWithin(bitmap.width, bitmap.height, maxPx)
+  const src = await toBlob(dataUrlOrUrl);
+  const bitmap = await createImageBitmap(src);
+  const fit = fitWithin(bitmap.width, bitmap.height, maxPx);
 
   if (!fit) {
-    bitmap.close()
-    return src
+    bitmap.close();
+    return src;
   }
 
-  const canvas = new OffscreenCanvas(fit.w, fit.h)
-  const ctx = canvas.getContext("2d")!
-  ctx.drawImage(bitmap, 0, 0, fit.w, fit.h)
-  bitmap.close()
+  const canvas = new OffscreenCanvas(fit.w, fit.h);
+  const ctx = canvas.getContext("2d")!;
+  ctx.drawImage(bitmap, 0, 0, fit.w, fit.h);
+  bitmap.close();
 
-  return canvas.convertToBlob({ type: "image/jpeg", quality: 0.88 })
+  return canvas.convertToBlob({ type: "image/jpeg", quality: 0.88 });
 }
 
 async function toBlob(dataUrlOrUrl: string): Promise<Blob> {
   if (dataUrlOrUrl.startsWith("data:")) {
-    const [header, b64] = dataUrlOrUrl.split(",")
-    const mime = header.match(/:(.*?);/)?.[1] ?? "image/jpeg"
-    const bytes = atob(b64)
-    const arr = new Uint8Array(bytes.length)
-    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i)
-    return new Blob([arr], { type: mime })
+    const [header, b64] = dataUrlOrUrl.split(",");
+    const mime = header.match(/:(.*?);/)?.[1] ?? "image/jpeg";
+    const bytes = atob(b64);
+    const arr = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+    return new Blob([arr], { type: mime });
   }
-  const res = await fetch(dataUrlOrUrl)
-  if (!res.ok) throw new Error(`Fetch failed: ${res.status}`)
-  return res.blob()
+  const res = await fetch(dataUrlOrUrl);
+  if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
+  return res.blob();
 }
 
 /**
@@ -111,8 +121,8 @@ export async function uploadLocalFile(
       session_id: sessionId,
       event_name: meta?.eventName,
     }),
-  })
-  if (!res.ok) throw new Error(`Upload local file failed: ${res.status}`)
-  const { url, key } = await res.json()
-  return { url, key }
+  });
+  if (!res.ok) throw new Error(`Upload local file failed: ${res.status}`);
+  const { url, key } = await res.json();
+  return { url, key };
 }

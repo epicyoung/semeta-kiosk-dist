@@ -398,18 +398,21 @@ export function PreviewScreen({
         const finalized = state.base
           ? await finalizeVideo(video, overlay, eventName, state.base)
           : null;
-        
+
         const finalBlobUrl = finalized?.blobUrl ?? video;
         setVideoProgress(100);
         setVideoUrl(finalBlobUrl);
         setActiveTab("video");
-        
+
         // Cloud copy: Video .mp4 udah di-render ffmpeg dan ada di C:/semeta/ (localPath).
         // Kita BACA LANGSUNG dari disk lokal untuk upload ke R2, bypass blob browser sepenuhnya.
         // Gagal = ga ada video di HP, on-screen tetep main (fail-safe).
         if (licensed && state.base && finalized?.localPath) {
-          uploadLocalFile(finalized.localPath, "C", state.base, { eventName })
-            .catch((err) => console.warn("[preview] upload video _C lokal gagal:", err));
+          uploadLocalFile(finalized.localPath, "C", state.base, {
+            eventName,
+          }).catch((err) =>
+            console.warn("[preview] upload video _C lokal gagal:", err),
+          );
         }
       }
     } finally {
@@ -464,15 +467,15 @@ export function PreviewScreen({
         let framedMulti: string[] = [];
         if (plan && plan.others.length > 0) {
           mCount = plan.others.length;
-          framedMulti = await Promise.all(
-            plan.others.map((r) =>
-              compositeFrame(
-                r.rawAiUrl ?? r.aiUrl,
-                currentFrame?.url ?? null,
-                1200,
-              ),
-            ),
-          );
+          // SEQUENTIAL composite to prevent GPU/RAM crash (OffscreenCanvas memory spike)
+          for (const r of plan.others) {
+            const frame = await compositeFrame(
+              r.rawAiUrl ?? r.aiUrl,
+              currentFrame?.url ?? null,
+              1200,
+            );
+            framedMulti.push(frame);
+          }
         }
 
         // A+B WAJIB sukses (QR gantung ke resB). QR di-set SEGERA setelah A+B — tamu bisa scan
@@ -480,7 +483,7 @@ export function PreviewScreen({
         // sebelum microsite retry window (12s) habis. Gagal 1 _M ga crash flow.
         const [, resB] = await Promise.all([
           uploadAsset(framedA, "A", base, meta),
-          uploadAsset(framedB, "B", base, meta),
+          uploadAsset(framedB, "B", base, { ...meta, mCount }),
         ]);
         // QR muncul duluan — tamu scan sambil _M masih naik.
         if (uploadSeq.current === seq) {
@@ -514,6 +517,7 @@ export function PreviewScreen({
     }
     if (uploadSeq.current === seq) setQrStatus("failed");
   }
+
 
   useEffect(() => {
     if (!isFinal || !licensed || !state.base) return; // upload cuma di preview final, frame udah fixed
@@ -565,11 +569,17 @@ export function PreviewScreen({
         if (live && finalized) {
           setVideoUrl(finalized.blobUrl);
           setActiveTab("video");
-          
+
           // Sama kayak manual: baca langsung dari C:/semeta/ via Node backend (bukan browser blob).
           if (licensed && state.base && finalized.localPath) {
-            uploadLocalFile(finalized.localPath, "C", state.base, { eventName })
-              .catch((err) => console.warn("[preview] upload video _C (auto) lokal gagal:", err));
+            uploadLocalFile(finalized.localPath, "C", state.base, {
+              eventName,
+            }).catch((err) =>
+              console.warn(
+                "[preview] upload video _C (auto) lokal gagal:",
+                err,
+              ),
+            );
           }
         }
       } finally {
@@ -1750,7 +1760,9 @@ export function PreviewScreen({
               >
                 <img
                   src={
-                    (showOriginal ? activeResult.originalUrl : activeResult.aiUrl) || undefined
+                    (showOriginal
+                      ? activeResult.originalUrl
+                      : activeResult.aiUrl) || undefined
                   }
                   style={{ width: "100%", height: "100%", objectFit: "cover" }}
                 />
