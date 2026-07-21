@@ -22,18 +22,21 @@ const OUT_H = 1620
 // Pure — bikin argv ffmpeg buat letterbox 2:3 (+overlay opsional). Diekspor buat di-test tanpa
 // nge-spawn ffmpeg beneran. scale decrease + pad = aspect apa pun → 2:3 clean, zero crop.
 export function buildFfmpegArgs(inMp4: string, outPath: string, overlayPng: string | null): string[] {
-  const padChain =
-    `scale=${OUT_W}:${OUT_H}:force_original_aspect_ratio=decrease,` +
-    `pad=${OUT_W}:${OUT_H}:(ow-iw)/2:(oh-ih)/2:black`
+  // CENTER-CROP (cover): scale sampai NUTUP 2:3 (increase) lalu crop tengah → full-bleed, ZERO
+  // black bars. Sumber 9:16 (1080x1920) → buang langit atas + kaki bawah seimbang; muka tamu aman
+  // di tengah, width tetep 1080 (ga pecah). crop=w:h tanpa x:y = default center.
+  const cropChain =
+    `scale=${OUT_W}:${OUT_H}:force_original_aspect_ratio=increase,` +
+    `crop=${OUT_W}:${OUT_H}`
   if (overlayPng) {
     return [
       '-y', '-i', inMp4, '-i', overlayPng,
       '-filter_complex',
-      `[0:v]${padChain}[bg];[1:v]scale=${OUT_W}:${OUT_H}[ov];[bg][ov]overlay=0:0`,
+      `[0:v]${cropChain}[bg];[1:v]scale=${OUT_W}:${OUT_H}[ov];[bg][ov]overlay=0:0`,
       '-c:a', 'copy', '-movflags', '+faststart', outPath,
     ]
   }
-  return ['-y', '-i', inMp4, '-vf', padChain, '-c:a', 'copy', '-movflags', '+faststart', outPath]
+  return ['-y', '-i', inMp4, '-vf', cropChain, '-c:a', 'copy', '-movflags', '+faststart', outPath]
 }
 
 // Kandidat lokasi ffmpeg.exe bundled — dicek berurutan, yang pertama ada dipakai.

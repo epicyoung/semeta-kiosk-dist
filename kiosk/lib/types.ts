@@ -157,9 +157,9 @@ export type KioskState =
   // ke-burn watermark (freemium), jangan dipakai sbg sumber re-detect/upload.
   // rawAiUrl = hasil AI bersih (pre-watermark) buat upload _B. base = seq key dari finalizeLocal.
   // framechooser = pilih frame dulu (cycling), NEXT bawa selectedFrame ke preview. No upload/print di sini.
-  | { screen: 'framechooser'; aiUrl: string; originalUrl: string; sourceUrl?: string; rawAiUrl?: string; base?: string; processingSec?: number; videoUrl?: string; templateId?: string }
+  | { screen: 'framechooser'; aiUrl: string; originalUrl: string; sourceUrl?: string; rawAiUrl?: string; base?: string; processingSec?: number; videoUrl?: string; templateId?: string; allResults?: SwapResult[] }
   // printSize set = sesi Photo Print (video tab & toggle AI/Asli disembunyiin, BACK balik ke template)
-  | { screen: 'preview'; aiUrl: string; originalUrl: string; sourceUrl?: string; rawAiUrl?: string; base?: string; processingSec?: number; selectedFrame: Frame | null; videoUrl?: string; templateId?: string; printSize?: PrintSize }
+  | { screen: 'preview'; aiUrl: string; originalUrl: string; sourceUrl?: string; rawAiUrl?: string; base?: string; processingSec?: number; selectedFrame: Frame | null; videoUrl?: string; templateId?: string; printSize?: PrintSize; allResults?: SwapResult[] }
   // aiUrl/originalUrl = display (burned+framed). uploadAiUrl/uploadOriginalUrl = raw+framed → R2.
   | { screen: 'delivery'; aiUrl: string; originalUrl: string; uploadAiUrl: string; uploadOriginalUrl: string; base?: string; processingSec?: number; r2OriginalUrl?: string; r2AiUrl?: string }
   | { screen: 'force_locked'; reason?: LockReason; message?: string }

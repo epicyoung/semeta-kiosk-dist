@@ -12,7 +12,7 @@ const CATEGORIES = [
   { id: 'gptimg',  label: 'GPTIMG2',     img: '/sample%20(5).jpg' },
 ]
 
-export function IdleScreen({ dispatch }: { dispatch: Dispatch<KioskAction> }) {
+export function IdleScreen({ dispatch, isPaused }: { dispatch: Dispatch<KioskAction>; isPaused?: boolean }) {
   const t = useT()
   return (
     <div className="screen-split screen-split--lowtitle flex flex-col w-full h-full overflow-hidden">
@@ -43,10 +43,14 @@ export function IdleScreen({ dispatch }: { dispatch: Dispatch<KioskAction> }) {
         </div>
       </div>
 
-      {/* Button */}
       <div className="screen-actions shrink-0 p-5">
-        <TouchButton className="w-full" onClick={() => dispatch({ type: 'START' })}>
-          {t('idle_next') as string}
+        <TouchButton 
+          className="w-full" 
+          onClick={() => dispatch({ type: 'START' })}
+          disabled={isPaused}
+          style={isPaused ? { background: 'rgba(255,100,100,0.1)', color: '#ff6b6b' } : undefined}
+        >
+          {isPaused ? 'PAUSED' : (t('idle_next') as string)}
         </TouchButton>
         {/* Legal gate for Magic Catcher — must render before reaction cam may record. */}
         <p style={{ marginTop: 12, fontSize: 'var(--text-2xs)', lineHeight: 1.5, textAlign: 'center', color: 'rgba(255,255,255,0.6)', maxWidth: 520, marginInline: 'auto', fontFamily: 'var(--font-ui)' }}>

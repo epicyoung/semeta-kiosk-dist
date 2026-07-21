@@ -698,20 +698,18 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   }
 
   const handleResume = async () => {
-    if (!navigator.onLine) { setResumeError(true); return }
-    setResumeError(false)
     try {
       const res = await fetch('/api/session-resume', { method: 'POST' })
-      if (res.ok) {
+      if (res.ok || res.status === 404) {
         const d = await res.json().catch(() => ({}))
         if (d?.pause_quota_sec != null) { setPauseQuotaSec(d.pause_quota_sec); setPauseUsedSec(d.pause_used_sec ?? 0) }
-        pauseStartRef.current = null
-        resume?.()
-        setSessionPaused(false)
       }
     } catch {
-      setResumeError(true)
+      // Fire and forget - even if offline, unpause locally
     }
+    pauseStartRef.current = null
+    resume?.()
+    setSessionPaused(false)
   }
 
   const handleDone = async () => {
@@ -1297,16 +1295,6 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                 </div>
               </Row>
 
-              {/* Magic Catcher — reaction cam toggle. Recording gated by IdleScreen disclaimer. */}
-              <div style={{ padding: '13px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ maxWidth: 380 }}>
-                    <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{t('set_magic_catcher') as string}</span>
-                    <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0' }}>{t('set_magic_catcher_hint') as string}</p>
-                  </div>
-                  <Toggle on={magicCatcher} onToggle={() => setMagicCatcher(v => !v)} />
-                </div>
-              </div>
 
               {/* License / Secret */}
               <div style={{ padding: '12px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
@@ -1439,6 +1427,17 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                 )}
               </div>
 
+              {/* Dompet token tenant — saldo kepotong cuma sama cloud AI (foto API + video).
+                  Faceswap lokal / comfy / Photo Print = 0 token. Saldo dari handshake pas panel dibuka. */}
+              <Row label="Token Balance">
+                <span style={{
+                  fontFamily: 'var(--font-ui)', fontSize: 'var(--text-lg)', fontWeight: 600, letterSpacing: '0.03em',
+                  color: tokenBalance == null ? 'rgba(255,255,255,0.25)' : tokenBalance > 50 ? '#a3be8c' : tokenBalance > 0 ? '#f0c040' : '#ff6b6b',
+                }}>
+                  {tokenBalance == null ? '—' : `${tokenBalance.toLocaleString('id-ID')} token`}
+                </span>
+              </Row>
+
               {/* Timer + Pause */}
               {(pause || resume) && (
                 <Row label={t('set_time_remaining') as string}>
@@ -1456,12 +1455,12 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                       </span>
                     )}
                     {sessionPaused ? (
-                      <button onClick={handleResume} disabled={!navigator.onLine} style={{
-                        padding: '6px 16px', borderRadius: 'var(--radius-glass)', border: 'none', cursor: navigator.onLine ? 'pointer' : 'default',
-                        background: navigator.onLine ? '#a3e635' : 'rgba(255,255,255,0.1)',
-                        color: navigator.onLine ? 'var(--bg)' : 'rgba(255,255,255,0.4)', fontWeight: 600, fontSize: 'var(--text-sm)', fontFamily: 'var(--font-ui)',
+                      <button onClick={handleResume} style={{
+                        padding: '6px 16px', borderRadius: 'var(--radius-glass)', border: 'none', cursor: 'pointer',
+                        background: '#a3e635',
+                        color: 'var(--bg)', fontWeight: 600, fontSize: 'var(--text-sm)', fontFamily: 'var(--font-ui)',
                       }}>
-                        {navigator.onLine ? t('set_resume') as string : t('set_resume_need_conn') as string}
+                        {t('set_resume') as string}
                       </button>
                     ) : pauseQuotaSec > 0 && pauseUsedSec >= pauseQuotaSec ? (
                       <span style={{ fontSize: 'var(--text-xs)', color: '#ff6b6b', fontFamily: 'var(--font-ui)' }}>
@@ -1478,21 +1477,6 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                     )}
                   </div>
                 </Row>
-              )}
-              {/* Dompet token tenant — saldo kepotong cuma sama cloud AI (foto API + video).
-                  Faceswap lokal / comfy / Photo Print = 0 token. Saldo dari handshake pas panel dibuka. */}
-              <Row label="Token Balance">
-                <span style={{
-                  fontFamily: 'var(--font-ui)', fontSize: 'var(--text-lg)', fontWeight: 600, letterSpacing: '0.03em',
-                  color: tokenBalance == null ? 'rgba(255,255,255,0.25)' : tokenBalance > 50 ? '#a3be8c' : tokenBalance > 0 ? '#f0c040' : '#ff6b6b',
-                }}>
-                  {tokenBalance == null ? '—' : `${tokenBalance.toLocaleString('id-ID')} token`}
-                </span>
-              </Row>
-              {resumeError && (
-                <p style={{ fontSize: 'var(--text-xs)', color: '#ff6b6b', margin: '-8px 0 8px' }}>
-                  {t('set_resume_failed') as string}
-                </p>
               )}
 
               {/* Pause Quota */}
@@ -1575,6 +1559,21 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                     <span style={{ fontSize: 'var(--text-2xs)', fontWeight: 600, letterSpacing: '0.06em', fontFamily: 'var(--font-ui)', color: on ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.35)' }}>{label}</span>
                   </div>
                 ))}
+              </div>
+
+              {/* Magic Catcher — reaction cam toggle. Recording gated by IdleScreen disclaimer. */}
+              <div style={{ padding: '13px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ maxWidth: 380 }}>
+                    <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{t('set_magic_catcher') as string}</span>
+                    <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0' }}>
+                      {t('set_magic_catcher_hint') as string}
+                      <br />
+                      <span style={{ color: '#f0c040', marginTop: 2, display: 'inline-block' }}>Only available in Webcam (getUserMedia) mode.</span>
+                    </p>
+                  </div>
+                  <Toggle on={magicCatcher} onToggle={() => setMagicCatcher(v => !v)} />
+                </div>
               </div>
 
               {/* System / Update */}

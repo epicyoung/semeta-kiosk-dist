@@ -4,6 +4,7 @@ import { TouchButton } from '@/components/ui/TouchButton'
 import { PrintLayoutPreview } from '@/components/ui/PrintLayoutPreview'
 import { stopCamera, triggerCanonCapture, rotateDataUrl } from '@/lib/camera'
 import { rotatedSize, CANON_LIVE, CANON_LIVE_MS } from '@/components/screens/LiveViewScreen'
+import { layoutSlots } from '@/lib/print-layout'
 import type { KioskAction, KioskState } from '@/lib/types'
 import { useT } from '@/lib/i18n'
 
@@ -161,17 +162,27 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource }: Props) {
   }, [running, done, cameraReady, state.shots.length, captureShot])
 
   const quarter = rotation === 90 || rotation === 270
-  // Review mode (done): switch to the print canvas aspect so preview fills cleanly.
-  // 2R_STRIP 2-up = 2:3 (1200×1800), 4R_PORTRAIT = 2:3, 4R_LANDSCAPE = 3:2.
   const printSize = state.template.print_size || '4R_PORTRAIT'
-  const isReviewLandscape = done && printSize === '4R_LANDSCAPE'
+  const isLandscapePrint = printSize === '4R_LANDSCAPE'
+  const isPrint = state.template.engine_type === 'print'
+
+  // Match the camera capture box to the EXACT aspect ratio of the individual cells in the template.
+  const { slots } = layoutSlots(printSize, target, state.template.layout_config)
+  const cellIsLandscape = slots[0] ? slots[0].w >= slots[0].h : true
+
+  // During review (done), the box MUST match the full paper's aspect ratio.
+  // During capture (!done) for print, match the individual cell's aspect ratio.
   const boxClass = done
-    ? (isReviewLandscape
+    ? (isLandscapePrint
         ? 'aspect-[3/2] w-full max-w-full h-auto max-h-full'
         : 'aspect-[2/3] w-[500px] max-w-full max-h-full h-auto')
-    : quarter
-      ? 'aspect-[9/16] w-[500px] max-w-full max-h-full h-auto'
-      : 'aspect-video w-full max-w-full h-auto max-h-full'
+    : isPrint
+      ? (cellIsLandscape
+          ? 'aspect-[3/2] w-full max-w-full h-auto max-h-full'
+          : 'aspect-[2/3] w-[500px] max-w-full max-h-full h-auto')
+      : quarter
+        ? 'aspect-[9/16] w-[500px] max-w-full max-h-full h-auto'
+        : 'aspect-video w-full max-w-full h-auto max-h-full'
 
   // Style live-feed dipakai bareng <video> (webcam) & <img> MJPEG (canon).
   const liveStyle: CSSProperties = {
@@ -289,6 +300,27 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource }: Props) {
             )}
           </div>
         </div>
+
+        {/* Thumbnails of taken shots (Requested for Photo Print) */}
+        {isPrint && !done && state.shots.length >= 0 && (
+          <div className="shrink-0 flex justify-center gap-2 px-5 pb-5 mt-[-10px]">
+            {Array.from({ length: target }, (_, i) => {
+              const url = state.shots[i]
+              return (
+                <div key={i} style={{
+                  width: cellIsLandscape ? 60 : 45,
+                  height: cellIsLandscape ? 40 : 60,
+                  borderRadius: 6,
+                  border: url ? '1.5px solid #a78bfa' : '1.5px dashed rgba(255,255,255,0.2)',
+                  background: url ? `url(${url}) center/cover no-repeat` : 'rgba(0,0,0,0.2)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}>
+                  {!url && <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.2)', fontWeight: 600 }}>{i + 1}</span>}
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       <div className="screen-actions shrink-0 p-5 flex gap-3">

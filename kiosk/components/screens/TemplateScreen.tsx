@@ -18,17 +18,29 @@ type Props = {
   dispatch: Dispatch<KioskAction>
   templates: Template[]
   maxTemplates: number
+  engineMode?: string | null
 }
 
-export function TemplateScreen({ state, dispatch, templates, maxTemplates }: Props) {
+export function TemplateScreen({ state, dispatch, templates, maxTemplates, engineMode }: Props) {
   const t = useT()
   const hasReal = templates.length > 0
-  const allList = hasReal ? templates : DUMMY_TEMPLATES
+  const isPrintMode = engineMode === 'print_local'
+  const allList = hasReal ? templates : (isPrintMode ? [] : DUMMY_TEMPLATES)
   const filtered = allList.filter(t => t.category === state.category)
-  // VIP multi (maxTemplates>1): tampilin SEMUA template — tamu pilih lintas kategori dalam 1 layar,
-  // gak perlu bolak-balik category (yang reset pilihan). Single: filter per kategori (behavior lama).
-  const list = maxTemplates > 1 ? allList : (filtered.length > 0 ? filtered : allList)
+  // Multi-template: filter per kategori (sama kayak single), sesuai request bos.
+  const list = filtered.length > 0 ? filtered : allList
   const selectedCount = state.selected.length
+
+  if (isPrintMode && !hasReal) {
+    return (
+      <div className="screen-split flex flex-col w-full h-full items-center justify-center">
+        <div style={{ textAlign: 'center', color: 'var(--fg-muted)', fontSize: 'var(--text-lg)', fontWeight: 300 }}>
+          <p style={{ marginBottom: 16, fontSize: '48px' }}>🖨️</p>
+          <p>Please add template in setting</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="screen-split flex flex-col w-full h-full overflow-hidden">

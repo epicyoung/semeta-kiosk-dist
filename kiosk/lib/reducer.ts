@@ -59,7 +59,7 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
       // Multi-template: tamu pilih 1 hasil di grid → collapse ke framechooser (flow single lama).
       if (state.screen !== 'resultchooser') return state
       const r = action.result
-      return { screen: 'framechooser', aiUrl: r.aiUrl, originalUrl: r.originalUrl, sourceUrl: r.sourceUrl, rawAiUrl: r.rawAiUrl, base: r.base, processingSec: r.processingSec, templateId: r.templateId }
+      return { screen: 'framechooser', aiUrl: r.aiUrl, originalUrl: r.originalUrl, sourceUrl: r.sourceUrl, rawAiUrl: r.rawAiUrl, base: r.base, processingSec: r.processingSec, templateId: r.templateId, allResults: state.results }
     }
 
     case 'GO_FACE_ASSIGN':
@@ -118,7 +118,7 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
 
     case 'CONFIRM_FRAME':
       if (state.screen !== 'framechooser') return state
-      return { screen: 'preview', aiUrl: state.aiUrl, originalUrl: state.originalUrl, sourceUrl: state.sourceUrl, rawAiUrl: state.rawAiUrl, base: state.base, processingSec: state.processingSec, selectedFrame: action.frame, videoUrl: state.videoUrl, templateId: state.templateId }
+      return { screen: 'preview', aiUrl: state.aiUrl, originalUrl: state.originalUrl, sourceUrl: state.sourceUrl, rawAiUrl: state.rawAiUrl, base: state.base, processingSec: state.processingSec, selectedFrame: action.frame, videoUrl: state.videoUrl, templateId: state.templateId, allResults: state.allResults }
 
     case 'GO_DELIVERY':
       if (state.screen !== 'preview') return state

@@ -71,7 +71,7 @@ export function GlassShell({ screenKey, direction, children, config, onLogoClick
       setSyncPhase({ kind: 'error', message: 'Tidak bisa terhubung. Pastikan PocketBase menyala.' })
     }
   }
-  const showSync = screenKey === 'category' || screenKey === 'template'
+  const showSync = (screenKey === 'category' || screenKey === 'template') && localConfig.engine_mode !== 'print_local'
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'g' || e.key === 'G') setGridDebug(v => !v) }

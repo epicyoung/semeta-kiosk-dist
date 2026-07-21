@@ -93,7 +93,7 @@ export function KioskApp({ config: initialConfig }: { config: KioskConfig }) {
   const orientedFrames = useOrientedFrames(config.frames)
   const direction = useRef<'forward' | 'backward'>('forward')
 
-  const { isExpired, pause, resume, refill } = useCountdown(config.remaining_sec ?? 0)
+  const { isExpired, pause, resume, refill, isPaused } = useCountdown(config.remaining_sec ?? 0)
   // Seed: page.tsx baru aja handshake sukses sebelum render, jadi "last OK" = mount time.
   const lastOkAt = useRef(Date.now())
   // Heartbeat: refill saat sukses, lock saat verdict server, grace 12 jam saat offline.
@@ -119,6 +119,15 @@ export function KioskApp({ config: initialConfig }: { config: KioskConfig }) {
   // Tanpa ini, timer InactivityReset (dep: dispatch) ke-restart tiap detik → failsafe mati,
   // dan effect di screen yang key ke dispatch ke-cancel terus.
   const wrappedDispatch: typeof dispatch = useCallback((rawAction) => {
+    // ── Anti-cheat: Block session start / dev nav if paused ─────────────
+    if (isPaused && 'type' in rawAction) {
+      if (rawAction.type === 'START') return
+      if (rawAction.type === 'SET_STATE') {
+        const nextScreen = (rawAction as any).state?.screen
+        if (nextScreen && nextScreen !== 'idle') return
+      }
+    }
+
     // Photo Print: consent langsung ke pemilih layout — liveview+category itu flow AI.
     // Rewrite di sini (bukan di ConsentScreen) karena cuma KioskApp yang pegang config.
     const action = ('type' in rawAction && rawAction.type === 'CONSENT_GIVEN' && config.engine_mode === 'print_local')
@@ -189,7 +198,14 @@ export function KioskApp({ config: initialConfig }: { config: KioskConfig }) {
     // ────────────────────────────────────────────────────────────────────
 
     dispatch(action)
-  }, [state, config.engine_mode, log, dispatch])
+  }, [state, config.engine_mode, log, dispatch, isPaused])
+
+  // Security: Kick to idle immediately if paused mid-session
+  useEffect(() => {
+    if (isPaused && state.screen !== 'idle') {
+      wrappedDispatch({ type: 'RESET' })
+    }
+  }, [isPaused, state.screen, wrappedDispatch])
 
   // Sync hash → state once on mount (dev nav via URL hash)
   useEffect(() => {
@@ -236,13 +252,13 @@ export function KioskApp({ config: initialConfig }: { config: KioskConfig }) {
 
   const screen = (() => {
     switch (state.screen) {
-      case 'idle':        return <IdleScreen dispatch={wrappedDispatch} />
+      case 'idle':        return <IdleScreen dispatch={wrappedDispatch} isPaused={isPaused} />
       case 'consent':     return <ConsentScreen dispatch={wrappedDispatch} />
       case 'liveview':    return <LiveViewScreen state={state} dispatch={wrappedDispatch} cameraSource={config.camera_source} />
       case 'category':    return <CategoryScreen state={state} dispatch={wrappedDispatch} templates={templates} eventName={config.event_name} licensed={config.licensed ?? false} />
       // Multi-template cuma faceswap LOCAL (butuh face_server :8000 buat sequential swap).
       // Fullbody (comfy) & faceswap API = selalu single-select.
-      case 'template':    return <TemplateScreen state={state} dispatch={wrappedDispatch} templates={templates} maxTemplates={config.engine_mode === 'faceswap_local' ? (config.max_templates ?? 1) : 1} />
+      case 'template':    return <TemplateScreen state={state} dispatch={wrappedDispatch} templates={templates} maxTemplates={config.engine_mode === 'faceswap_local' ? (config.max_templates ?? 1) : 1} engineMode={config.engine_mode} />
       case 'faceassign':  return <FaceAssignScreen state={state} dispatch={wrappedDispatch} />
       case 'multicapture': return <MultiCaptureScreen state={state} dispatch={wrappedDispatch} cameraSource={config.camera_source} />
       case 'processing':  return <ProcessingScreen state={state} dispatch={wrappedDispatch} generationSource={config.generation_source} eventName={config.event_name} licensed={config.licensed ?? false} videoUnlocked={isVideoUnlocked(config)} comfy={comfyCfg} enableMagicCatcher={config.enable_magic_catcher ?? false} enableVideoEngine={config.enable_video_engine ?? false} videoProvider={config.video_provider ?? 'PIXVERSE'} videoResolution={config.video_resolution ?? '720p'} onUploadFailed={(meta) => log('UPLOAD_FAILED', meta)} />

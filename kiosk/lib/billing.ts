@@ -60,6 +60,7 @@ export function useHeartbeat(
  */
 export function useCountdown(initialSec: number) {
   const [remainingSec, setRemaining] = useState(initialSec)
+  const [isPaused, setIsPaused] = useState(false)
   const lastTick = useRef(performance.now())
   const paused = useRef(false)
 
@@ -78,12 +79,13 @@ export function useCountdown(initialSec: number) {
     return () => clearInterval(id)
   }, [])
 
-  const pause = useCallback(() => { paused.current = true }, [])
+  const pause = useCallback(() => { paused.current = true; setIsPaused(true) }, [])
 
   const resume = useCallback(() => {
     lastTick.current = performance.now()
     paused.current = false
+    setIsPaused(false)
   }, [])
 
-  return { remainingSec, isExpired: remainingSec <= 0, pause, resume, refill: setRemaining }
+  return { remainingSec, isExpired: remainingSec <= 0, pause, resume, refill: setRemaining, isPaused }
 }

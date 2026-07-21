@@ -3,7 +3,7 @@ import { useState, useEffect, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import Moveable from 'react-moveable'
 import type { Template, PrintSize } from '@/lib/types'
-import { CANVAS_4R_PORTRAIT, CANVAS_4R_LANDSCAPE, PANEL_2R_STRIP } from '@/lib/print-layout'
+import { CANVAS_4R_PORTRAIT, CANVAS_4R_LANDSCAPE, PANEL_2R_STRIP, layoutSlots } from '@/lib/print-layout'
 
 type Slot = { x: number; y: number; w: number; h: number; r?: number }
 type Props = {
@@ -64,20 +64,21 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
   }, [displayDims.w, displayDims.h])
 
   const generateDefaultSlots = (): Slot[] => {
-    const out: Slot[] = []
     const n = template.shot_count || 4
-    const cw = editDims.w
-    const ch = editDims.h
-    const w = Math.min(cw - 40, 500)
-    const h = Math.round(w * 0.67)
-    const gap = 30
-    const totalH = (n * h) + ((n - 1) * gap)
-    const startY = Math.max(50, (ch - totalH) / 2)
-    const startX = (cw - w) / 2
-    for (let i = 0; i < n; i++) {
-      out.push({ x: startX, y: startY + (i * (h + gap)), w, h, r: 0 })
-    }
-    return out
+    const { slots: defaultGrid } = layoutSlots(size, n)
+    
+    // Beri sedikit padding/gap (shrink 4%) biar gampang di-resize (gak nempel tembok)
+    return defaultGrid.map(s => {
+      const padW = s.w * 0.04
+      const padH = s.h * 0.04
+      return {
+        x: s.x + padW,
+        y: s.y + padH,
+        w: s.w - (padW * 2),
+        h: s.h - (padH * 2),
+        r: s.r || 0
+      }
+    })
   }
 
   useEffect(() => {
@@ -181,10 +182,7 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
         padding: '16px 28px',
         display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap',
       }}>
-        <button onClick={handleAddSlot} style={pillBtn(false)}>
-          <span style={{ fontSize: 20, lineHeight: 0, marginTop: -2, color: BRAND }}>+</span>
-          Add Slot
-        </button>
+
         <button onClick={handleDeleteSlot} disabled={selectedSlotIndex === null} style={pillBtn(false, true, selectedSlotIndex === null)}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
@@ -224,7 +222,7 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
             style={{
               width: displayW, height: displayH,
               position: 'relative',
-              background: template.overlay_url ? '#1a1140' : '#f4f2ec',
+              background: template.overlay_url ? '#1a1140' : '#272729',
               borderRadius: 4,
               boxShadow: '0 40px 80px -24px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.08)',
               outline: `1px solid ${GLASS_LINE}`,

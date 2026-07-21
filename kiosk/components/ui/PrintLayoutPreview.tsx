@@ -38,7 +38,7 @@ export function PrintLayoutPreview({ template, shots, containerWidth, containerH
           maxWidth: containerWidth ? 'none' : '100%',
           maxHeight: containerHeight ? 'none' : '100%',
           aspectRatio: `${displayCanvas.w} / ${displayCanvas.h}`,
-          background: '#f4f2ec', // warm paper white, matches Layout Studio
+          background: '#272729', // dark grey, matches Layout Studio
           borderRadius: 3,
           boxShadow: '0 24px 48px -16px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.1)',
           overflow: 'hidden'

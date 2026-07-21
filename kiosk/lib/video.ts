@@ -18,7 +18,7 @@ export function isVideoUnlocked(cfg: { bypassed?: boolean; enable_video?: boolea
 export async function animateImage(
   imageUrl: string,
   provider: VideoProvider,
-  opts?: { positive?: string; negative?: string; resolution?: '720p' | '1080p'; duration?: number; signal?: AbortSignal },
+  opts?: { positive?: string; negative?: string; resolution?: '720p' | '1080p'; duration?: number; onFail?: (status: number) => void; signal?: AbortSignal },
 ): Promise<string | null> {
   try {
     const res = await fetch('/api/generate-video', {
@@ -36,7 +36,7 @@ export async function animateImage(
       }),
       signal: opts?.signal,
     })
-    if (!res.ok) return null
+    if (!res.ok) { opts?.onFail?.(res.status); return null } // 402 = token abis → caller kasih popup
     const { video_url } = await res.json()
     return typeof video_url === 'string' && video_url ? video_url : null
   } catch {

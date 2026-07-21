@@ -84,6 +84,8 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
   const [emailError, setEmailError] = useState(false)
   const [emailSent, setEmailSent] = useState(false)
   const [showVideoConfirm, setShowVideoConfirm] = useState(false)
+  const [noTokens, setNoTokens] = useState(false)                 // popup pas worker balik 402 (token abis)
+  const [videoCost, setVideoCost] = useState<number | null>(null) // harga token buat tombol (cache handshake)
   const [videoLoading, setVideoLoading] = useState(false)
   const [videoProgress, setVideoProgress] = useState(0)
   // Auto video engine (img2vid): video udah jadi di ProcessingScreen, kebawa lewat state.
@@ -93,6 +95,7 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
   const [activeTab, setActiveTab] = useState<'photo' | 'video'>('photo')
   const [finalizing, setFinalizing] = useState(false)
   const finalizedBase = useRef<string | null>(null) // cegah finalize dobel per foto
+  const videoGenRef = useRef(false)                  // cegah double-tap dialog → double token charge
   const qrHiddenRef = useRef<HTMLDivElement>(null)   // sumber SVG QR buat di-burn ke video
   const inputRef = useRef<HTMLInputElement>(null)
   const progressRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -116,6 +119,17 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
     if (state.aiUrl) loadImageDims(state.aiUrl).then(d => { if (live) setAiDims(d) })
     return () => { live = false }
   }, [state.originalUrl, state.aiUrl])
+
+  // Harga token video buat tombol — baca cache handshake 'lastVideoCosts' (sumber sama SettingsPanel).
+  // client-only (localStorage) → di useEffect, aman dari SSR.
+  useEffect(() => {
+    try {
+      const costs = JSON.parse(localStorage.getItem('lastVideoCosts') || '{}')
+      const prov = config.video_provider ?? 'PIXVERSE'
+      const c = costs[config.video_resolution === '1080p' ? `${prov}_1080` : prov] ?? costs[prov]
+      setVideoCost(typeof c === 'number' ? c : null)
+    } catch { setVideoCost(null) }
+  }, [config.video_provider, config.video_resolution])
 
   const origOrientation = origDims ? orientationOf(origDims.w, origDims.h) : 'portrait'
   const aiOrientation = aiDims ? orientationOf(aiDims.w, aiDims.h) : 'portrait'
@@ -189,6 +203,8 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
   // Token kepotong server-side sesuai harga dashboard; gagal/402 → fail-safe balik ke
   // tombol, foto tetep aman. Dipakai buat retry pas auto-video gagal / bikin on-demand.
   async function handleVideoConfirmOk() {
+    if (videoGenRef.current) return // double-tap guard — dialog confirm bisa ke-tap 2x sebelum state update
+    videoGenRef.current = true
     setShowVideoConfirm(false)
     setVideoLoading(true)
     setVideoProgress(0)
@@ -207,12 +223,13 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
       const tmpl = config.templates.find(t => t.id === state.templateId)
       const positive = tmpl?.video_positive_prompt || config.video_defaults?.default_positive_prompt
       const negative = tmpl?.video_negative_prompt || config.video_defaults?.default_negative_prompt
-      const video = await animateImage(seed, config.video_provider ?? 'PIXVERSE', { positive, negative, resolution: config.video_resolution ?? '720p', duration: config.video_duration })
+      const video = await animateImage(seed, config.video_provider ?? 'PIXVERSE', { positive, negative, resolution: config.video_resolution ?? '720p', duration: config.video_duration, onFail: (status) => { if (status === 402) setNoTokens(true) } })
       if (video) {
         // Baru DI SINI: overlay = frame KEPILIH (+ QR) di-burn ke video (letterbox 2:3, ffmpeg server).
         // Gagal finalize → fallback video mentah (tamu ga kehilangan video).
-        const qrSvg = qrHiddenRef.current?.querySelector('svg')?.outerHTML ?? null
-        const overlay = await buildVideoOverlay(currentFrame?.url ?? null, licensed ? qrSvg : null)
+        // QR JANGAN di-burn ke MP4 — file digital biar bersih. QR cukup di LAYAR (JSX overlay) +
+        // kertas print. Tamu tetep dapet video via QR microsite (satu QR = ori/ai/video). Overlay = frame doang.
+        const overlay = await buildVideoOverlay(currentFrame?.url ?? null, null)
         const finalUrl = (state.base ? await finalizeVideo(video, overlay, eventName, state.base) : null) ?? video
         setVideoProgress(100)
         setVideoUrl(finalUrl)
@@ -222,6 +239,9 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
       }
     } finally {
       setVideoLoading(false)
+      // videoGenRef stays true if video generated (prevent re-gen same photo).
+      // Reset only on failure so user can retry.
+      if (!videoUrl) videoGenRef.current = false
     }
   }
 
@@ -257,12 +277,22 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
           compositeFrame(rawOriginal, frameForOriginal?.url ?? null, 1200),
           compositeFrame(rawAi, currentFrame?.url ?? null, 1200),
         ])
+        
+        let mCount = 0
+        let framedMulti: string[] = []
+        if (state.allResults && state.allResults.length > 1) {
+          const unchosen = state.allResults.filter(r => (r.rawAiUrl ?? r.aiUrl) !== rawAi)
+          mCount = unchosen.length
+          framedMulti = await Promise.all(unchosen.map(r => compositeFrame(r.rawAiUrl ?? r.aiUrl, currentFrame?.url ?? null, 1200)))
+        }
+
         const [, resB] = await Promise.all([
           uploadAsset(framedA, 'A', base, meta),
           uploadAsset(framedB, 'B', base, meta),
+          ...framedMulti.map((data, i) => uploadAsset(data, `M${i+1}` as 'A', base, meta)) // type cast as 'A' just to bypass strict TS, the actual key generated will be _M1, _M2
         ])
         if (uploadSeq.current === seq) {
-          setShareUrl(`https://semeta-microsite.pages.dev/s?b=${encodeURIComponent(resB.key)}`)
+          setShareUrl(`https://semeta-microsite.pages.dev/s?b=${encodeURIComponent(resB.key)}${mCount > 0 ? `&m=${mCount}` : ''}`)
           setQrStatus('idle')
         }
         return
@@ -307,9 +337,8 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
     ;(async () => {
       setFinalizing(true)
       try {
-        // QR SVG dari node hidden (kalau licensed & ada shareUrl). Frame = frame kepilih.
-        const qrSvg = qrHiddenRef.current?.querySelector('svg')?.outerHTML ?? null
-        const overlay = await buildVideoOverlay(currentFrame?.url ?? null, licensed ? qrSvg : null)
+        // QR JANGAN di-burn ke MP4 (lihat handleVideoConfirmOk) — overlay video = frame kepilih doang.
+        const overlay = await buildVideoOverlay(currentFrame?.url ?? null, null)
         const finalUrl = await finalizeVideo(preVideo, overlay, eventName, state.base!)
         if (live && finalUrl) {
           setVideoUrl(finalUrl); setActiveTab('video')
@@ -567,7 +596,7 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
             <TouchButton onClick={() => setShowVideoConfirm(true)} className="flex-1" disabled={printing || videoLoading || !!videoUrl}>
               <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.2 }}>
                 <span style={{ fontSize: 'var(--text-sm)' }}>{videoUrl ? t('preview_btn_video_ready') as string : videoLoading ? t('preview_generating') as string : t('preview_btn_make_video') as string}</span>
-                {!videoUrl && !videoLoading && <span style={{ fontSize: 'var(--text-2xs)', opacity: 0.55, fontWeight: 400 }}>{t('preview_video_cost_note') as string}</span>}
+                {!videoUrl && !videoLoading && <span style={{ fontSize: 'var(--text-2xs)', opacity: 0.55, fontWeight: 400 }}>{videoCost != null ? `${videoCost} Token` : t('preview_video_cost_note') as string}</span>}
               </span>
             </TouchButton>
           )}
@@ -596,6 +625,20 @@ export function PreviewScreen({ mode, state, dispatch, frames, config, licensed,
             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-muted)', lineHeight: 1.7 }}>
               {t('preview_email_sent_body') as string}
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Out of tokens popup (worker 402) */}
+      {noTokens && (
+        <div className="animate-fade-in" style={{ position: 'absolute', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(9,1,53,0.72)', backdropFilter: 'blur(8px)' }} onClick={() => setNoTokens(false)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: 'rgba(20,10,70,0.95)', border: '1px solid var(--border-dialog)', borderRadius: 'var(--radius-dialog)', padding: '40px 36px', maxWidth: 420, width: '80%', textAlign: 'center', boxShadow: '0 24px 80px rgba(0,0,0,0.7)' }}>
+            <div style={{ fontSize: 'var(--text-3xl)', marginBottom: 16 }}>🪙</div>
+            <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 600, marginBottom: 12, letterSpacing: '-0.02em' }}>Oops — out of tokens!</h2>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-muted)', lineHeight: 1.6, marginBottom: 28 }}>
+              Your video credits just ran out. Please contact the admin to top up and keep the magic rolling. ✨
+            </p>
+            <TouchButton onClick={() => setNoTokens(false)} className="w-full">Got it</TouchButton>
           </div>
         </div>
       )}

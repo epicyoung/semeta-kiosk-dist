@@ -149,12 +149,20 @@ export function LocalTemplateManager({ onRefreshTemplates }: Props) {
             Local Print Templates
           </p>
         </div>
-        <TouchButton
+        <button
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
+          style={{
+            padding: '8px 14px', borderRadius: 8,
+            background: 'rgba(255,255,255,0.04)',
+            border: '1.5px solid rgba(255,255,255,0.08)',
+            color: '#fff', cursor: uploading ? 'default' : 'pointer', fontSize: 'var(--text-xs)', fontWeight: 600,
+            transition: 'all 150ms ease',
+            opacity: uploading ? 0.5 : 1
+          }}
         >
           {uploading ? 'Uploading…' : '+ Add Overlay'}
-        </TouchButton>
+        </button>
         <input 
           type="file" 
           ref={fileInputRef} 
@@ -169,6 +177,7 @@ export function LocalTemplateManager({ onRefreshTemplates }: Props) {
           <div style={{ textAlign: 'center', padding: '28px 12px', border: '1px dashed rgba(255,255,255,0.12)', borderRadius: 12 }}>
             <p style={{ fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.55)', margin: 0, fontWeight: 600 }}>No print templates yet</p>
             <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.4)', margin: '4px 0 0' }}>Upload a transparent PNG overlay to create one.</p>
+            <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.25)', margin: '4px 0 0', fontFamily: 'var(--font-ui)' }}>4R: 1200×1800px · 2 Stripe: 600×1800px (@300dpi)</p>
           </div>
         )}
 
@@ -199,7 +208,7 @@ export function LocalTemplateManager({ onRefreshTemplates }: Props) {
               <div style={{
                 width: isLandscape || currentStyle === '2_STRIPE' ? 90 : 60,
                 height: isLandscape ? 60 : 90,
-                background: '#f4f2ec', borderRadius: 6, overflow: 'hidden', flexShrink: 0,
+                background: '#272729', borderRadius: 6, overflow: 'hidden', flexShrink: 0,
                 boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
@@ -290,7 +299,7 @@ export function LocalTemplateManager({ onRefreshTemplates }: Props) {
                 {currentStyle === '4R' && (
                   <div>
                     <span style={{ fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', fontWeight: 700, display: 'block', marginBottom: 8 }}>
-                      Orientation
+                      Orientation of Camera
                     </span>
                     <div style={{ display: 'flex', gap: 6 }}>
                       {(['portrait', 'landscape'] as const).map(ori => {
