@@ -6,9 +6,16 @@ export function slugify(name: string): string {
   return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'event'
 }
 
+function formatLocalDate(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}${m}${d}`
+}
+
 /** eventFolder: "Fun Run!" + date → "fun-run-20260625" */
 export function eventFolder(name: string, date = new Date()): string {
-  const d = date.toISOString().slice(0, 10).replace(/-/g, '')
+  const d = formatLocalDate(date)
   return `${slugify(name)}-${d}`
 }
 
@@ -35,7 +42,7 @@ export function videoFilename(eventName: string, seq: string, date = new Date())
 }
 
 function sessionBase(eventName: string, date: Date): string {
-  const d = date.toISOString().slice(0, 10).replace(/-/g, '')
+  const d = formatLocalDate(date)
   return `${slugify(eventName)}-${d}`
 }
 

@@ -261,4 +261,105 @@ export interface Translations {
   set_bg_effects: string
   set_bg_effects_hint: string          // "Off = solid color, blob removed"
   set_bg_color: string
+
+  // ── SettingsPanel — accordion group titles ───────────────────────────────────
+  set_group_event: string              // "Event & Identity"
+  set_group_branding: string           // "Creative & Branding"
+  set_group_engine: string             // "AI Engine & Templates"
+  set_group_hardware: string           // "Hardware & System"
+
+  // ── SettingsPanel — engine/stylize section ───────────────────────────────────
+  set_token_balance: string            // "Token Balance"
+  set_token_unit: string               // "token" (suffix after number)
+  set_api_model_hint: string           // per-photo token cost note
+  set_stylize_offline: string          // "Stylize server offline — saved setting still used"
+  set_model_family: string             // "Model family"
+  set_checkpoint: string               // "Checkpoint"
+  set_controlnet: string               // "ControlNet"
+  set_controlnet_hint: string
+  set_controlnet_strength: string      // "ControlNet strength"
+  set_controlnet_strength_hint: string
+  set_face_lock: string                // "Face lock"
+  set_flux_locked_note: string         // Flux fixed-recipe note
+  set_sampler: string                  // "Sampler"
+  set_scheduler: string                // "Scheduler"
+  set_cfg: string                      // "CFG (prompt fidelity)"
+  set_cfg_hint: string
+  set_steps: string                    // "Steps (smoothness)"
+  set_steps_hint: string
+  set_denoise: string                  // "Denoise (default)"
+  set_denoise_hint: string             // "template can override"
+
+  // ── SettingsPanel — video engine section ─────────────────────────────────────
+  set_video_engine: string             // "Enable Video Engine (img2vid)"
+  set_video_locked_badge: string       // "LOCKED"
+  set_video_need_rental: string        // needs active rental note
+  set_video_locked_note: string        // feature locked note
+  set_video_enabled_note: string       // last photo animated note
+  set_video_provider: string           // "Select Video Provider"
+  set_video_provider_hint_cost: string // "Each video (8s, {res}) burns {n} token…" — {res}/{n} via replace
+  set_video_provider_hint_disabled: string
+  set_video_provider_hint_online: string
+  set_video_resolution: string         // "Video Resolution"
+  set_video_res_hint_ltx: string
+  set_video_res_hint_no1080: string
+  set_video_res_hint_default: string
+  set_video_duration: string           // "Video Duration"
+  set_video_dur_hint_ltx: string
+  set_video_dur_hint_default: string
+  set_video_dur_5s: string             // "5 seconds"
+  set_video_dur_5s_ltx: string         // "5 seconds (LTX ✕)"
+  set_video_dur_8s: string             // "8 seconds"
+  set_video_prompt_designer: string    // "Video Prompt Engineer"
+  set_video_prompt_designer_hint: string
+  set_video_prompt_designer_btn: string // "Setup Prompts"
+  set_verify_checking: string          // "Verifying key…"
+  set_verify_valid: string             // "✓ Key valid — restarting in {n}…"
+  set_verify_expired: string
+  set_verify_invalid: string
+  set_verify_offline: string
+  set_secret_verify_btn_checking: string // "Check…"
+  set_status_no_watermark: string      // "NO WATERMARK"
+  set_status_qr_active: string         // "QR ACTIVE"
+  set_magic_catcher_webcam_only: string // "Only available in Webcam (getUserMedia) mode."
+  set_restart_booth_title: string      // restart booth tooltip
+
+  // ── LocalTemplateManager (Photo Print) ───────────────────────────────────────
+  ltm_loading: string                  // "Loading…"
+  ltm_section_kicker: string           // "Photo Print"
+  ltm_section_title: string            // "Local Print Templates"
+  ltm_add_overlay: string              // "+ Add Overlay"
+  ltm_uploading: string                // "Uploading…"
+  ltm_upload_failed: string            // alert on upload fail
+  ltm_empty_title: string              // "No print templates yet"
+  ltm_empty_body: string               // "Upload a transparent PNG overlay to create one."
+  ltm_empty_spec: string               // canvas spec line
+  ltm_name: string                     // "Name"
+  ltm_step1: string                    // "Step 1 — Print Style"
+  ltm_orientation: string              // "Orientation of Camera"
+  ltm_step2: string                    // "Step 2 — Number of Shots"
+  ltm_shots_suffix: string             // "Shot"/"Shots" — code adds count+plural
+  ltm_layout_studio: string            // "Layout Studio"
+  ltm_delete: string                   // "Delete"
+  ltm_style_4r_label: string           // "4R Print"
+  ltm_style_4r_desc: string
+  ltm_style_2stripe_label: string      // "2 Stripe"
+  ltm_style_2stripe_desc: string
+  ltm_default_name: string             // "Print Template" (auto name prefix)
+
+  // ── VideoPromptManager ───────────────────────────────────────────────────────
+  vpm_title: string                    // "Video Prompt Engineer"
+  vpm_subtitle: string
+  vpm_cancel: string                   // "Cancel"
+  vpm_save: string                     // "Save Configuration"
+  vpm_choice_label: string             // "Choice" — code appends #n
+  vpm_remove: string                   // "Remove"
+  vpm_field_title: string              // "Label / Button Title"
+  vpm_field_title_ph: string           // placeholder
+  vpm_field_positive: string           // "Positive Prompt (Motion Style)"
+  vpm_field_positive_ph: string
+  vpm_field_negative: string           // "Negative Prompt (Anti-Parallax etc.)"
+  vpm_field_negative_ph: string
+  vpm_add: string                      // "Add Prompt Choice"
+  vpm_new_choice_title: string         // default title for a new choice
 }

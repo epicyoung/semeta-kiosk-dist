@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import type { VideoPromptChoice, KioskConfig } from '../../lib/types'
+import { useT } from '@/lib/i18n'
 
 type Props = {
   open: boolean
@@ -9,6 +10,7 @@ type Props = {
 }
 
 export function VideoPromptManager({ open, onClose, config, onConfigChanged }: Props) {
+  const t = useT()
   const [choices, setChoices] = useState<VideoPromptChoice[]>(config.video_prompt_choices ?? [])
 
   useEffect(() => {
@@ -34,7 +36,7 @@ export function VideoPromptManager({ open, onClose, config, onConfigChanged }: P
   }
 
   const addChoice = () => {
-    setChoices([...choices, { id: crypto.randomUUID(), title: 'Gaya Baru', positive_prompt: '', negative_prompt: '' }])
+    setChoices([...choices, { id: crypto.randomUUID(), title: t('vpm_new_choice_title') as string, positive_prompt: '', negative_prompt: '' }])
   }
 
   const removeChoice = (id: string) => {
@@ -57,21 +59,21 @@ export function VideoPromptManager({ open, onClose, config, onConfigChanged }: P
       }}>
         <div>
           <h2 style={{ fontSize: 'var(--text-2xl)', fontWeight: 600, margin: '0 0 8px', letterSpacing: '-0.02em' }}>
-            Video Prompt Engineer
+            {t('vpm_title') as string}
           </h2>
           <p style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-muted)', margin: 0 }}>
-            Tentukan pilihan gaya video yang bisa dipilih tamu. Kosongkan untuk pakai default pabrik.
+            {t('vpm_subtitle') as string}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 12 }}>
           <button onClick={onClose} style={{
             padding: '12px 24px', background: 'transparent', border: '1px solid rgba(255,255,255,0.2)',
             borderRadius: 'var(--radius-glass)', color: '#fff', fontSize: 'var(--text-sm)', cursor: 'pointer'
-          }}>Batal</button>
+          }}>{t('vpm_cancel') as string}</button>
           <button onClick={handleSave} style={{
             padding: '12px 24px', background: 'var(--brand)', border: 'none',
             borderRadius: 'var(--radius-glass)', color: '#fff', fontSize: 'var(--text-sm)', fontWeight: 600, cursor: 'pointer'
-          }}>Simpan Konfigurasi</button>
+          }}>{t('vpm_save') as string}</button>
         </div>
       </div>
 
@@ -84,19 +86,19 @@ export function VideoPromptManager({ open, onClose, config, onConfigChanged }: P
               borderRadius: 'var(--radius-preview)', padding: 24
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.5)', fontFamily: 'var(--font-ui)' }}>Pilihan #{i + 1}</span>
+                <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.5)', fontFamily: 'var(--font-ui)' }}>{t('vpm_choice_label') as string} #{i + 1}</span>
                 <button onClick={() => removeChoice(c.id)} style={{
                   background: 'rgba(255,107,107,0.1)', color: '#ff6b6b', border: 'none',
                   borderRadius: 6, padding: '4px 8px', fontSize: 'var(--text-xs)', cursor: 'pointer'
-                }}>Hapus</button>
+                }}>{t('vpm_remove') as string}</button>
               </div>
 
               <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.6)', marginBottom: 6 }}>Label / Judul Tombol</label>
+                <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.6)', marginBottom: 6 }}>{t('vpm_field_title') as string}</label>
                 <input
                   value={c.title}
                   onChange={e => updateChoice(c.id, 'title', e.target.value)}
-                  placeholder="Misal: Senyum & Dadah 👋"
+                  placeholder={t('vpm_field_title_ph') as string}
                   style={{
                     width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
                     borderRadius: 6, color: '#fff', padding: '10px 12px', fontSize: 'var(--text-sm)'
@@ -105,11 +107,11 @@ export function VideoPromptManager({ open, onClose, config, onConfigChanged }: P
               </div>
 
               <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.6)', marginBottom: 6 }}>Positive Prompt (Gaya Gerak)</label>
+                <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.6)', marginBottom: 6 }}>{t('vpm_field_positive') as string}</label>
                 <textarea
                   value={c.positive_prompt}
                   onChange={e => updateChoice(c.id, 'positive_prompt', e.target.value)}
-                  placeholder="Cinematic, person is jumping energetically..."
+                  placeholder={t('vpm_field_positive_ph') as string}
                   rows={4}
                   style={{
                     width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
@@ -119,11 +121,11 @@ export function VideoPromptManager({ open, onClose, config, onConfigChanged }: P
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.6)', marginBottom: 6 }}>Negative Prompt (Anti-Paralaks dll)</label>
+                <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.6)', marginBottom: 6 }}>{t('vpm_field_negative') as string}</label>
                 <textarea
                   value={c.negative_prompt}
                   onChange={e => updateChoice(c.id, 'negative_prompt', e.target.value)}
-                  placeholder="frozen, static, parallax effect..."
+                  placeholder={t('vpm_field_negative_ph') as string}
                   rows={3}
                   style={{
                     width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
@@ -147,7 +149,7 @@ export function VideoPromptManager({ open, onClose, config, onConfigChanged }: P
           >
             <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.5)' }}>
               <div style={{ fontSize: 'var(--text-3xl)', marginBottom: 8 }}>+</div>
-              <div style={{ fontSize: 'var(--text-sm)' }}>Tambah Pilihan Prompt</div>
+              <div style={{ fontSize: 'var(--text-sm)' }}>{t('vpm_add') as string}</div>
             </div>
           </div>
         </div>

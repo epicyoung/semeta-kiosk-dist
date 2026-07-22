@@ -32,7 +32,7 @@ const CAMERA_OPTS = [
 ]
 // Stylize (face_server) — opsi asli dari GET :8000/capabilities, ini cuma label map.
 const COMFY_FAMILY_LABELS: Record<string, string> = { sd15: 'SD 1.5', sdxl: 'SDXL', flux: 'Flux' }
-const COMFY_CONTROLNET_LABELS: Record<string, string> = { canny: 'Canny (garis/outline)', depth: 'Depth (kedalaman 3D)', off: 'Off' }
+const COMFY_CONTROLNET_LABELS: Record<string, string> = { canny: 'Canny (lines/outline)', depth: 'Depth (3D depth)', off: 'Off' }
 // Sampler/scheduler — value '' = default per family. Allowlist sinkron sama comfy_client.py.
 const COMFY_SAMPLER_OPTS = [
   { value: '',                label: 'Default (per family)' },
@@ -76,9 +76,9 @@ const COMFY_CONTROLNET_STRENGTH = 0.8 // fixed di face_server — hanya buat rec
 // UI — endpoint-nya masih di worker (video-provider.ts) kalau suatu saat mau dibalikin. Harga token
 // di-append otomatis di map bawah (videoProviderOpts).
 const VIDEO_PROVIDER_OPTS: { value: VideoProvider; label: string }[] = [
-  { value: 'LTX',      label: 'Murah — LTX 2.3'       },
-  { value: 'PIXVERSE', label: 'Medium — PixVerse V6'  },
-  { value: 'SEEDANCE', label: 'Mahal — Seedance Fast' },
+  { value: 'LTX',      label: 'Budget — LTX 2.3'       },
+  { value: 'PIXVERSE', label: 'Standard — PixVerse V6' },
+  { value: 'SEEDANCE', label: 'Premium — Seedance Fast' },
 ]
 
 type StylizeCaps = {
@@ -796,7 +796,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
           <div style={{ maxWidth: 680, margin: '0 auto' }}>
 
             {/* ── GROUP 1: EVENT & IDENTITY ─────────────────────────────── */}
-            <AccordionGroup id="event" icon="🎪" title="Event & Identity" open={openGroup === 'event'} onToggle={toggleGroup}>
+            <AccordionGroup id="event" icon="🎪" title={t('set_group_event') as string} open={openGroup === 'event'} onToggle={toggleGroup}>
               <Row label={t('set_kiosk_name') as string}>
                 <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.5)', fontFamily: 'var(--font-ui)' }}>
                   {config.kiosk_name ?? '—'}
@@ -833,7 +833,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
             </AccordionGroup>
 
             {/* ── GROUP 2: CREATIVE & BRANDING ──────────────────────────── */}
-            <AccordionGroup id="branding" icon="🎨" title="Creative & Branding" open={openGroup === 'branding'} onToggle={toggleGroup}>
+            <AccordionGroup id="branding" icon="🎨" title={t('set_group_branding') as string} open={openGroup === 'branding'} onToggle={toggleGroup}>
               {/* Logo */}
               <div style={{ padding: '12px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: logoPreview ? 12 : 0 }}>
@@ -959,14 +959,14 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
             </AccordionGroup>
 
             {/* ── GROUP 3: AI ENGINE & TEMPLATES ────────────────────────── */}
-            <AccordionGroup id="engine" icon="🧠" title="AI Engine & Templates" open={openGroup === 'engine'} onToggle={toggleGroup}>
-              <Row label="Token Balance">
+            <AccordionGroup id="engine" icon="🧠" title={t('set_group_engine') as string} open={openGroup === 'engine'} onToggle={toggleGroup}>
+              <Row label={t('set_token_balance') as string}>
                 <span style={{
                   fontFamily: 'var(--font-ui)', fontSize: 'var(--text-sm)', fontWeight: 600, letterSpacing: '0.02em',
                   color: tokenBalance == null ? 'rgba(255,255,255,0.25)' : tokenBalance > 50 ? '#a3be8c' : tokenBalance > 0 ? '#f0c040' : '#ff6b6b',
                   background: 'rgba(0,0,0,0.2)', padding: '4px 10px', borderRadius: 'var(--radius-glass)', border: '1px solid rgba(255,255,255,0.05)'
                 }}>
-                  {tokenBalance == null ? '—' : `${tokenBalance.toLocaleString('id-ID')} token`}
+                  {tokenBalance == null ? '—' : `${tokenBalance.toLocaleString('id-ID')} ${t('set_token_unit') as string}`}
                 </span>
               </Row>
               {/* Engine Mode */}
@@ -981,7 +981,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                 </div>
               </Row>
               {isApi && (
-                <RowHint label={t('set_api_model') as string} hint="Tiap foto motong token sesuai token_cost template (diatur di dashboard admin).">
+                <RowHint label={t('set_api_model') as string} hint={t('set_api_model_hint') as string}>
                   <Sel value={apiModel} options={API_MODEL_OPTS} onChange={setApiModel} />
                 </RowHint>
               )}
@@ -999,7 +999,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
               </p>
               {comfyCaps ? (
                 <>
-                  <Row label="Model family">
+                  <Row label={t('set_model_family') as string}>
                     <Sel value={comfyFamily} options={comfyFamilyOpts} onChange={v => {
                       setComfyFamily(v as ComfyModelFamily)
                       // Ganti family = reset checkpoint ke milik family baru — checkpoint
@@ -1008,19 +1008,19 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                       if (first) setComfyCheckpoint(first)
                     }} />
                   </Row>
-                  <Row label="Checkpoint">
+                  <Row label={t('set_checkpoint') as string}>
                     <Sel value={comfyCheckpoint} options={comfyCkptOpts} onChange={setComfyCheckpoint} />
                   </Row>
-                  <RowHint label="ControlNet" hint="Seberapa ketat pose/garis dari foto tamu dipertahankan. Off = model bebas berkreasi, abaikan foto asli.">
+                  <RowHint label={t('set_controlnet') as string} hint={t('set_controlnet_hint') as string}>
                     <Sel value={comfyControlnet} options={comfyControlnetOpts} onChange={v => setComfyControlnet(v as ComfyControlnetMode)} />
                   </RowHint>
                   {comfyControlnet !== 'off' && (
-                    <RowHint label="ControlNet strength" hint="Seberapa ketat pose/garis foto tamu 'mengunci' hasil. Rendah = pose lebih longgar/kreatif. Tinggi = pose persis foto asli, tapi gampang kaku/artefak di tepi.">
+                    <RowHint label={t('set_controlnet_strength') as string} hint={t('set_controlnet_strength_hint') as string}>
                       <Sel value={comfyCnStrength} options={COMFY_CN_STRENGTH_OPTS} onChange={setComfyCnStrength} />
                     </RowHint>
                   )}
                   {comfyCaps.face_lock && (
-                    <Row label="Face lock">
+                    <Row label={t('set_face_lock') as string}>
                       <Toggle on={comfyFaceLock} onToggle={() => setComfyFaceLock(v => !v)} />
                     </Row>
                   )}
@@ -1029,20 +1029,20 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                       sesuatu yang diem-diem gak ngefek. */}
                   {comfyFluxLocked ? (
                     <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '8px 0' }}>
-                      Flux pakai resep tetap (Euler · Simple · CFG 1.0 · 20 steps) — gak bisa diubah, biar hasil gak rusak.
+                      {t('set_flux_locked_note') as string}
                     </p>
                   ) : (
                     <>
-                      <Row label="Sampler">
+                      <Row label={t('set_sampler') as string}>
                         <Sel value={comfySampler} options={COMFY_SAMPLER_OPTS} onChange={setComfySampler} />
                       </Row>
-                      <Row label="Scheduler">
+                      <Row label={t('set_scheduler') as string}>
                         <Sel value={comfyScheduler} options={COMFY_SCHEDULER_OPTS} onChange={setComfyScheduler} />
                       </Row>
-                      <RowHint label="CFG (kesetiaan ke prompt)" hint="Seberapa 'nurut' hasil ke kata-kata prompt. Rendah = lebih natural/bebas tapi kadang melenceng dari prompt. Tinggi = ngotot ikutin prompt, tapi gampang belang warna/kebakar.">
+                      <RowHint label={t('set_cfg') as string} hint={t('set_cfg_hint') as string}>
                         <Sel value={comfyCfg} options={COMFY_CFG_OPTS} onChange={setComfyCfg} />
                       </RowHint>
-                      <RowHint label="Steps (kehalusan)" hint="Berapa kali gambar 'diproses ulang' sebelum jadi. Rendah = lebih cepat, sedikit kasar. Tinggi = lebih halus, sedikit lebih lama. 30 ke atas biasanya sudah tidak menambah kualitas.">
+                      <RowHint label={t('set_steps') as string} hint={t('set_steps_hint') as string}>
                         <Sel value={comfySteps} options={COMFY_STEPS_OPTS} onChange={setComfySteps} />
                       </RowHint>
                     </>
@@ -1050,13 +1050,13 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                 </>
               ) : comfyStatus === 'offline' ? (
                 <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '8px 0' }}>
-                  Stylize server offline — setting tersimpan tetap dipakai
+                  {t('set_stylize_offline') as string}
                 </p>
               ) : null}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                 <div>
-                  <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>Denoise (default)</span>
-                  <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0' }}>template bisa override</p>
+                  <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{t('set_denoise') as string}</span>
+                  <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0' }}>{t('set_denoise_hint') as string}</p>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <input
@@ -1086,17 +1086,17 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', gap: 16 }}>
                 <div style={{ minWidth: 0 }}>
                   <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>
-                    Enable Video Engine (img2vid)
+                    {t('set_video_engine') as string}
                     {videoLocked && (
-                      <span style={{ marginLeft: 8, fontSize: 'var(--text-2xs)', fontFamily: 'var(--font-ui)', letterSpacing: '0.04em', color: '#f0c040', border: '1px solid rgba(240,192,64,0.4)', borderRadius: 6, padding: '1px 6px', whiteSpace: 'nowrap' }}>LOCKED</span>
+                      <span style={{ marginLeft: 8, fontSize: 'var(--text-2xs)', fontFamily: 'var(--font-ui)', letterSpacing: '0.04em', color: '#f0c040', border: '1px solid rgba(240,192,64,0.4)', borderRadius: 6, padding: '1px 6px', whiteSpace: 'nowrap' }}>{t('set_video_locked_badge') as string}</span>
                     )}
                   </span>
                   <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0', lineHeight: 1.4 }}>
                     {!hasRental
-                      ? 'Video butuh sewa aktif — mulai sesi (key + waktu rental) dulu.'
+                      ? t('set_video_need_rental') as string
                       : videoLocked
-                        ? 'Fitur video dikunci — hubungi admin untuk mengaktifkan kiosk ini.'
-                        : 'Hasil foto terakhir dianimasikan jadi video pendek lewat provider pilihan.'}
+                        ? t('set_video_locked_note') as string
+                        : t('set_video_enabled_note') as string}
                   </p>
                 </div>
                 <div style={{ flexShrink: 0 }}>
@@ -1105,51 +1105,53 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
               </div>
               {!videoLocked && videoEngine && (<>
                 <RowHint
-                  label="Select Video Provider"
+                  label={t('set_video_provider') as string}
                   hint={selectedVideoCost != null
-                    ? `Tiap video (8 detik, ${videoProvider === 'LTX' ? '1080p' : (videoResolution === '1080p' && has1080Rate ? '1080p' : '720p')}) motong ${selectedVideoCost} token dari saldo.`
+                    ? (t('set_video_provider_hint_cost') as string)
+                        .replace('{res}', videoProvider === 'LTX' ? '1080p' : (videoResolution === '1080p' && has1080Rate ? '1080p' : '720p'))
+                        .replace('{n}', String(selectedVideoCost))
                     : Object.keys(videoCosts).length > 0
-                      ? '❗ Provider ini nonaktif di dashboard admin — request video bakal ditolak.'
-                      : 'Harga token per provider tampil saat online.'}
+                      ? t('set_video_provider_hint_disabled') as string
+                      : t('set_video_provider_hint_online') as string}
                 >
                   <Sel value={videoProvider} options={videoProviderOpts} onChange={v => setVideoProvider(v as VideoProvider)} />
                 </RowHint>
                 <RowHint
-                  label="Video Resolution"
-                  hint={videoProvider === 'LTX' 
-                    ? 'LTX otomatis dirender 1080p (FHD) secara native — hemat token.'
+                  label={t('set_video_resolution') as string}
+                  hint={videoProvider === 'LTX'
+                    ? t('set_video_res_hint_ltx') as string
                     : videoResolution === '1080p' && !has1080Rate
-                      ? 'Provider ini gak punya tarif 1080p — otomatis dihitung & render 720p.'
-                      : '720p hemat token; 1080p lebih tajem, tarif beda per provider.'}
+                      ? t('set_video_res_hint_no1080') as string
+                      : t('set_video_res_hint_default') as string}
                 >
                   <Sel
                     value={videoResolution}
                     options={[
-                      { value: '720p',  label: `720p — ${videoCosts[videoProvider] ?? DEFAULT_VIDEO_COSTS[videoProvider]} token` },
-                      { value: '1080p', label: `1080p — ${videoCosts[`${videoProvider}_1080`] ?? DEFAULT_VIDEO_COSTS[`${videoProvider}_1080`] ?? (videoCosts[videoProvider] ?? DEFAULT_VIDEO_COSTS[videoProvider])} token` },
+                      { value: '720p',  label: `720p — ${videoCosts[videoProvider] ?? DEFAULT_VIDEO_COSTS[videoProvider]} ${t('set_token_unit') as string}` },
+                      { value: '1080p', label: `1080p — ${videoCosts[`${videoProvider}_1080`] ?? DEFAULT_VIDEO_COSTS[`${videoProvider}_1080`] ?? (videoCosts[videoProvider] ?? DEFAULT_VIDEO_COSTS[videoProvider])} ${t('set_token_unit') as string}` },
                     ]}
                     onChange={v => setVideoResolution(v as '720p' | '1080p')}
                   />
                 </RowHint>
                 <RowHint
-                  label="Durasi Video"
+                  label={t('set_video_duration') as string}
                   hint={videoProvider === 'LTX'
-                    ? 'LTX dikunci 8 detik (FAL nolak 5 detik untuk LTX).'
-                    : '5 detik hemat biaya, 8 detik lebih puas. Token dipotong SAMA (5 dtk = margin lebih gede).'}
+                    ? t('set_video_dur_hint_ltx') as string
+                    : t('set_video_dur_hint_default') as string}
                 >
                   <Sel
                     value={String(videoProvider === 'LTX' ? 8 : videoDuration)}
                     options={[
-                      { value: '5', label: videoProvider === 'LTX' ? '5 detik (LTX ✕)' : '5 detik', soon: videoProvider === 'LTX' },
-                      { value: '8', label: '8 detik' },
+                      { value: '5', label: videoProvider === 'LTX' ? t('set_video_dur_5s_ltx') as string : t('set_video_dur_5s') as string, soon: videoProvider === 'LTX' },
+                      { value: '8', label: t('set_video_dur_8s') as string },
                     ]}
                     onChange={v => setVideoDuration(Number(v))}
                   />
                 </RowHint>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                   <div>
-                    <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>Prompt Video Engineer</span>
-                    <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0' }}>Bikin pilihan gaya (Joget, Senyum) di popup video.</p>
+                    <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{t('set_video_prompt_designer') as string}</span>
+                    <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0' }}>{t('set_video_prompt_designer_hint') as string}</p>
                   </div>
                   <button
                     onClick={() => setShowPromptDesigner(true)}
@@ -1159,7 +1161,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                       fontFamily: 'var(--font-ui)', cursor: 'pointer', whiteSpace: 'nowrap',
                     }}
                   >
-                    Setup Prompts
+                    {t('set_video_prompt_designer_btn') as string}
                   </button>
                 </div>
               </>)}
@@ -1259,7 +1261,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
             </AccordionGroup>
 
             {/* ── GROUP 4: HARDWARE & SYSTEM ────────────────────────────── */}
-            <AccordionGroup id="hardware" icon="⚙️" title="Hardware & System" open={openGroup === 'hardware'} onToggle={toggleGroup}>
+            <AccordionGroup id="hardware" icon="⚙️" title={t('set_group_hardware') as string} open={openGroup === 'hardware'} onToggle={toggleGroup}>
               {/* Camera */}
               <Row label={t('set_source') as string}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -1281,8 +1283,8 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <button
                       onClick={restartToIdle}
-                      aria-label="Restart booth & re-check license"
-                      title="Restart booth (kembali ke idle) & cek ulang lisensi"
+                      aria-label={t('set_restart_booth_title') as string}
+                      title={t('set_restart_booth_title') as string}
                       style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 'var(--radius-glass)', color: 'rgba(255,255,255,0.65)', cursor: 'pointer', fontSize: 'var(--text-sm)', lineHeight: 1, padding: '5px 9px' }}
                     >↻</button>
                     <span style={{ fontSize: 'var(--text-xs)', fontWeight: isUnlimited ? 700 : 400, letterSpacing: isUnlimited ? '0.06em' : undefined, fontFamily: 'var(--font-ui)', color: isUnlimited ? '#f0c040' : config.licensed ? '#a3be8c' : config.has_secret ? '#f0c040' : 'rgba(255,255,255,0.3)' }}>
@@ -1359,7 +1361,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                         fontFamily: 'var(--font-ui)', cursor: secretSaving || verify === 'checking' || !secret.trim() ? 'default' : 'pointer',
                         whiteSpace: 'nowrap', opacity: secretSaving || verify === 'checking' || verify === 'valid' || !secret.trim() ? 0.6 : 1,
                       }}>
-                        {secretSaving ? '…' : verify === 'checking' ? 'Cek…' : t('set_secret_save') as string}
+                        {secretSaving ? '…' : verify === 'checking' ? t('set_secret_verify_btn_checking') as string : t('set_secret_save') as string}
                       </button>
                       <button onClick={() => { setSecretEditing(false); setVerify('idle'); setRestartIn(null) }} style={{
                         padding: '0 12px', borderRadius: 'var(--radius-glass)', border: '1px solid rgba(255,255,255,0.15)',
@@ -1373,27 +1375,27 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                     {verify === 'checking' && (
                       <p style={{ fontSize: 'var(--text-2xs)', color: '#f0c040', margin: '8px 0 0', display: 'flex', alignItems: 'center', gap: 6 }}>
                         <span style={{ width: 10, height: 10, borderRadius: '50%', border: '2px solid rgba(240,192,64,0.3)', borderTopColor: '#f0c040', animation: 'spin 0.8s linear infinite', display: 'inline-block' }} />
-                        Memverifikasi kunci…
+                        {t('set_verify_checking') as string}
                       </p>
                     )}
                     {verify === 'valid' && (
                       <p style={{ fontSize: 'var(--text-2xs)', color: '#a3be8c', margin: '8px 0 0', fontWeight: 600 }}>
-                        ✓ Kunci valid — restart dalam {restartIn ?? 3}…
+                        {(t('set_verify_valid') as string).replace('{n}', String(restartIn ?? 3))}
                       </p>
                     )}
                     {verify === 'expired' && (
                       <p style={{ fontSize: 'var(--text-2xs)', color: '#f0c040', margin: '8px 0 0' }}>
-                        ⏳ Kunci benar, tapi sewa belum/sudah tidak aktif. Hubungi admin.
+                        {t('set_verify_expired') as string}
                       </p>
                     )}
                     {verify === 'invalid' && (
                       <p style={{ fontSize: 'var(--text-2xs)', color: '#ff6b6b', margin: '8px 0 0', fontWeight: 600 }}>
-                        ✗ Kunci salah / mesin dinonaktifkan. Cek lagi kodenya.
+                        {t('set_verify_invalid') as string}
                       </p>
                     )}
                     {verify === 'offline' && (
                       <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.5)', margin: '8px 0 0' }}>
-                        Butuh internet buat verifikasi — cek koneksi, lalu Simpan lagi.
+                        {t('set_verify_offline') as string}
                       </p>
                     )}
                   </>
@@ -1402,12 +1404,12 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
 
               {/* Dompet token tenant — saldo kepotong cuma sama cloud AI (foto API + video).
                   Faceswap lokal / comfy / Photo Print = 0 token. Saldo dari handshake pas panel dibuka. */}
-              <Row label="Token Balance">
+              <Row label={t('set_token_balance') as string}>
                 <span style={{
                   fontFamily: 'var(--font-ui)', fontSize: 'var(--text-lg)', fontWeight: 600, letterSpacing: '0.03em',
                   color: tokenBalance == null ? 'rgba(255,255,255,0.25)' : tokenBalance > 50 ? '#a3be8c' : tokenBalance > 0 ? '#f0c040' : '#ff6b6b',
                 }}>
-                  {tokenBalance == null ? '—' : `${tokenBalance.toLocaleString('id-ID')} token`}
+                  {tokenBalance == null ? '—' : `${tokenBalance.toLocaleString('id-ID')} ${t('set_token_unit') as string}`}
                 </span>
               </Row>
 
@@ -1524,8 +1526,8 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                   Default abu2. Godmode/unlimited = licensed=true → ikut nyala. */}
               <div style={{ display: 'flex', gap: 10, padding: '12px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                 {([
-                  { on: config.licensed ?? false, label: 'NO WATERMARK' },
-                  { on: config.licensed ?? false, label: 'QR ACTIVE' },
+                  { on: config.licensed ?? false, label: t('set_status_no_watermark') as string },
+                  { on: config.licensed ?? false, label: t('set_status_qr_active') as string },
                 ] as const).map(({ on, label }) => (
                   <div key={label} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 'var(--radius-glass)', padding: '8px 12px' }}>
                     <span style={{ width: 9, height: 9, borderRadius: '50%', flexShrink: 0, background: on ? '#a3be8c' : 'rgba(255,255,255,0.2)', boxShadow: on ? '0 0 8px rgba(163,190,140,0.8)' : 'none', transition: 'background .2s, box-shadow .2s' }} />
@@ -1542,7 +1544,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                     <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0' }}>
                       {t('set_magic_catcher_hint') as string}
                       <br />
-                      <span style={{ color: '#f0c040', marginTop: 2, display: 'inline-block' }}>Only available in Webcam (getUserMedia) mode.</span>
+                      <span style={{ color: '#f0c040', marginTop: 2, display: 'inline-block' }}>{t('set_magic_catcher_webcam_only') as string}</span>
                     </p>
                   </div>
                   <Toggle on={magicCatcher} onToggle={() => setMagicCatcher(v => !v)} />
