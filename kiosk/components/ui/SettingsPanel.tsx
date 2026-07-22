@@ -10,6 +10,7 @@ type TFn = (key: keyof Translations) => Translations[keyof Translations]
 type EngineKey = 'faceswap_local' | 'gohst_local' | 'fullbody_local' | 'print_local' | 'faceswap_api' | 'fullbody_api'
 
 import { LocalTemplateManager } from './LocalTemplateManager'
+import { VideoPromptManager } from './VideoPromptManager'
 
 const ENGINE_OPTS: { value: EngineKey; label: string; soon?: boolean }[] = [
   { value: 'faceswap_local', label: 'Faceswap (LOCAL)' },
@@ -247,6 +248,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   const [comfyCnStrength, setComfyCnStrength] = useState(config.comfy_cn_strength ?? '')
   const [maxTemplates,    setMaxTemplates]    = useState(config.max_templates ?? 1)
   const [magicCatcher,    setMagicCatcher]    = useState(config.enable_magic_catcher ?? false)
+  const [showPromptDesigner, setShowPromptDesigner] = useState(false)
   const [videoEngine,     setVideoEngine]     = useState(config.enable_video_engine ?? false)
   // Default LTX — 1080p native, murah & tajam. Provider dipangkas ke 3 tier (LTX/PIXVERSE/SEEDANCE);
   // config lama yg ke-set VEO/WAN/VIDU/KLING udah ga ada di dropdown → jatuhin ke LTX biar select ga
@@ -1144,6 +1146,22 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                     onChange={v => setVideoDuration(Number(v))}
                   />
                 </RowHint>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div>
+                    <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>Prompt Video Engineer</span>
+                    <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0' }}>Bikin pilihan gaya (Joget, Senyum) di popup video.</p>
+                  </div>
+                  <button
+                    onClick={() => setShowPromptDesigner(true)}
+                    style={{
+                      padding: '8px 16px', borderRadius: 'var(--radius-glass)', border: '1px solid rgba(255,255,255,0.15)',
+                      background: 'rgba(255,255,255,0.08)', color: '#fff', fontSize: 'var(--text-xs)',
+                      fontFamily: 'var(--font-ui)', cursor: 'pointer', whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Setup Prompts
+                  </button>
+                </div>
               </>)}
               </>) })()}
 
@@ -1611,6 +1629,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
           </div>
         </div>
       </div>
+      <VideoPromptManager open={showPromptDesigner} onClose={() => setShowPromptDesigner(false)} config={config} onConfigChanged={onConfigSaved ?? (() => {})} />
     </>
   )
 }

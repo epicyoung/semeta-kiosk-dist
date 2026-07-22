@@ -87,8 +87,8 @@ const FALLBACK: KioskConfig = {
   comfy_denoise: 0.65,
   comfy_face_lock: true,
   video_defaults: {
-    default_positive_prompt: 'smile and wave hand, subtle body movement, no camera movement, cinematic',
-    default_negative_prompt: 'shaky camera, jump cut, distorted face, blur',
+    default_positive_prompt: 'cheerful people standing and posing, energetic body language, big genuine smiles, naturally waving hands with positive energy, lively atmosphere, subtle cinematic camera movement, fluid character animation, alive and breathing, wind gently blowing hair, highly detailed, photorealistic, joyful vibe, dynamic interaction',
+    default_negative_prompt: 'parallax effect, 3d photo effect, static, stiff, frozen, slideshow, aggressive camera pan, jump cuts, morphing, warped faces, mutated hands, distorted fingers, blurry, low quality',
     max_duration_sec: 7,
   },
 }

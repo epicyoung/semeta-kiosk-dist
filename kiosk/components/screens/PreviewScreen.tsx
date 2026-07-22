@@ -35,6 +35,7 @@ type Props = {
     | "video_resolution"
     | "video_duration"
     | "video_defaults"
+    | "video_prompt_choices"
     | "has_secret"
     | "bypassed"
     | "templates"
@@ -165,6 +166,7 @@ export function PreviewScreen({
         };
 
   const [showOriginal, setShowOriginal] = useState(false);
+  const [showBigQr, setShowBigQr] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [qrStatus, setQrStatus] = useState<"idle" | "uploading" | "failed">(
     "idle",
@@ -184,6 +186,7 @@ export function PreviewScreen({
   const [emailError, setEmailError] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [showVideoConfirm, setShowVideoConfirm] = useState(false);
+  const [showVideoChoices, setShowVideoChoices] = useState(false);
   const [noTokens, setNoTokens] = useState(false); // popup pas worker balik 402 (token abis)
   const [videoCost, setVideoCost] = useState<number | null>(null); // harga token buat tombol (cache handshake)
   const [videoLoading, setVideoLoading] = useState(false);
@@ -344,10 +347,18 @@ export function PreviewScreen({
   // (pola maybeAnimate — FAL butuh URL publik), lalu img2vid provider pilihan vendor.
   // Token kepotong server-side sesuai harga dashboard; gagal/402 → fail-safe balik ke
   // tombol, foto tetep aman. Dipakai buat retry pas auto-video gagal / bikin on-demand.
-  async function handleVideoConfirmOk() {
+  async function handleVideoConfirmOk(choice?: { positive: string, negative: string }) {
     if (videoGenRef.current) return; // double-tap guard — dialog confirm bisa ke-tap 2x sebelum state update
+    
+    if (!choice && config.video_prompt_choices && config.video_prompt_choices.length > 0) {
+      setShowVideoConfirm(false);
+      setShowVideoChoices(true);
+      return;
+    }
+
     videoGenRef.current = true;
     setShowVideoConfirm(false);
+    setShowVideoChoices(false);
     setVideoLoading(true);
     setVideoProgress(0);
     try {
@@ -368,9 +379,11 @@ export function PreviewScreen({
       // dari video_defaults; override per-template (video_positive_prompt) nyusul plumbing state.
       const tmpl = config.templates.find((t) => t.id === state.templateId);
       const positive =
+        choice?.positive ||
         tmpl?.video_positive_prompt ||
         config.video_defaults?.default_positive_prompt;
       const negative =
+        choice?.negative ||
         tmpl?.video_negative_prompt ||
         config.video_defaults?.default_negative_prompt;
       const video = await animateImage(
@@ -686,189 +699,7 @@ export function PreviewScreen({
             </div>
           )}
 
-          {/* QR — anchor ke MEDIA-AREA (bukan media box, jadi ga ke-clip overflow:hidden).
-            Portrait: tengah-atas di area kosong bawah judul (jauh dari grid). Landscape: kanan +
-            padding. Posisi diatur .preview-qr di globals.css. Blok QR internal position:static. */}
-          {isFinal && (
-            <div className="preview-qr">
-              {!licensed ? (
-                <div
-                  style={{
-                    padding: 6,
-                    borderRadius: 10,
-                    background: "white",
-                    boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
-                  }}
-                >
-                  <div style={{ position: "relative", width: 80, height: 80 }}>
-                    {/* QR boongan — pola asli ketutup label, keliatan "ada tapi mati" */}
-                    <QRCodeSVG
-                      value="https://spindonesia.id"
-                      size={80}
-                      bgColor="white"
-                      fgColor="#090135"
-                    />
-                    <div
-                      style={{
-                        position: "absolute",
-                        inset: 0,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        background: "rgba(255,255,255,1)",
-                        borderRadius: 4,
-                        padding: 3,
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: 7,
-                          lineHeight: 1.3,
-                          fontWeight: 600,
-                          color: "#090135",
-                          textAlign: "center",
-                          fontFamily: "var(--font-ui)",
-                        }}
-                      >
-                        {config.has_secret
-                          ? "Butuh sewa aktif — mulai rental di admin"
-                          : "Belum ada kunci — isi di Settings"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ) : qrValue ? (
-                <div
-                  style={{
-                    padding: 6,
-                    borderRadius: 10,
-                    background: "white",
-                    boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
-                  }}
-                >
-                  <QRCodeSVG
-                    value={qrValue}
-                    size={80}
-                    bgColor="white"
-                    fgColor="#090135"
-                  />
-                </div>
-              ) : activeTab === "photo" &&
-                (qrStatus === "uploading" || qrStatus === "failed") ? (
-                // Upload R2 belum kelar / gagal (offline). Operator bisa tap buat re-upload manual.
-                <button
-                  onClick={() => {
-                    if (qrStatus !== "uploading") runUpload(1);
-                  }}
-                  disabled={qrStatus === "uploading"}
-                  style={{
-                    width: 92,
-                    height: 92,
-                    padding: 6,
-                    borderRadius: 10,
-                    background: "white",
-                    border: "none",
-                    boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
-                    cursor: qrStatus === "uploading" ? "default" : "pointer",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 6,
-                  }}
-                >
-                  {qrStatus === "uploading" ? (
-                    <>
-                      <span
-                        style={{
-                          width: 22,
-                          height: 22,
-                          borderRadius: "50%",
-                          border: "3px solid rgba(9,1,53,0.15)",
-                          borderTopColor: "#090135",
-                          animation: "spin 0.8s linear infinite",
-                        }}
-                      />
-                      <span
-                        style={{
-                          fontSize: 8,
-                          fontWeight: 600,
-                          color: "#090135",
-                          letterSpacing: "0.04em",
-                        }}
-                      >
-                        Mengunggah…
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span
-                        style={{
-                          fontSize: 20,
-                          lineHeight: 1,
-                          color: "#090135",
-                        }}
-                      >
-                        ↻
-                      </span>
-                      <span
-                        style={{
-                          fontSize: 8,
-                          lineHeight: 1.25,
-                          fontWeight: 700,
-                          color: "#090135",
-                          textAlign: "center",
-                        }}
-                      >
-                        Ulangi
-                        <br />
-                        QR
-                      </span>
-                    </>
-                  )}
-                </button>
-              ) : activeTab === "photo" ? (
-                // licensed tapi belum ada shareUrl & status idle = upload effect ga jalan (base kosong?).
-                // Kasih tombol paksa upload biar operator ga buntu + keliatan sebabnya.
-                <button
-                  onClick={() => runUpload(1)}
-                  style={{
-                    width: 92,
-                    height: 92,
-                    padding: 6,
-                    borderRadius: 10,
-                    background: "white",
-                    border: "none",
-                    boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
-                    cursor: "pointer",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 5,
-                    fontFamily: "var(--font-ui)",
-                  }}
-                >
-                  <span
-                    style={{ fontSize: 20, lineHeight: 1, color: "#090135" }}
-                  >
-                    ↻
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 8,
-                      lineHeight: 1.25,
-                      fontWeight: 700,
-                      color: "#090135",
-                      textAlign: "center",
-                    }}
-                  >
-                    {state.base ? "Buat QR" : "Foto belum tersimpan"}
-                  </span>
-                </button>
-              ) : null}
-            </div>
-          )}
+
 
           {activeTab === "photo" && isChoose && (
             <button
@@ -1000,6 +831,171 @@ export function PreviewScreen({
                     className="absolute inset-0 w-full h-full object-cover pointer-events-none z-20"
                   />
                 )}
+              </div>
+            )}
+
+            {/* Big QR Overlay on top of the photo (if enabled by button) */}
+            {activeTab === "photo" && showBigQr && (
+              <div 
+                className="absolute inset-0 z-50 flex flex-col items-center justify-center animate-fade-in"
+                style={{ background: "rgba(0,0,0,0.8)", backdropFilter: "blur(4px)" }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowBigQr(false);
+                }}
+              >
+                {!licensed ? (
+                  <div
+                    style={{
+                      padding: 16,
+                      borderRadius: 16,
+                      background: "white",
+                      boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div style={{ position: "relative", width: 250, height: 250 }}>
+                      <QRCodeSVG
+                        value="https://spindonesia.id"
+                        size={250}
+                        bgColor="white"
+                        fgColor="#090135"
+                      />
+                      <div
+                        style={{
+                          position: "absolute",
+                          inset: 0,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          background: "rgba(255,255,255,1)",
+                          borderRadius: 8,
+                          padding: 12,
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: 14,
+                            lineHeight: 1.4,
+                            fontWeight: 600,
+                            color: "#090135",
+                            textAlign: "center",
+                            fontFamily: "var(--font-ui)",
+                          }}
+                        >
+                          {config.has_secret
+                            ? "Butuh sewa aktif — mulai rental di admin"
+                            : "Belum ada kunci — isi di Settings"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : qrValue ? (
+                  <div
+                    style={{
+                      padding: 16,
+                      borderRadius: 16,
+                      background: "white",
+                      boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <QRCodeSVG
+                      value={qrValue}
+                      size={250}
+                      bgColor="white"
+                      fgColor="#090135"
+                    />
+                  </div>
+                ) : qrStatus === "uploading" || qrStatus === "failed" ? (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (qrStatus !== "uploading") runUpload(1);
+                    }}
+                    disabled={qrStatus === "uploading"}
+                    style={{
+                      width: 250,
+                      height: 250,
+                      padding: 12,
+                      borderRadius: 16,
+                      background: "white",
+                      border: "none",
+                      boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+                      cursor: qrStatus === "uploading" ? "default" : "pointer",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 12,
+                    }}
+                  >
+                    {qrStatus === "uploading" ? (
+                      <>
+                        <span
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: "50%",
+                            border: "4px solid rgba(9,1,53,0.15)",
+                            borderTopColor: "#090135",
+                            animation: "spin 0.8s linear infinite",
+                          }}
+                        />
+                        <span
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 600,
+                            color: "#090135",
+                            letterSpacing: "0.04em",
+                          }}
+                        >
+                          Mengunggah…
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ fontSize: 32, lineHeight: 1, color: "#090135" }}>↻</span>
+                        <span style={{ fontSize: 12, lineHeight: 1.25, fontWeight: 700, color: "#090135", textAlign: "center" }}>
+                          Ulangi<br />QR
+                        </span>
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      runUpload(1);
+                    }}
+                    style={{
+                      width: 250,
+                      height: 250,
+                      padding: 12,
+                      borderRadius: 16,
+                      background: "white",
+                      border: "none",
+                      boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+                      cursor: "pointer",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 10,
+                      fontFamily: "var(--font-ui)",
+                    }}
+                  >
+                    <span style={{ fontSize: 32, lineHeight: 1, color: "#090135" }}>↻</span>
+                    <span style={{ fontSize: 12, lineHeight: 1.25, fontWeight: 700, color: "#090135", textAlign: "center" }}>
+                      {state.base ? "Buat QR" : "Foto belum tersimpan"}
+                    </span>
+                  </button>
+                )}
+                
+                {/* Close instruction */}
+                <p style={{ marginTop: 24, fontSize: "var(--text-sm)", color: "rgba(255,255,255,0.7)", letterSpacing: "0.05em" }}>
+                  Ketuk untuk menutup
+                </p>
               </div>
             )}
 
@@ -1531,6 +1527,13 @@ export function PreviewScreen({
                 {t("preview_btn_email") as string}
               </TouchButton>
             )}
+            <TouchButton
+              onClick={() => setShowBigQr(true)}
+              className="flex-1"
+              disabled={printing || activeTab === "video"}
+            >
+              QR Code
+            </TouchButton>
             {videoAllowed && (
               <TouchButton
                 onClick={() => {
@@ -1726,7 +1729,7 @@ export function PreviewScreen({
             background: "rgba(9,1,53,0.7)",
             backdropFilter: "blur(8px)",
           }}
-          onClick={() => setShowVideoConfirm(false)}
+          onClick={() => { setShowVideoConfirm(false); setShowVideoChoices(false); }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
@@ -1810,6 +1813,86 @@ export function PreviewScreen({
                 className="flex-1"
               >
                 {t("preview_video_dialog_cancel") as string}
+              </TouchButton>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Video Style Choices — popup milih gaya gerak SEBELUM video di-generate.
+          Muncul kalau config.video_prompt_choices terisi & user klik OK di confirm dialog.
+          Pilih salah satu → handleVideoConfirmOk(choice) → langsung generate. */}
+      {showVideoChoices && (
+        <div
+          className="animate-fade-in"
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 200,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "rgba(9,1,53,0.85)",
+            backdropFilter: "blur(12px)",
+          }}
+          onClick={() => setShowVideoChoices(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "rgba(20,10,70,0.95)",
+              border: "1px solid var(--border-dialog)",
+              borderRadius: "var(--radius-dialog)",
+              padding: "40px 32px",
+              maxWidth: 520,
+              width: "88%",
+              textAlign: "center",
+              boxShadow: "0 24px 80px rgba(0,0,0,0.7)",
+            }}
+          >
+            <h2
+              style={{
+                fontSize: "var(--text-xl)",
+                fontWeight: 600,
+                marginBottom: 8,
+                letterSpacing: "-0.02em",
+              }}
+            >
+              Pilih Gaya Video
+            </h2>
+            <p
+              style={{
+                fontSize: "var(--text-sm)",
+                color: "var(--fg-muted)",
+                lineHeight: 1.5,
+                marginBottom: 28,
+              }}
+            >
+              Mau gerakan kayak gimana?
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {(config.video_prompt_choices ?? []).map((c) => (
+                <TouchButton
+                  key={c.id}
+                  onClick={() =>
+                    handleVideoConfirmOk({
+                      positive: c.positive_prompt,
+                      negative: c.negative_prompt,
+                    })
+                  }
+                  className="w-full"
+                  style={{ fontSize: "var(--text-base)", padding: "18px 24px" }}
+                >
+                  {c.title}
+                </TouchButton>
+              ))}
+              <TouchButton
+                variant="secondary"
+                onClick={() => setShowVideoChoices(false)}
+                className="w-full"
+                style={{ marginTop: 4 }}
+              >
+                Batal
               </TouchButton>
             </div>
           </div>

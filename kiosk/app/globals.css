@@ -740,10 +740,13 @@ h1, .h1-glow { letter-spacing: -0.02em; }
     position: absolute;
     top: 0;
     left: auto;
-    /* Pindah mepet ke ujung kanan layar biar ga ketindih foto grid yg melar */
-    right: -25px;
-    transform: none;
+    /* Geser ke dalam sedikit (right: 20px) agar tidak terpotong saat diperbesar */
+    right: 20px;
+    /* Gedein QR 1.8x di landscape TV biar gampang discan dari jauh */
+    transform: scale(1.8);
+    transform-origin: top right;
   }
+  .qr-arrow-portrait { display: none !important; }
 }
 
 /* ── Preview media box ────────────────────────────────────────────────────────

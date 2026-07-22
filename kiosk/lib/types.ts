@@ -15,6 +15,13 @@ export type VideoProvider =
   | 'SEEDANCE' | 'LTX' | 'WAN' | 'VEO' | 'KLING'
   | 'PIXVERSE' | 'HAPPYHORSE' | 'VIDU'
 
+export type VideoPromptChoice = {
+  id: string
+  title: string
+  positive_prompt: string
+  negative_prompt: string
+}
+
 export type Template = {
   id: string
   name: string
@@ -97,6 +104,7 @@ export type KioskConfig = {
   enable_video: boolean
   enable_gallery: boolean
   video_defaults: VideoDefaults
+  video_prompt_choices?: VideoPromptChoice[]
   engine_mode?: string
   camera_source?: string
   api_model?: string
