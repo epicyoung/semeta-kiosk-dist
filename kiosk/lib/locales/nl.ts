@@ -135,13 +135,14 @@ const nl: Translations = {
   consent_policy_s3_items: [
     'Het leveren van de fotoboothdienst (vastleggen, verwerken met AI en bezorgen van de fotoresultaten).',
     'Het exploiteren en onderhouden van de betrouwbaarheid van de dienst.',
+    'Contact met u opnemen over uw fotoresultaten, aankomende evenementen en promoties — alleen als u daarvoor afzonderlijk toestemming geeft bij het invullen van uw contactgegevens.',
   ],
   consent_policy_s4_heading: '4. Hoe gegevens worden verwerkt',
   consent_policy_s4_body:
     'Foto\'s worden verwerkt met AI-technologie (de verwerking kan lokaal op het apparaat en/of via clouddiensten plaatsvinden) om fotoresultaten te produceren. Resultaten worden tijdelijk opgeslagen en zijn toegankelijk via QR-code.',
   consent_policy_s5_heading: '5. Opslag & bewaring',
   consent_policy_s5_body:
-    'Fotogegevens worden opgeslagen in cloudopslag en automatisch na 30 (dertig) dagen verwijderd. Wij bewaren gegevens niet langer dan nodig is voor het doel van de dienst.',
+    'Fotogegevens worden opgeslagen in cloudopslag en automatisch na 30 (dertig) dagen verwijderd. Contactgegevens (naam, e-mailadres, telefoonnummer) die u vrijwillig verstrekt, worden maximaal 12 (twaalf) maanden bewaard, of totdat u uw toestemming intrekt. Wij bewaren gegevens niet langer dan nodig is voor het doel van de dienst.',
   consent_policy_s6_heading: '6. Derden (subverwerkers)',
   consent_policy_s6_intro:
     'Om de dienst te leveren, vertrouwen wij op een kleine reeks betrouwbare externe aanbieders voor opslag, AI-verwerking, database en e-mailbezorging. Elk verwerkt gegevens uitsluitend volgens onze instructies en is gebonden aan zijn eigen privacybeleid. Een volledige lijst van subverwerkers is op verzoek beschikbaar.',

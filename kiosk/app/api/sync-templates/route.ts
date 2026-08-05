@@ -217,7 +217,8 @@ async function deleteTemplate(token: string, id: string): Promise<boolean> {
 
 // ── handler ────────────────────────────────────────────────────────────────────
 
-export async function POST() {
+export async function POST(req: Request) {
+  const rebuild = new URL(req.url).searchParams.get('rebuild') === '1'
   const encoder = new TextEncoder()
   const stream = new ReadableStream({
     async start(controller) {
@@ -245,8 +246,11 @@ export async function POST() {
         const folderKeys = new Set(folderFiles.map(f => key(f.category, f.name)))
         const pbByKey = new Map(pbTemplates.map(t => [key(t.category, t.name), t]))
 
-        const toAdd = folderFiles.filter(f => !pbByKey.has(key(f.category, f.name)))
-        const toDelete = folderFiles.length === 0 ? [] : pbTemplates.filter(t => !folderKeys.has(key(t.category, t.name)))
+        // rebuild (repair): wipe SEMUA record lalu re-add semua dari folder. Perlu karena dedup
+        // by category||name GA nyembuhin kasus "record ada tapi file storage ilang" (thumbnail 404) —
+        // nama udah kepakai jadi sync biasa skip file-nya. Delete dijalanin duluan (bawah) → nama bebas.
+        const toAdd = rebuild ? folderFiles : folderFiles.filter(f => !pbByKey.has(key(f.category, f.name)))
+        const toDelete = rebuild ? pbTemplates : (folderFiles.length === 0 ? [] : pbTemplates.filter(t => !folderKeys.has(key(t.category, t.name))))
 
         let added = 0, cropped = 0, deleted = 0, anyDetectDown = false
         const skipped: { name: string; reason: string }[] = []
@@ -283,8 +287,6 @@ export async function POST() {
           }
         })
         
-        await runWithConcurrency(addTasks, 5)
-
         const deleteTasks = toDelete.map(t => async () => {
           try {
             if (await deleteTemplate(token, t.id)) deleted++
@@ -294,7 +296,9 @@ export async function POST() {
           }
         })
 
-        await runWithConcurrency(deleteTasks, 5)
+        // rebuild: delete DULU (bebasin nama) baru add ulang. Normal: add dulu, baru mirror-delete.
+        if (rebuild) { await runWithConcurrency(deleteTasks, 5); await runWithConcurrency(addTasks, 5) }
+        else { await runWithConcurrency(addTasks, 5); await runWithConcurrency(deleteTasks, 5) }
 
         send({ ok: true, added, cropped, deleted, detectDown: anyDetectDown, skipped })
       } catch (e) {

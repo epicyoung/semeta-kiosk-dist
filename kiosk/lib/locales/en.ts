@@ -135,13 +135,14 @@ const en: Translations = {
   consent_policy_s3_items: [
     'Providing the photobooth service (capturing, processing with AI, and delivering photo results).',
     'Operating and maintaining service reliability.',
+    'Contacting you about your photo results, upcoming events, and promotions — only if you give separate consent when submitting your contact details.',
   ],
   consent_policy_s4_heading: '4. How Data Is Processed',
   consent_policy_s4_body:
     'Photos are processed using AI technology (processing may run locally on the device and/or via cloud services) to produce photo results. Results are stored temporarily and can be accessed via QR code.',
   consent_policy_s5_heading: '5. Storage & Retention',
   consent_policy_s5_body:
-    'Photo data is stored in cloud storage and automatically deleted after 30 (thirty) days. We do not retain data longer than necessary for the service purpose.',
+    'Photo data is stored in cloud storage and automatically deleted after 30 (thirty) days. Contact details (name, email, phone number) you voluntarily provide are retained for a maximum of 12 (twelve) months, or until you withdraw your consent. We do not retain data longer than necessary for the service purpose.',
   consent_policy_s6_heading: '6. Third Parties (Sub-Processors)',
   consent_policy_s6_intro:
     'To deliver the service, we rely on a small set of trusted third-party providers for storage, AI processing, database, and email delivery. Each processes data solely on our instructions and is bound by its own privacy policy. A full list of sub-processors is available on request.',

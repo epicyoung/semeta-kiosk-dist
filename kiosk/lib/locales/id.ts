@@ -137,13 +137,14 @@ const id: Translations = {
   consent_policy_s3_items: [
     'Menyediakan layanan photobooth (mengambil, memproses dengan AI, dan menyampaikan hasil foto).',
     'Mengoperasikan dan menjaga keandalan layanan.',
+    'Menghubungi kamu terkait hasil foto, acara, dan promo berikutnya — hanya jika kamu memberikan persetujuan terpisah saat mengisi data kontak.',
   ],
   consent_policy_s4_heading: '4. Bagaimana Data Diproses',
   consent_policy_s4_body:
     'Foto diproses menggunakan teknologi AI (pemrosesan dapat berjalan secara lokal di perangkat dan/atau melalui layanan cloud) untuk menghasilkan hasil foto. Hasil disimpan sementara dan dapat diakses melalui QR code.',
   consent_policy_s5_heading: '5. Penyimpanan & Retensi',
   consent_policy_s5_body:
-    'Data foto disimpan pada penyimpanan cloud dan dihapus secara otomatis setelah 30 (tiga puluh) hari. Kami tidak menyimpan data lebih lama dari yang diperlukan untuk tujuan layanan.',
+    'Data foto disimpan pada penyimpanan cloud dan dihapus secara otomatis setelah 30 (tiga puluh) hari. Data kontak (nama, email, nomor telepon) yang kamu berikan secara sukarela disimpan paling lama 12 (dua belas) bulan, atau sampai kamu mencabut persetujuan. Kami tidak menyimpan data lebih lama dari yang diperlukan untuk tujuan layanan.',
   consent_policy_s6_heading: '6. Pihak Ketiga (Sub-Prosesor)',
   consent_policy_s6_intro:
     'Untuk menjalankan layanan, kami mengandalkan sejumlah kecil penyedia pihak ketiga tepercaya untuk penyimpanan, pemrosesan AI, basis data, dan pengiriman email. Masing-masing memproses data semata-mata berdasarkan instruksi kami dan terikat pada kebijakan privasinya sendiri. Daftar lengkap sub-prosesor tersedia atas permintaan.',

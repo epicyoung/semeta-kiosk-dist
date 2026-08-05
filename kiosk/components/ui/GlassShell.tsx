@@ -37,12 +37,12 @@ export function GlassShell({ screenKey, direction, children, config, onLogoClick
 
   // Sync folder→PB lalu refresh templates ke kiosk. Sama seperti tombol di Settings.
   // Popup progress via syncPhase; tombol ↻ tetap punya warna via syncStatus.
-  const handleQuickSync = async () => {
+  const handleQuickSync = async (rebuild = false) => {
     if (syncStatus === 'syncing') return
     setSyncStatus('syncing')
     setSyncPhase({ kind: 'syncing' })
     try {
-      const res = await fetch('/api/sync-templates', { method: 'POST' })
+      const res = await fetch(`/api/sync-templates${rebuild ? '?rebuild=1' : ''}`, { method: 'POST' })
       if (!res.ok) {
         setSyncStatus('err')
         setSyncPhase({ kind: 'error', message: 'Server menolak sync (cek PocketBase & env).' })
@@ -260,7 +260,8 @@ export function GlassShell({ screenKey, direction, children, config, onLogoClick
               pause={pause}
               resume={resume}
               onRefreshTemplates={onRefreshTemplates}
-              onQuickSync={handleQuickSync}
+              onQuickSync={() => handleQuickSync(false)}
+              onRebuild={() => handleQuickSync(true)}
               onConfigSaved={updated => { setLocalConfig(c => ({ ...c, ...updated })); onConfigChange?.(updated) }}
             />
 

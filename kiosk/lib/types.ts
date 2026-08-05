@@ -143,8 +143,8 @@ export type KioskConfig = {
   locale?: Locale
 }
 
-// Display languages: plain EN/ID + KO/JA/NL/ZH/AR + Dark Myth variants (oracle tone on titles/subtitles).
-export type Locale = 'en' | 'id' | 'ko' | 'ja' | 'nl' | 'zh' | 'ar' | 'myth-en' | 'myth-id'
+// Display languages: plain EN/ID + SEA (MS/TH/VI/TL) + KO/JA/NL/ZH/AR + Dark Myth variants (oracle tone on titles/subtitles).
+export type Locale = 'en' | 'id' | 'ms' | 'th' | 'vi' | 'tl' | 'ko' | 'ja' | 'nl' | 'zh' | 'ar' | 'myth-en' | 'myth-id'
 
 export type KioskState =
   | { screen: 'idle' }

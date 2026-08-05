@@ -117,6 +117,7 @@ type Props = {
   resume?: () => void
   onRefreshTemplates?: (templates: Template[]) => void
   onQuickSync?: () => void
+  onRebuild?: () => void
 }
 
 // ── Accordion group ──────────────────────────────────────────────────────────
@@ -225,7 +226,7 @@ function StatusBadge({ status, t }: { status: PbStatus; t: TFn }) {
   )
 }
 
-export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, resume, onRefreshTemplates, onQuickSync }: Props) {
+export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, resume, onRefreshTemplates, onQuickSync, onRebuild }: Props) {
   const t = useT()
   const [locale,          setLocale]          = useState<Locale>(config.locale ?? 'myth-en')
   const [eventName,       setEventName]       = useState(config.event_name || 'Semeta Event')
@@ -818,6 +819,10 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                     options={[
                       { value: 'en', label: 'English' },
                       { value: 'id', label: 'Bahasa Indonesia' },
+                      { value: 'ms', label: 'Bahasa Melayu' },
+                      { value: 'th', label: 'ไทย' },
+                      { value: 'vi', label: 'Tiếng Việt' },
+                      { value: 'tl', label: 'Filipino' },
                       { value: 'ko', label: '한국어' },
                       { value: 'ja', label: '日本語' },
                       { value: 'nl', label: 'Nederlands' },
@@ -1247,6 +1252,13 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                     <p style={{ fontSize: 'var(--text-2xs)', fontFamily: 'var(--font-ui)', color: 'rgba(255,255,255,0.18)', margin: '4px 0 0', wordBreak: 'break-all' }}>
                       kiosk/face_server/put-template-here/
                     </p>
+                    {/* ponytail: repair thumbnail 404 — wipe record + re-import dari folder. Operator-only, string inline (no i18n plumbing). */}
+                    <button
+                      onClick={() => { if (onRebuild && confirm('Rebuild SEMUA template dari folder put-template-here?\n\nSemua template di database dihapus lalu di-import ulang dari folder. Template yang cuma ada di admin (bukan di folder) akan HILANG.\n\nPakai ini kalau thumbnail rusak / 404.')) onRebuild() }}
+                      style={{ ...pbActionBtn, cursor: 'pointer', width: '100%', marginTop: 10, color: 'rgba(255,180,120,0.9)', borderColor: 'rgba(255,150,80,0.25)' }}
+                    >
+                      ⟳ Rebuild dari folder (repair thumbnail 404)
+                    </button>
                   </div>
                 </>
               )}
