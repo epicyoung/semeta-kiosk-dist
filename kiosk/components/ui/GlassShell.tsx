@@ -227,7 +227,10 @@ export function GlassShell({ screenKey, direction, children, config, onLogoClick
             {/* Quick Sync — top right, cuma di category & template. Mirror gear kiri. */}
             {showSync && (
               <button
-                onClick={handleQuickSync}
+                // WAJIB dibungkus arrow. `onClick={handleQuickSync}` bikin React ngirim
+                // MouseEvent ke parameter `rebuild` → selalu truthy → tombol ini diam-diam
+                // jalanin REBUILD (wipe semua template lalu add ulang), bukan sync ringan.
+                onClick={() => handleQuickSync(false)}
                 disabled={syncStatus === 'syncing'}
                 title="Sync templates"
                 style={{
