@@ -300,10 +300,13 @@ export function LiveViewScreen({ dispatch, cameraSource }: Props) {
                       opacity: countdown !== null || lvResetting ? 0.4 : 1,
                     }}
                   >
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: lvResetting ? 'spin 0.8s linear infinite' : undefined }}>
-                      <polyline points="1 4 1 10 7 10" />
-                      <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
-                    </svg>
+                    {/* Huruf "R" — dulu ikon panah melengkung, ketuker sama tombol rotate di
+                        atasnya (dua-duanya panah). Muter pas lagi reset = feedback proses jalan. */}
+                    <span style={{
+                      fontFamily: 'var(--font-ui)', fontSize: 18, fontWeight: 700, lineHeight: 1,
+                      display: 'inline-block',
+                      animation: lvResetting ? 'spin 0.8s linear infinite' : undefined,
+                    }}>R</span>
                   </button>
                 )}
               </div>
