@@ -1342,12 +1342,13 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                       fontFamily: 'var(--font-ui)', letterSpacing: '0.12em', userSelect: 'none',
                     }}>
                       {config.has_secret && config.secret_hint
-                        ? secretRevealed
+                        ? secretRevealed && !config.bypassed
                           ? config.secret_hint
                           : (h => h.length > 4 ? h.slice(0, 4) + h.slice(4).replace(/[^-]/g, '*') : h.replace(/./g, '*'))(config.secret_hint)
                         : t('set_secret_placeholder_empty') as string}
                     </span>
-                    {config.has_secret && config.secret_hint && (
+                    {/* Tombol reveal (mata) disembunyiin pas GODMODE — god key JANGAN pernah keintip. */}
+                    {config.has_secret && config.secret_hint && !config.bypassed && (
                       <button
                         onMouseDown={() => setSecretRevealed(true)}
                         onMouseUp={() => setSecretRevealed(false)}
