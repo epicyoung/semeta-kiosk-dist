@@ -723,30 +723,19 @@ h1, .h1-glow { letter-spacing: -0.02em; }
   .preview-tab-switcher-landscape { display: block !important; }
 }
 
-/* ── Preview QR — anchor ke media-area (bukan media box) biar ga ke-clip overflow ─────
-   Portrait: tengah-ATAS di area kosong bawah judul/tab — jauh dari grid, ga ketiban item frame.
-   top offset ngasih jarak dari tab switcher (PHOTO/VIDEO) di atasnya. */
-.preview-qr {
-  position: absolute;
-  z-index: 50;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-}
-/* Landscape: QR di sisi kanan media-area. Grid foto fit-to-height (sempit, center) → ada ruang
-   kanan. right = jarak dari tepi kanan media-area. Kecilin buat mepet kanan, gedein buat ke kiri. */
+/* ── Slot QR — dua tempat, satu tombol ────────────────────────────────────────────────
+   Portrait: slot MELAYANG di pita atas foto (posisi inline di PreviewScreen.tsx —
+   tinggi pita cuma bisa diukur runtime). Landscape: QR pindah ke KOLOM KIRI
+   (.preview-qr-title-slot, persis di bawah subtitle) — slot melayang dimatiin,
+   !important buat ngalahin display:flex inline-nya. */
+.preview-qr-title-slot { display: none; }
 @media (orientation: landscape) {
-  .preview-qr {
-    position: absolute;
-    top: 0;
-    left: auto;
-    /* Geser ke dalam sedikit (right: 20px) agar tidak terpotong saat diperbesar */
-    right: 20px;
-    /* Gedein QR 1.8x di landscape TV biar gampang discan dari jauh */
-    transform: scale(1.8);
-    transform-origin: top right;
+  .preview-qr-slot { display: none !important; }
+  .preview-qr-title-slot {
+    display: flex;
+    justify-content: center;
+    margin-top: 16px;
   }
-  .qr-arrow-portrait { display: none !important; }
 }
 
 /* ── Preview media box ────────────────────────────────────────────────────────

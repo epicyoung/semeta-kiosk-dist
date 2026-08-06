@@ -19,6 +19,9 @@ import { animateImage, finalizeVideo, isVideoUnlocked } from "@/lib/video";
 import { buildVideoOverlay } from "@/lib/video-overlay";
 import { useT } from "@/lib/i18n";
 
+// QR yang kepampang terus di atas foto. Kecil aja — ini pintu masuk, ketuk buat gedein.
+const QR_INLINE_SIZE = 85;
+
 type Props = {
   // choose = frame chooser (cycling + Back/Next, no upload/print). final = preview (fixed frame, upload+print).
   mode: "choose" | "final";
@@ -50,12 +53,19 @@ function TabSwitcher({
   videoUrl,
   videoLoading,
   onSwitch,
+  only,
 }: {
   activeTab: "photo" | "video";
   videoUrl: string | null;
   videoLoading: boolean;
   onSwitch: (tab: "photo" | "video") => void;
+  // Portrait mecah pill jadi DUA: PHOTO kiri QR, VIDEO kanan QR. Tanpa `only` = pill utuh
+  // (landscape tetep pakai versi utuh). Style container sama persis, cuma isinya difilter.
+  only?: "photo" | "video";
 }) {
+  const tabs = (["photo", "video"] as const).filter(
+    (tb) => !only || tb === only,
+  );
   return (
     <div
       style={{
@@ -67,7 +77,7 @@ function TabSwitcher({
         gap: 3,
       }}
     >
-      {(["photo", "video"] as const).map((tab) => (
+      {tabs.map((tab) => (
         <button
           key={tab}
           onClick={() =>
@@ -166,7 +176,16 @@ export function PreviewScreen({
         };
 
   const [showOriginal, setShowOriginal] = useState(false);
+  // Zoom grid 4-up: null = grid, angka = index foto yang lagi dibesarin. PREVIEW DOANG —
+  // sengaja TIDAK nyentuh resultIndex, jadi foto yang di-print/QR tetep ditentukan chooser
+  // (tombol Re-choose). Tap foto ≠ milih foto.
+  const [zoomIndex, setZoomIndex] = useState<number | null>(null);
   const [showBigQr, setShowBigQr] = useState(false);
+  // Tinggi pita kosong di ATAS foto, diukur dari DOM. CSS ga bisa ngitung ini: tingginya =
+  // (tinggi baris − tinggi foto) / 2, sementara tinggi foto itu aspect-ratio-locked dan
+  // di-center flex. Persen tebakan bikin QR ga pernah pas tengah — ini diukur beneran.
+  const mediaBoxRef = useRef<HTMLDivElement>(null);
+  const [qrBandHeight, setQrBandHeight] = useState(0);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [qrStatus, setQrStatus] = useState<"idle" | "uploading" | "failed">(
     "idle",
@@ -245,6 +264,20 @@ export function PreviewScreen({
     };
   }, [activeResult.originalUrl, activeResult.aiUrl]);
 
+  // Ukur pita kosong di atas foto. offsetTop foto relatif ke baris media (baris itu
+  // position:relative) = persis tinggi celahnya. ResizeObserver biar ikut bener pas
+  // orientasi muter / foto ganti rasio, bukan cuma pas pertama render.
+  useEffect(() => {
+    const box = mediaBoxRef.current;
+    if (!box) return;
+    const measure = () => setQrBandHeight(box.offsetTop);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(box);
+    if (box.parentElement) ro.observe(box.parentElement);
+    return () => ro.disconnect();
+  }, [activeTab, isFinal]);
+
   // Harga token video buat tombol — baca cache handshake 'lastVideoCosts' (sumber sama SettingsPanel).
   // client-only (localStorage) → di useEffect, aman dari SSR.
   useEffect(() => {
@@ -283,6 +316,35 @@ export function PreviewScreen({
     activeTab === "photo" && !!shownDims && shownDims.w > shownDims.h;
 
   const printUrl = showOriginal ? activeResult.originalUrl : activeResult.aiUrl;
+
+  // Multi-template (2-4 hasil) → grid 4-up. Tap sel = zoom, tap lagi = balik grid.
+  const multiResults =
+    !isChoose && state.allResults && state.allResults.length > 1
+      ? state.allResults
+      : null;
+  const isGridView = !!multiResults && !showOriginal && zoomIndex === null;
+  // Foto yang lagi DIPAJANG. Beda dari activeResult (yang dipakai print/QR/upload) — zoom
+  // cuma ngubah tampilan. shownDims/visibleFrame sengaja tetep ikut activeResult karena
+  // visibleFrame ikut ke-burn pas print (dipakai di doPrint), bukan cuma buat layar.
+  const displayResult =
+    multiResults && zoomIndex !== null ? multiResults[zoomIndex] : activeResult;
+
+  // Slot melayang di pita kosong atas/bawah foto. Ditulis INLINE, bukan di globals.css,
+  // karena tingginya hasil ukur runtime — jadi mau ga mau lewat style prop. Konsekuensinya
+  // override landscape di globals.css wajib !important buat ngalahin inline ini.
+  const slotBase: React.CSSProperties = {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    height: qrBandHeight,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    pointerEvents: "none",
+    zIndex: 45,
+  };
+  // gap 16: jarak PHOTO ─ QR ─ VIDEO di pita atas (portrait).
+  const qrSlotStyle: React.CSSProperties = { ...slotBase, top: 0, gap: 16 };
 
   async function doPrint(url: string, frameUrl: string | null, copies: number) {
     // Burn frame ke foto full-res sebelum print — DOM overlay ga ikut ke printer.
@@ -605,6 +667,66 @@ export function PreviewScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFinal, preVideo, state.base, shareUrl, licensed]);
 
+  // Tombol QR — SATU definisi, dipajang di dua slot: portrait = melayang di pita atas
+  // foto, landscape = kolom kiri di bawah subtitle. Gate per-orientasi di globals.css.
+  const qrButton = (
+    <button
+      onClick={() => setShowBigQr(true)}
+      aria-label="QR code"
+      style={{
+        padding: 8,
+        borderRadius: 12,
+        background: "white",
+        border: "none",
+        cursor: "pointer",
+        boxShadow: "0 6px 24px rgba(0,0,0,0.35)",
+        lineHeight: 0,
+        pointerEvents: "auto",
+      }}
+    >
+      {licensed && qrValue ? (
+        <QRCodeSVG
+          value={qrValue}
+          size={QR_INLINE_SIZE}
+          bgColor="white"
+          fgColor="#090135"
+        />
+      ) : (
+        <div
+          style={{
+            width: QR_INLINE_SIZE,
+            height: QR_INLINE_SIZE,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            textAlign: "center",
+            padding: 4,
+          }}
+        >
+          {/* Label pendek — muat di kotak 85px. Penjelasan lengkapnya ada di
+              overlay QR gede yang kebuka pas diketuk. */}
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              lineHeight: 1.3,
+              color: "#090135",
+              fontFamily: "var(--font-ui)",
+            }}
+          >
+            {!licensed
+              ? "Belum aktif"
+              : qrStatus === "uploading"
+                ? "Upload…"
+                : qrStatus === "failed"
+                  ? "Ulangi"
+                  : "Ketuk"}
+          </span>
+        </div>
+      )}
+    </button>
+  );
+
   return (
     <div
       className="screen-split screen-split--center flex flex-col w-full h-full"
@@ -655,29 +777,60 @@ export function PreviewScreen({
         >
           {t(isChoose ? "preview_subtitle" : "delivery_subtitle") as string}
         </p>
+        {/* Landscape-only: QR persis di bawah subtitle — "The seal below carries it
+            beyond these walls" literal nunjuk ke sini. Portrait: display:none (globals.css). */}
+        {isFinal && activeTab === "photo" && (
+          <div className="preview-qr-title-slot">{qrButton}</div>
+        )}
       </div>
 
       <div className="screen-content">
-        {/* Tab switcher portrait-only — di atas foto, normal flow. Video cuma kalau vendor nyalain. */}
-        {isFinal && videoAllowed && (
-          <div
-            className="preview-tab-switcher"
-            style={{ justifyContent: "center", paddingBottom: 10 }}
-          >
-            <TabSwitcher
-              activeTab={activeTab}
-              videoUrl={videoUrl}
-              videoLoading={videoLoading}
-              onSwitch={setActiveTab}
-            />
-          </div>
-        )}
-
-        {/* Media area — position:relative jadi anchor tab switcher landscape */}
+        {/* Media area — position:relative jadi anchor tab switcher landscape + QR melayang */}
         <div
           className="flex-1 min-h-0 flex items-center justify-center gap-3"
           style={{ padding: 4, position: "relative" }}
         >
+          {/* QR melayang di pita kosong ATAS foto. position:absolute — sengaja, biar nol
+              pengaruh ke tinggi/posisi foto (versi normal-flow bikin foto kedorong turun).
+              Ketuk = buka overlay QR gede (retry + pesan lisensi ada di situ, ga diduplikasi). */}
+          {/* Pita atas foto (portrait): [PHOTO] [QR] [VIDEO] — tab dipecah ngapit QR.
+              Tabs WAJIB tetep render pas tab video aktif (QR-nya doang yang ngumpet),
+              kalau nggak ga ada jalan balik ke photo. Landscape: slot ini display:none
+              (globals.css) — QR pindah kolom kiri, tabs pakai versi -landscape. */}
+          {isFinal && (activeTab === "photo" || videoAllowed) && (
+            <div className="preview-qr-slot" style={qrSlotStyle}>
+              {videoAllowed && (
+                <div
+                  className="preview-tab-switcher"
+                  style={{ pointerEvents: "auto" }}
+                >
+                  <TabSwitcher
+                    only="photo"
+                    activeTab={activeTab}
+                    videoUrl={videoUrl}
+                    videoLoading={videoLoading}
+                    onSwitch={setActiveTab}
+                  />
+                </div>
+              )}
+              {activeTab === "photo" && qrButton}
+              {videoAllowed && (
+                <div
+                  className="preview-tab-switcher"
+                  style={{ pointerEvents: "auto" }}
+                >
+                  <TabSwitcher
+                    only="video"
+                    activeTab={activeTab}
+                    videoUrl={videoUrl}
+                    videoLoading={videoLoading}
+                    onSwitch={setActiveTab}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Tab switcher landscape-only — absolute top-center di atas foto, di luar overflow:hidden */}
           {isFinal && videoAllowed && (
             <div
@@ -717,6 +870,7 @@ export function PreviewScreen({
             </button>
           )}
           <div
+            ref={mediaBoxRef}
             className={`preview-media${shownNative ? " preview-media--native" : ""}`}
             style={
               shownNative && shownDims
@@ -729,29 +883,30 @@ export function PreviewScreen({
             {/* Media layer */}
             {activeTab === "photo" ? (
               <div
-                className={`absolute inset-0${isPrintSession ? "" : " cursor-pointer"}${printing ? "" : " animate-photo-reveal-inner"}`}
+                className={`absolute inset-0${zoomIndex !== null ? " cursor-pointer" : ""}${printing ? "" : " animate-photo-reveal-inner"}`}
                 style={{
                   animation: printing
                     ? "print-eject 1200ms ease-in-out"
                     : undefined,
                 }}
                 onClick={
-                  isPrintSession ? undefined : () => setShowOriginal((v) => !v)
+                  zoomIndex !== null ? () => setZoomIndex(null) : undefined
                 }
                 onAnimationEnd={onPrintAnimEnd}
               >
-                {!isChoose &&
-                !showOriginal &&
-                state.allResults &&
-                state.allResults.length > 1 ? (
+                {isGridView ? (
                   <div className="absolute inset-0 grid grid-cols-2 gap-0.5 bg-[#111]">
-                    {state.allResults.map((r, i) => (
+                    {multiResults.map((r, i) => (
                       <div
                         key={i}
-                        className="relative w-full h-full overflow-hidden"
+                        className="relative w-full h-full overflow-hidden cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setZoomIndex(i);
+                        }}
                       >
                         <img
-                          src={showOriginal ? r.originalUrl : r.aiUrl}
+                          src={r.aiUrl}
                           className="absolute inset-0 w-full h-full object-cover"
                         />
                         {visibleFrame && (
@@ -765,9 +920,9 @@ export function PreviewScreen({
                   </div>
                 ) : (
                   <>
-                    {activeResult.aiUrl ? (
+                    {displayResult.aiUrl ? (
                       <img
-                        src={activeResult.aiUrl}
+                        src={displayResult.aiUrl}
                         alt="AI result"
                         className="absolute inset-0 w-full h-full object-cover"
                       />
@@ -777,9 +932,9 @@ export function PreviewScreen({
                         style={{ background: "rgba(255,255,255,0.04)" }}
                       />
                     )}
-                    {activeResult.originalUrl && (
+                    {displayResult.originalUrl && (
                       <img
-                        src={activeResult.originalUrl}
+                        src={displayResult.originalUrl}
                         alt="Original"
                         className="absolute inset-0 w-full h-full object-cover z-10"
                         style={{
@@ -1063,27 +1218,38 @@ export function PreviewScreen({
                     : "AI"}
             </div>
 
-            {/* Tap hint — bottom center (print: gak ada toggle AI/Asli) */}
+            {/* Toggle AI ↔ Asli — tombol kecil di bawah foto (dulu tap-di-foto, sekarang tap
+                foto dipakai buat zoom grid). Print: gak ada toggle AI/Asli. */}
             {activeTab === "photo" && !isPrintSession && (
               <div
-                className="absolute bottom-3 inset-x-0 flex justify-center pointer-events-none"
+                className="absolute bottom-3 inset-x-0 flex justify-center"
                 style={{ zIndex: 40 }}
               >
-                <span
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // Balik ke grid pas keluar dari Asli — biar tamu ga nyangkut di satu foto.
+                    setZoomIndex(null);
+                    setShowOriginal((v) => !v);
+                  }}
                   style={{
                     fontSize: "var(--text-2xs)",
                     letterSpacing: "0.2em",
                     textTransform: "uppercase",
                     background: "rgba(0,0,0,0.55)",
-                    color: "var(--fg-muted)",
-                    padding: "6px 14px",
+                    color: showOriginal ? "#fff" : "var(--fg-muted)",
+                    padding: "8px 16px",
                     borderRadius: "var(--radius-chip)",
+                    border: "1px solid rgba(255,255,255,0.18)",
+                    backdropFilter: "blur(8px)",
+                    cursor: "pointer",
+                    fontFamily: "var(--font-ui)",
                   }}
                 >
                   {showOriginal
                     ? (t("preview_tap_see_ai") as string)
                     : (t("preview_tap_compare") as string)}
-                </span>
+                </button>
               </div>
             )}
           </div>
@@ -1102,6 +1268,8 @@ export function PreviewScreen({
               ›
             </button>
           )}
+
+          {/* Tab switcher portrait pindah ke PITA ATAS (ngapit QR) — slot bawah dihapus. */}
         </div>
       </div>
 
@@ -1527,13 +1695,7 @@ export function PreviewScreen({
                 {t("preview_btn_email") as string}
               </TouchButton>
             )}
-            <TouchButton
-              onClick={() => setShowBigQr(true)}
-              className="flex-1"
-              disabled={printing || activeTab === "video"}
-            >
-              QR Code
-            </TouchButton>
+            {/* Tombol "QR Code" dicabut — QR-nya sekarang kepampang terus di atas foto. */}
             {videoAllowed && (
               <TouchButton
                 onClick={() => {
