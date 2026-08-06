@@ -40,6 +40,17 @@ async function fetchFrame(): Promise<Response | null> {
   return null
 }
 
+// Restart PAKSA live view — tombol refresh di layar live. Buat kasus "ngadat" yang self-healing
+// ga bisa liat: frame NGEFREEZE tapi HTTP tetep 200 (self-healing cuma ke-trigger pas fetch
+// GAGAL). Hide → jeda → Show ulang = dCC re-init sensor LV.
+export async function POST() {
+  liveOn = false
+  try { await fetch(`${DCC}/?CMD=LiveViewWnd_Hide`, { cache: 'no-store' }) } catch { /* best-effort */ }
+  await new Promise(r => setTimeout(r, 400))
+  await startLiveView()
+  return NextResponse.json({ ok: true })
+}
+
 export async function GET() {
   // Belum pernah sukses → coba nyalain LV dulu (self-healing). Udah nyala → langsung ambil frame.
   if (!liveOn) await startLiveView()

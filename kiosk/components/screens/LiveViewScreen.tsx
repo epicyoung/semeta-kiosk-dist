@@ -112,6 +112,15 @@ export function LiveViewScreen({ dispatch, cameraSource }: Props) {
     setRetry(n => n + 1)
   }, [])
 
+  // Restart paksa LV dCC (POST /api/canon-live) — buat frame NGEFREEZE (HTTP masih 200 →
+  // self-healing ga ke-trigger). Fire-and-forget; polling 200ms nyambung sendiri abis LV bangun.
+  const [lvResetting, setLvResetting] = useState(false)
+  const resetLiveView = useCallback(async () => {
+    setLvResetting(true)
+    try { await fetch('/api/canon-live', { method: 'POST' }) } catch { /* polling recover sendiri */ }
+    finally { setTimeout(() => setLvResetting(false), 800) }
+  }, [])
+
   const handleCapture = useCallback(async () => {
     for (const n of [3, 2, 1]) {
       setCountdown(n)
@@ -249,26 +258,48 @@ export function LiveViewScreen({ dispatch, cameraSource }: Props) {
 
           {flash && <div className="absolute inset-0 bg-white z-20" />}
 
-          {/* Tombol ROTATE — cuma pas kamera live (cameraReady && !captured), mati pas countdown */}
+          {/* Tombol ROTATE (+ refresh LV khusus Canon) — cuma pas kamera live, mati pas countdown */}
           {cameraReady && !captured && (
             <div className="absolute inset-0 flex items-start justify-end p-4" style={{ zIndex: 30 }}>
-              <button
-                onClick={rotate}
-                disabled={countdown !== null}
-                aria-label={t('liveview_rotate_aria') as string}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  width: 44, height: 44, borderRadius: 12,
-                  background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.3)',
-                  color: '#fff', cursor: 'pointer', backdropFilter: 'blur(8px)',
-                  opacity: countdown !== null ? 0.4 : 1,
-                }}
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="23 4 23 10 17 10" />
-                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-                </svg>
-              </button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <button
+                  onClick={rotate}
+                  disabled={countdown !== null}
+                  aria-label={t('liveview_rotate_aria') as string}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    width: 44, height: 44, borderRadius: 12,
+                    background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.3)',
+                    color: '#fff', cursor: 'pointer', backdropFilter: 'blur(8px)',
+                    opacity: countdown !== null ? 0.4 : 1,
+                  }}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="23 4 23 10 17 10" />
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                  </svg>
+                </button>
+                {/* Refresh LV — restart live view dCC pas frame ngefreeze. Canon only. */}
+                {isCanon && (
+                  <button
+                    onClick={resetLiveView}
+                    disabled={countdown !== null || lvResetting}
+                    aria-label="Refresh live view"
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      width: 44, height: 44, borderRadius: 12,
+                      background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.3)',
+                      color: '#fff', cursor: 'pointer', backdropFilter: 'blur(8px)',
+                      opacity: countdown !== null || lvResetting ? 0.4 : 1,
+                    }}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: lvResetting ? 'spin 0.8s linear infinite' : undefined }}>
+                      <polyline points="1 4 1 10 7 10" />
+                      <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+                    </svg>
+                  </button>
+                )}
+              </div>
             </div>
           )}
 

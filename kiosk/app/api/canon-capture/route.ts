@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
+import { stripExif } from '@/lib/jpeg-exif'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -87,7 +88,11 @@ export async function POST() {
     if (latest && latest.mtimeMs > before) {
       const buf = await readStable(latest.file)
       if (buf) {
-        return NextResponse.json({ dataUrl: `data:image/jpeg;base64,${buf.toString('base64')}`, file: path.basename(latest.file) })
+        // EXIF dibuang DI SINI (bukan di browser): imageOrientation:'none' udah dicabut Chrome,
+        // fallback-nya diam-diam apply EXIF Orientation → capture portrait keputer dobel vs live.
+        // Tanpa EXIF, decode browser = pixel mentah → rotasi kiosk satu-satunya kebenaran.
+        const clean = stripExif(buf)
+        return NextResponse.json({ dataUrl: `data:image/jpeg;base64,${clean.toString('base64')}`, file: path.basename(latest.file) })
       }
     }
   }
