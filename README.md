@@ -28,10 +28,29 @@ Tanpa model ini, faceswap error. Minta bundle `semeta-kiosk-FULL` ke admin.
 3. Copy **semua isi** bundle `semeta-kiosk-MODELS` (dari admin) ke dalam
    folder `semeta-kiosk\` hasil clone (model AI + `pb\`). Timpa/gabung.
 4. Di `semeta-kiosk\`: jalanin `setup.bat` (auto-stop kalau model belum di-copy)
-5. Jalanin `LAUNCHER.bat` → buka http://localhost:3000
+5. Jalanin `LAUNCHER-BUILD.BAT` → buka http://localhost:3000
+   (Pertama kali compile dulu ~1-2 menit — biarin jalan, jangan ditutup.
+   Buka berikutnya udah cepet, gak compile lagi.)
 6. Isi **KIOSK_SECRET** di Settings → Lisensi (minta ke admin)
 
 ## Update (mesin yang udah jalan)
 
-Settings (⚙️) → **Sistem** → **Cek update** → **Update** → tutup+buka lagi `LAUNCHER.bat`.
+Settings (⚙️) → **Sistem** → **Cek update** → **Update**, terus:
+
+```
+kill.bat
+LAUNCHER-BUILD.BAT --rebuild
+```
+
+**Wajib pakai `--rebuild`.** Mode produksi nyajiin hasil compile lama sampai
+di-compile ulang. Kalau cuma tutup-buka biasa, kiosk jalan pakai kode LAMA
+dan kelihatannya normal — gak ada tanda apa-apa kalau update belum kepasang.
+
 Template + frame yang udah di-upload **aman** — update cuma narik source, gak nyentuh `pb_data`.
+
+## `LAUNCHER.bat` vs `LAUNCHER-BUILD.BAT`
+
+| | Buat |
+|---|------|
+| `LAUNCHER-BUILD.BAT` | **Mesin lapangan.** Mode produksi — pre-compiled, stabil. |
+| `LAUNCHER.bat` | Ngoding/ngetes doang. Mode dev: lambat, gampang mati sendiri. |
