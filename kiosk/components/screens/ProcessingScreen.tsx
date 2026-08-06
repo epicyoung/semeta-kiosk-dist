@@ -8,7 +8,6 @@ import { animateImage } from '@/lib/video'
 import { uploadAsset } from '@/lib/upload'
 import { compositeFrame } from '@/lib/frame-composite'
 import { composePrintLayout } from '@/lib/print-layout'
-import { useMagicCatcher } from '@/lib/use-magic-catcher'
 import { useT } from '@/lib/i18n'
 import { finalizeLocal, localCopies } from '@/lib/local-finalize'
 
@@ -206,15 +205,13 @@ type Props = {
   licensed: boolean
   videoUnlocked: boolean
   comfy: ComfyCfg
-  enableMagicCatcher: boolean
-  magicCatcherDeviceId?: string
   enableVideoEngine: boolean
   videoProvider: VideoProvider
   videoResolution: '720p' | '1080p'
   onUploadFailed?: (metadata: Record<string, unknown>) => void
 }
 
-export function ProcessingScreen({ state, dispatch, generationSource, eventName, licensed, videoUnlocked, comfy, enableMagicCatcher, magicCatcherDeviceId, enableVideoEngine, videoProvider, videoResolution, onUploadFailed }: Props) {
+export function ProcessingScreen({ state, dispatch, generationSource, eventName, licensed, videoUnlocked, comfy, enableVideoEngine, videoProvider, videoResolution, onUploadFailed }: Props) {
   const t = useT()
   const copy = t('processing_copy') as string[]
   const [copyIndex, setCopyIndex] = useState(0)
@@ -226,9 +223,8 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
   const isErrorHash = () => typeof window !== 'undefined' && window.location.hash === '#error'
   const [timedOut, setTimedOut] = useState(isErrorHash)
 
-  // Magic Catcher — rekam reaksi tamu saat reveal AI. Gated: toggle config + disclaimer di idle.
-  // No-op internal kalau disabled / #error preview. Hook self-cleaning (kamera mati pas unmount).
-  useMagicCatcher({ enabled: enableMagicCatcher && !timedOut, eventName, deviceId: magicCatcherDeviceId })
+  // Magic Catcher DIPINDAH ke PreviewScreen (mulai pas tamu PERTAMA lihat hasil AI di
+  // framechooser/preview — momen reaksi asli), BUKAN di sini pas layar loading generate.
 
   useEffect(() => {
     const onHash = () => setTimedOut(isErrorHash())

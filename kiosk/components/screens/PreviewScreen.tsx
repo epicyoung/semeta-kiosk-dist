@@ -17,6 +17,7 @@ import { uploadAsset, blobUrlToDataUrl, uploadLocalFile } from "@/lib/upload";
 import { planMultiUpload } from "@/lib/multi-upload";
 import { animateImage, finalizeVideo, isVideoUnlocked } from "@/lib/video";
 import { buildVideoOverlay } from "@/lib/video-overlay";
+import { useMagicCatcher } from "@/lib/use-magic-catcher";
 import { useT } from "@/lib/i18n";
 
 // QR yang kepampang terus di atas foto. Kecil aja — ini pintu masuk, ketuk buat gedein.
@@ -42,6 +43,8 @@ type Props = {
     | "has_secret"
     | "bypassed"
     | "templates"
+    | "enable_magic_catcher"
+    | "magic_catcher_device_id"
   >;
   licensed: boolean;
   eventName: string;
@@ -142,6 +145,17 @@ export function PreviewScreen({
   const isFinal = mode === "final";
   // Photo Print: composite udah final (overlay kebakar) — no frame, no video, no toggle AI/Asli.
   const isPrintSession = state.screen === "preview" && !!state.printSize;
+
+  // Magic Catcher — rekam reaksi HANYA di FINAL, bukan choose. Keputusan produk: di
+  // framechooser foto sengaja dikosongin biar tamu fokus milih frame tanpa terdistraksi
+  // (lihat render foto di bawah, gated !isChoose). Reveal + reaksi tamu = pas final, di situ
+  // foto muncul → catcher jalan. Print session skip (non-AI, ga ada reveal). Cuma final →
+  // satu klip utuh, ga ada remount-double-clip. Hook self-cleaning (kamera mati pas unmount).
+  useMagicCatcher({
+    enabled: isFinal && (config.enable_magic_catcher ?? false) && !isPrintSession,
+    eventName,
+    deviceId: config.magic_catcher_device_id,
+  });
   // Video GA (2026-07-20): kebuka kalau super admin nyalain kiosks.enable_video (nyampe via
   // handshake) ATAU godmode — isVideoUnlocked. Layer kedua tetep keputusan VENDOR (toggle
   // "Enable Video Engine" di Settings): vendor OFF → nol UI video (tab + tombol) di preview.
@@ -920,7 +934,10 @@ export function PreviewScreen({
                   </div>
                 ) : (
                   <>
-                    {displayResult.aiUrl ? (
+                    {/* isChoose: foto AI SENGAJA dikosongin — tamu fokus milih frame doang,
+                        ga keganggu wajah sendiri. Foto + magic catcher baru muncul di final.
+                        Frame tetep render (di bawah) biar bentuk sigil kepilih keliatan. */}
+                    {!isChoose && displayResult.aiUrl ? (
                       <img
                         src={displayResult.aiUrl}
                         alt="AI result"
@@ -932,7 +949,7 @@ export function PreviewScreen({
                         style={{ background: "rgba(255,255,255,0.04)" }}
                       />
                     )}
-                    {displayResult.originalUrl && (
+                    {!isChoose && displayResult.originalUrl && (
                       <img
                         src={displayResult.originalUrl}
                         alt="Original"
@@ -1219,8 +1236,9 @@ export function PreviewScreen({
             </div>
 
             {/* Toggle AI ↔ Asli — tombol kecil di bawah foto (dulu tap-di-foto, sekarang tap
-                foto dipakai buat zoom grid). Print: gak ada toggle AI/Asli. */}
-            {activeTab === "photo" && !isPrintSession && (
+                foto dipakai buat zoom grid). Print: gak ada toggle AI/Asli. Choose: foto
+                dikosongin, jadi Compare ga ada gunanya (dua-duanya kosong) → disembunyiin. */}
+            {activeTab === "photo" && !isPrintSession && !isChoose && (
               <div
                 className="absolute bottom-3 inset-x-0 flex justify-center"
                 style={{ zIndex: 40 }}
