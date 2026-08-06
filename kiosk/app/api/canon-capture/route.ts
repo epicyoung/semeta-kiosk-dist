@@ -22,6 +22,12 @@ const SESSION_ROOT = process.env.CANON_SESSION_DIR
 const CAPTURE_TIMEOUT_MS = 15_000
 const POLL_MS = 400
 
+// LV aktif pas shutter = sumber hang klasik (600D + lensa AF nyari fokus di LV → kamera
+// gantung, satu-satunya obat cabut USB/restart dCC). Hide LV dulu — best-effort, gagal pun
+// capture tetep dicoba. Nyalainnya TIDAK di sini: canon-live self-healing nge-Show lagi
+// otomatis pas frame diminta (sesi berikutnya / balik ke live). CANON_LV_HIDE=off buat skip.
+const LV_HIDE_CMD = process.env.CANON_LV_HIDE ?? 'LiveViewWnd_Hide'
+
 /** Newest .jpg di dir + subfolder (default 2 level: digiCamControl/<session>/foto). Nama bebas. */
 function newestJpeg(dir: string, depth = 2): { file: string; mtimeMs: number } | null {
   let best: { file: string; mtimeMs: number } | null = null
@@ -58,6 +64,11 @@ async function readStable(file: string): Promise<Buffer | null> {
 export async function POST() {
   // Baseline: mtime file terbaru SEBELUM jepret → penanda mana yang "baru" (across semua session).
   const before = newestJpeg(SESSION_ROOT)?.mtimeMs ?? 0
+
+  // Matiin LV dulu biar shutter ga balapan sama sensor live view (lihat catatan LV_HIDE_CMD).
+  if (LV_HIDE_CMD !== 'off') {
+    try { await fetch(`${DCC}/?CMD=${LV_HIDE_CMD}`, { cache: 'no-store' }) } catch { /* best-effort */ }
+  }
 
   // Trigger shutter.
   try {

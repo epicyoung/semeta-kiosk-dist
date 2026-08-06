@@ -104,12 +104,15 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource }: Props) {
 
   // Canon live-ish: bump tiap CANON_LIVE_MS → <img> cache-bust → re-fetch frame proxy. Berhenti
   // pas done (semua shot udah diambil). Webcam ga kena (pakai <video> stream).
+  // capturing: polling setop selama shutter — capture route nge-Hide LV, polling yang jalan
+  // terus bakal nge-Show LV lagi di tengah shutter (race → kamera hang). Sama kayak LiveView.
+  const [capturing, setCapturing] = useState(false)
   const [liveTick, setLiveTick] = useState(0)
   useEffect(() => {
-    if (!isCanon || done) return
+    if (!isCanon || done || capturing) return
     const id = setInterval(() => setLiveTick(t => t + 1), CANON_LIVE_MS)
     return () => clearInterval(id)
-  }, [isCanon, done])
+  }, [isCanon, done, capturing])
 
   // Satu jepretan: countdown 3-2-1 → flash → canvas (rotasi ikut kalibrasi) → dataURL
   const captureShot = useCallback(async (): Promise<string | null> => {
@@ -124,7 +127,10 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource }: Props) {
     if (isCanon) {
       // Rotate ikut tombol — non-faceswap (print) = orientasi kamera nentuin hasil, DSLR ga bisa
       // diputer fisik. deg 0 = passthrough.
-      try { return await rotateDataUrl(await triggerCanonCapture(), rotation) } catch { setCameraError(true); return null }
+      setCapturing(true)
+      try { return await rotateDataUrl(await triggerCanonCapture(), rotation) }
+      catch { setCameraError(true); return null }
+      finally { setCapturing(false) }
     }
     const video = videoRef.current
     if (!video) return null

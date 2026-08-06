@@ -75,12 +75,15 @@ export function LiveViewScreen({ dispatch, cameraSource }: Props) {
 
   // Canon live-ish: bump tiap CANON_LIVE_MS → <img> src ganti (cache-bust) → re-fetch frame proxy.
   // Berhenti pas captured (ga perlu live pas review foto). Webcam ga kena (pakai <video> stream).
+  // capturing: polling SETOP selama shutter jalan — capture route sengaja nge-Hide LV, dan
+  // polling yang jalan terus bakal nge-Show LV lagi DI TENGAH shutter (race → kamera hang).
+  const [capturing, setCapturing] = useState(false)
   const [liveTick, setLiveTick] = useState(0)
   useEffect(() => {
-    if (!isCanon || captured) return
+    if (!isCanon || captured || capturing) return
     const id = setInterval(() => setLiveTick(t => t + 1), CANON_LIVE_MS)
     return () => clearInterval(id)
-  }, [isCanon, captured])
+  }, [isCanon, captured, capturing])
 
   useEffect(() => {
     // Canon: capture lewat backend (DSLR bukan webcam). Enable tombol; preview = proxy frame.
@@ -121,8 +124,10 @@ export function LiveViewScreen({ dispatch, cameraSource }: Props) {
     if (isCanon) {
       // DSLR full-res dari backend, lalu rotate ikut tombol (sama kayak webcam) — DSLR ga bisa
       // diputer fisik, jadi rotasi di canvas. deg 0 = passthrough.
+      setCapturing(true)
       try { const url = await rotateDataUrl(await triggerCanonCapture(), rotation); setBrowseAspect(null); setCaptured(url) }
       catch { setCameraError(true) }
+      finally { setCapturing(false) }
       return
     }
     const video = videoRef.current
