@@ -92,6 +92,13 @@ export async function POST() {
         // fallback-nya diam-diam apply EXIF Orientation → capture portrait keputer dobel vs live.
         // Tanpa EXIF, decode browser = pixel mentah → rotasi kiosk satu-satunya kebenaran.
         const clean = stripExif(buf)
+        // Shutter kelar & file aman → nyalain LV lagi (fire-and-forget, ga nahan response).
+        // Retake / shot berikutnya / tamu berikutnya dapet live seger tanpa nunggu freeze-detect.
+        if (LV_HIDE_CMD !== 'off') {
+          fetch(`${DCC}/?CMD=LiveViewWnd_Show`, { cache: 'no-store' })
+            .then(() => fetch(`${DCC}/?CMD=LiveViewWnd_Maximized`, { cache: 'no-store' }))
+            .catch(() => { /* best-effort — mount restart & freeze-detect jadi jaring pengaman */ })
+        }
         return NextResponse.json({ dataUrl: `data:image/jpeg;base64,${clean.toString('base64')}`, file: path.basename(latest.file) })
       }
     }

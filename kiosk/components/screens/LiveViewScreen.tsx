@@ -87,7 +87,14 @@ export function LiveViewScreen({ dispatch, cameraSource }: Props) {
 
   useEffect(() => {
     // Canon: capture lewat backend (DSLR bukan webcam). Enable tombol; preview = proxy frame.
-    if (isCanon) { setCameraReady(true); return }
+    // Restart LV paksa TIAP mount — abis capture LV sengaja di-Hide, dan dCC nyajiin frame
+    // basi (HTTP 200) ke sesi berikutnya → tamu kedua dapet layar beku, operator klik manual.
+    // Restart di sini = tiap sesi mulai dari LV seger, nol intervensi. Retry bump ikut kena.
+    if (isCanon) {
+      setCameraReady(true)
+      fetch('/api/canon-live', { method: 'POST' }).catch(() => { /* freeze-detect jaring kedua */ })
+      return
+    }
     const el = videoRef.current
     if (!el) return
     let cancelled = false

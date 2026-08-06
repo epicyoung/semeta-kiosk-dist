@@ -66,7 +66,13 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource }: Props) {
 
   useEffect(() => {
     // Canon: capture lewat backend (DSLR bukan webcam). Enable; preview = MJPEG best-effort.
-    if (isCanon) { setCameraReady(true); return }
+    if (isCanon) {
+      setCameraReady(true)
+      // Restart LV paksa tiap mount — sama kayak LiveViewScreen: sesi baru = LV seger,
+      // ga ngandelin frame basi dCC (HTTP 200 tapi beku) dari sesi sebelumnya.
+      fetch('/api/canon-live', { method: 'POST' }).catch(() => { /* freeze-detect jaring kedua */ })
+      return
+    }
     const el = videoRef.current
     if (!el) return
     let cancelled = false

@@ -22,6 +22,14 @@ const LV_CMDS = (process.env.CANON_LV_CMDS ?? 'LiveViewWnd_Show,LiveViewWnd_Maxi
 // Reset pas proses restart (dev HMR bikin module baru).
 let liveOn = false
 
+// Deteksi FREEZE: dCC nyajiin frame BASI (HTTP 200, byte identik) pas LV mati/hang — self-healing
+// berbasis "fetch gagal" buta total sama kasus ini (inilah kenapa tamu kedua dapet layar beku &
+// operator kudu klik LV manual di dCC). Kamera nyata selalu ada noise antar frame; byte identik
+// > FREEZE_MS berturut-turut = hampir pasti file cache, bukan pemandangan diam → tendang LV.
+const FREEZE_MS = 3_000
+let prevFrame: Buffer | null = null
+let lastChangeAt = 0
+
 async function startLiveView(): Promise<void> {
   for (const cmd of LV_CMDS) {
     try { await fetch(`${DCC}/?CMD=${cmd.trim()}`, { cache: 'no-store' }) } catch { /* best-effort */ }
@@ -45,6 +53,8 @@ async function fetchFrame(): Promise<Response | null> {
 // GAGAL). Hide → jeda → Show ulang = dCC re-init sensor LV.
 export async function POST() {
   liveOn = false
+  prevFrame = null
+  lastChangeAt = 0
   try { await fetch(`${DCC}/?CMD=LiveViewWnd_Hide`, { cache: 'no-store' }) } catch { /* best-effort */ }
   await new Promise(r => setTimeout(r, 400))
   await startLiveView()
@@ -69,6 +79,19 @@ export async function GET() {
   }
   liveOn = true
   const buf = Buffer.from(await frame.arrayBuffer())
+  // Freeze check — frame identik kelamaan = LV mati diam-diam → restart LV OTOMATIS.
+  // Frame basi tetep dibalikin (biar layar ga item); poll berikutnya udah dapet yang seger.
+  const now = Date.now()
+  if (prevFrame && prevFrame.equals(buf)) {
+    if (lastChangeAt && now - lastChangeAt > FREEZE_MS) {
+      liveOn = false
+      await startLiveView()
+      lastChangeAt = now // jangan spam Show tiap poll 200ms — kick lagi paling cepat FREEZE_MS
+    }
+  } else {
+    prevFrame = buf
+    lastChangeAt = now
+  }
   return new NextResponse(buf, {
     headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store' },
   })
