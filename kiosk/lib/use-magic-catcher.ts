@@ -26,8 +26,10 @@ export function useMagicCatcher({ enabled, eventName }: { enabled: boolean; even
       recorder = mime ? new MediaRecorder(s, { mimeType: mime }) : new MediaRecorder(s)
       recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data) }
       recorder.onstop = () => {
-        // Cancelled mid-record (unmount/reset) → jangan simpan clip parsial. LED tetep mati (di cleanup).
-        if (cancelled || chunks.length === 0) return
+        // Unmount (Processing kelar → Preview) = justru momen reveal — clip TETEP disimpan
+        // walau < MAX_MS. Dulu clip parsial dibuang (`cancelled ||`) → faceswap lokal yang
+        // kelar < 15 dtk GA PERNAH nyimpen apa-apa. LED tetep mati (track stop di cleanup).
+        if (chunks.length === 0) return
         const blob = new Blob(chunks, { type: mime ?? 'video/webm' })
         // stamp client-side (route stays deterministic). Date.now() prefix biar unik lintas restart
         // (performance.now() reset ke 0 tiap reload → bisa tabrakan nama file antar sesi).
