@@ -6,7 +6,7 @@ const MAX_MS = 15_000
 // Records a muted reaction clip during the AI reveal, saved locally via /api/save-reaction.
 // Stream is re-acquired fresh — LiveView's stream is already stopped by the time Processing mounts.
 // Video ONLY, never audio (consent/legal). Fully self-cleaning: the camera LED must go dark on unmount.
-export function useMagicCatcher({ enabled, eventName }: { enabled: boolean; eventName: string }): void {
+export function useMagicCatcher({ enabled, eventName, deviceId }: { enabled: boolean; eventName: string; deviceId?: string }): void {
   useEffect(() => {
     if (!enabled) return
     if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) return
@@ -20,7 +20,14 @@ export function useMagicCatcher({ enabled, eventName }: { enabled: boolean; even
     const mime = typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported('video/webm')
       ? 'video/webm' : undefined
 
-    navigator.mediaDevices.getUserMedia({ video: true, audio: false }).then(s => {
+    // Kamera kepilih (Settings → Magic Catcher) dicoba EXACT dulu; kecabut/pindah port USB →
+    // fallback kamera default — reaction kerekam kamera lain lebih baik daripada ga kerekam.
+    navigator.mediaDevices.getUserMedia({
+      video: deviceId ? { deviceId: { exact: deviceId } } : true,
+      audio: false,
+    }).catch(() =>
+      navigator.mediaDevices.getUserMedia({ video: true, audio: false }),
+    ).then(s => {
       if (cancelled) { s.getTracks().forEach(t => t.stop()); return }
       stream = s
       recorder = mime ? new MediaRecorder(s, { mimeType: mime }) : new MediaRecorder(s)
@@ -51,5 +58,5 @@ export function useMagicCatcher({ enabled, eventName }: { enabled: boolean; even
       try { if (recorder && recorder.state !== 'inactive') recorder.stop() } catch { /* noop */ }
       if (stream) stream.getTracks().forEach(t => t.stop())
     }
-  }, [enabled, eventName])
+  }, [enabled, eventName, deviceId])
 }

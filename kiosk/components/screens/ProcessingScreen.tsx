@@ -207,13 +207,14 @@ type Props = {
   videoUnlocked: boolean
   comfy: ComfyCfg
   enableMagicCatcher: boolean
+  magicCatcherDeviceId?: string
   enableVideoEngine: boolean
   videoProvider: VideoProvider
   videoResolution: '720p' | '1080p'
   onUploadFailed?: (metadata: Record<string, unknown>) => void
 }
 
-export function ProcessingScreen({ state, dispatch, generationSource, eventName, licensed, videoUnlocked, comfy, enableMagicCatcher, enableVideoEngine, videoProvider, videoResolution, onUploadFailed }: Props) {
+export function ProcessingScreen({ state, dispatch, generationSource, eventName, licensed, videoUnlocked, comfy, enableMagicCatcher, magicCatcherDeviceId, enableVideoEngine, videoProvider, videoResolution, onUploadFailed }: Props) {
   const t = useT()
   const copy = t('processing_copy') as string[]
   const [copyIndex, setCopyIndex] = useState(0)
@@ -227,7 +228,7 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
 
   // Magic Catcher — rekam reaksi tamu saat reveal AI. Gated: toggle config + disclaimer di idle.
   // No-op internal kalau disabled / #error preview. Hook self-cleaning (kamera mati pas unmount).
-  useMagicCatcher({ enabled: enableMagicCatcher && !timedOut, eventName })
+  useMagicCatcher({ enabled: enableMagicCatcher && !timedOut, eventName, deviceId: magicCatcherDeviceId })
 
   useEffect(() => {
     const onHash = () => setTimedOut(isErrorHash())

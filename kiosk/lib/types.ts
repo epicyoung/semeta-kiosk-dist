@@ -110,6 +110,7 @@ export type KioskConfig = {
   api_model?: string
   max_templates?: number          // VIP multi-template: 1 (default) — 4. undefined ⇒ 1.
   enable_magic_catcher?: boolean  // reaction cam toggle. undefined ⇒ false.
+  magic_catcher_device_id?: string // kamera reaction cam (deviceId getUserMedia). ''/undefined ⇒ default.
   // Engine comfy (per-template engine_type 'comfy') — global knobs, persist di settings.json
   comfy_model_family?: ComfyModelFamily
   comfy_checkpoint?: string

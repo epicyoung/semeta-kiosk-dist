@@ -249,6 +249,22 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   const [comfyCnStrength, setComfyCnStrength] = useState(config.comfy_cn_strength ?? '')
   const [maxTemplates,    setMaxTemplates]    = useState(config.max_templates ?? 1)
   const [magicCatcher,    setMagicCatcher]    = useState(config.enable_magic_catcher ?? false)
+  const [magicCatcherCam, setMagicCatcherCam] = useState(config.magic_catcher_device_id ?? '')
+  // Daftar kamera buat Magic Catcher — label baru keisi kalau izin kamera pernah dikasih
+  // (aturan browser). Belum ada izin → "Kamera N" generik, deviceId-nya tetep valid dipakai.
+  const [camList, setCamList] = useState<{ value: string; label: string }[]>([])
+  useEffect(() => {
+    if (!magicCatcher) return
+    let dead = false
+    navigator.mediaDevices?.enumerateDevices?.()
+      .then(ds => {
+        if (dead) return
+        setCamList(ds.filter(d => d.kind === 'videoinput')
+          .map((d, i) => ({ value: d.deviceId, label: d.label || `Kamera ${i + 1}` })))
+      })
+      .catch(() => { /* enumerate gagal → dropdown cuma "Default" */ })
+    return () => { dead = true }
+  }, [magicCatcher])
   const [showPromptDesigner, setShowPromptDesigner] = useState(false)
   const [videoEngine,     setVideoEngine]     = useState(config.enable_video_engine ?? false)
   // Default LTX — 1080p native, murah & tajam. Provider dipangkas ke 3 tier (LTX/PIXVERSE/SEEDANCE);
@@ -718,6 +734,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         comfy_cn_strength:  comfyCnStrength,
         max_templates:      maxTemplates,
         enable_magic_catcher: magicCatcher,
+        magic_catcher_device_id: magicCatcherCam,
         // Photo Print = non-AI → video selalu OFF, jangan nyimpen state nyangkut dari mode lain.
         enable_video_engine: engine === 'print_local' ? false : videoEngine,
         video_provider:      videoProvider,
@@ -756,6 +773,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         comfy_cn_strength:  comfyCnStrength,
         max_templates:      maxTemplates,
         enable_magic_catcher: magicCatcher,
+        magic_catcher_device_id: magicCatcherCam,
         enable_video_engine: engine === 'print_local' ? false : videoEngine,
         video_provider:      videoProvider,
         video_resolution:    videoResolution,
@@ -1561,6 +1579,17 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                   </div>
                   <Toggle on={magicCatcher} onToggle={() => setMagicCatcher(v => !v)} />
                 </div>
+                {/* Pilih kamera perekam — rig Canon punya webcam terpisah (mis. Logitech di
+                    monitor); tanpa ini getUserMedia pasrah ke default yang bisa salah device. */}
+                {magicCatcher && (
+                  <div style={{ marginTop: 10 }}>
+                    <Sel
+                      value={magicCatcherCam}
+                      options={[{ value: '', label: 'Default' }, ...camList.filter(c => c.value)]}
+                      onChange={setMagicCatcherCam}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* System / Update */}
