@@ -196,7 +196,7 @@ const tl: Translations = {
   set_update_pulling: 'Ina-update…',
   set_update_ok: 'Na-update na',
   set_update_failed: 'Nabigo ang update',
-  set_update_restart_note: 'Na-install na ang update. Isara at buksan muli ang LAUNCHER.bat para mailapat.',
+  set_update_restart_note: 'Na-install na ang update. Isara gamit ang kill.bat, tapos patakbuhin ang LAUNCHER-BUILD.BAT --rebuild.',
   set_update_disabled_note: 'Hindi available ang auto-update (hindi git installation).',
   set_logo: 'Logo',
   set_logo_hint: 'PNG/SVG · 100px na taas · 72 dpi',

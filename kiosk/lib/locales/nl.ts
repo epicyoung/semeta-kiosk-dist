@@ -253,7 +253,7 @@ const nl: Translations = {
   set_update_pulling: 'Bijwerken…',
   set_update_ok: 'Bijgewerkt',
   set_update_failed: 'Update mislukt',
-  set_update_restart_note: 'Update geïnstalleerd. Sluit en heropen LAUNCHER.bat om toe te passen.',
+  set_update_restart_note: 'Update geïnstalleerd. Sluit af met kill.bat en voer daarna LAUNCHER-BUILD.BAT --rebuild uit.',
   set_update_disabled_note: 'Automatische update niet beschikbaar (geen git-installatie).',
   set_logo: 'Logo',
   set_logo_hint: 'PNG/SVG · 100px hoogte · 72 dpi',

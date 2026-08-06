@@ -196,7 +196,7 @@ const vi: Translations = {
   set_update_pulling: 'Đang cập nhật…',
   set_update_ok: 'Đã cập nhật',
   set_update_failed: 'Cập nhật thất bại',
-  set_update_restart_note: 'Đã cài bản cập nhật. Đóng và mở lại LAUNCHER.bat để áp dụng.',
+  set_update_restart_note: 'Đã cài bản cập nhật. Đóng bằng kill.bat, rồi chạy LAUNCHER-BUILD.BAT --rebuild.',
   set_update_disabled_note: 'Tự động cập nhật không khả dụng (không phải bản cài đặt git).',
   set_logo: 'Logo',
   set_logo_hint: 'PNG/SVG · cao 100px · 72 dpi',

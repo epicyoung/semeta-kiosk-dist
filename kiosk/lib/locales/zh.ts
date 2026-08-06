@@ -253,7 +253,7 @@ const zh: Translations = {
   set_update_pulling: '更新中…',
   set_update_ok: '已更新',
   set_update_failed: '更新失败',
-  set_update_restart_note: '更新已安装。请关闭并重新打开 LAUNCHER.bat 以应用。',
+  set_update_restart_note: '更新已安装。请用 kill.bat 关闭，然后运行 LAUNCHER-BUILD.BAT --rebuild。',
   set_update_disabled_note: '自动更新不可用（非 git 安装）。',
   set_logo: '标志',
   set_logo_hint: 'PNG/SVG · 高度 100px · 72 dpi',

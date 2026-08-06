@@ -121,7 +121,8 @@ echo ============================================
 echo.
 echo Langkah selanjutnya:
 echo   1. Isi kiosk\.env.local ^(KIOSK_SECRET + NEXT_PUBLIC_WORKER_URL^)
-echo   2. Double-click LAUNCHER.bat untuk jalanin semua service
+echo   2. Double-click LAUNCHER-BUILD.BAT untuk jalanin semua service
+echo      ^(pertama kali compile ~1-2 menit — biarin jalan, jangan ditutup^)
 echo   3. Buka http://localhost:3000
 echo.
 echo Import template pertama kali:

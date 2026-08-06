@@ -23,16 +23,42 @@ if /I "%~1"=="--rebuild" set "FORCE_REBUILD=1"
 
 powershell -NoProfile -Command "$e=[char]27;$p=$e+'[38;2;255;64;153m';$r=$e+'[0m';$d=$e+'[90m';cls;Write-Host '';Write-Host ($p+'###### #####  ####  #####  ##  ##  #####  ##   ## ##   ##  #####'+$r);Write-Host ($p+'##     ##  ##  ##  ##     ##  ## ##   ## ##   ## ###  ## ##    '+$r);Write-Host ($p+'####   #####   ##  ##     #####  ##   ## ##   ## ## # ## ## ###'+$r);Write-Host ($p+'##     ##      ##  ##      ##    ##   ## ##   ## ##  ### ##   ##'+$r);Write-Host ($p+'###### ##     ####  #####   ##    #####   #####  ##   ##  #####'+$r);Write-Host '';Write-Host ($d+'  Starting Semeta by Spindonesia x Epicyoung — MODE PRODUKSI (build+start)'+$r);Write-Host ''"
 
+REM ── Guard: kiosk masih nyala? Dua kerusakan sekaligus kalau diterusin —
+REM    (1) `next build` gagal, Windows ngunci file di .next yang lagi dibaca server lama;
+REM    (2) poll port 3000 di bawah nemu server LAMA, lapor "siap", browser kebuka ke
+REM        build LAMA — operator ngira update kepasang padahal enggak. ──
+netstat -ano | findstr /C:":3000 " | findstr LISTENING >nul 2>&1
+if not errorlevel 1 (
+  echo.
+  echo ============================================================
+  echo  [STOP] Port 3000 udah kepake — kiosk masih nyala.
+  echo  Tutup dulu pakai kill.bat, baru jalanin file ini lagi.
+  echo ============================================================
+  echo.
+  pause
+  exit /b 1
+)
+
+REM ── node_modules ada? Tanpa ini error `npm run build` ga jelas juntrungannya. ──
+if not exist "%ROOT%\kiosk\node_modules" (
+  echo [GAGAL] kiosk\node_modules ga ada — jalanin setup.bat dulu.
+  pause
+  exit /b 1
+)
+
 REM ── Build kiosk dulu (FOREGROUND — operator lihat progress + error ketauan sebelum booth kebuka) ──
 if defined FORCE_REBUILD (
   echo [BUILD] --rebuild diminta — compile ulang produksi...
   goto :do_build
 )
-if not exist "%ROOT%\kiosk\.next" (
-  echo [BUILD] Belum ada build (.next ga ada) — compile produksi dulu...
+REM Cek BUILD_ID, bukan folder .next: build yang gagal/keputus di tengah tetep ninggalin
+REM .next separo jadi. Kalau cuma ngecek foldernya, script bilang "OK" terus `next start`
+REM mati dengan "Could not find a production build" — di window minimize, ga keliatan.
+if not exist "%ROOT%\kiosk\.next\BUILD_ID" (
+  echo [BUILD] Belum ada build produksi yang utuh — compile dulu...
   goto :do_build
 )
-echo [OK] Build lama kepake (.next udah ada). Mau build ulang? tutup + jalanin: LAUNCHER-BUILD.BAT --rebuild
+echo [OK] Build lama kepake. Mau compile ulang? tutup + jalanin: LAUNCHER-BUILD.BAT --rebuild
 goto :build_done
 
 :do_build
@@ -41,6 +67,10 @@ call npm run build
 set "BUILD_ERR=%ERRORLEVEL%"
 popd
 if not "%BUILD_ERR%"=="0" (
+  REM Buang BUILD_ID biar run berikutnya KEPAKSA compile ulang. Tanpa ini, sisa BUILD_ID
+  REM dari build lama bikin script bilang "Build lama kepake" — booth jalan pakai kode
+  REM lama diam-diam, persis kondisi yang bikin operator ngira update udah kepasang.
+  del /q "%ROOT%\kiosk\.next\BUILD_ID" >nul 2>&1
   echo.
   echo ============================================================
   echo  [GAGAL] npm run build ERROR ^(exit %BUILD_ERR%^).
@@ -97,7 +127,7 @@ REM ── Tunggu Next.js beneran LISTENING di 3000 baru buka browser. Poll, buk
 REM    next start bisa butuh beberapa detik, buka browser kecepetan = "connection refused". ──
 echo [..] Nunggu kiosk siap di port 3000...
 set "READY="
-for /L %%i in (1,1,30) do (
+for /L %%i in (1,1,60) do (
   if not defined READY (
     netstat -ano | findstr /C:":3000 " | findstr LISTENING >nul 2>&1
     if not errorlevel 1 (
@@ -108,7 +138,19 @@ for /L %%i in (1,1,30) do (
     )
   )
 )
-if not defined READY echo [!!] Port 3000 belum listening setelah 30s — browser tetep dibuka, refresh manual kalau perlu.
+if not defined READY (
+  echo.
+  echo ============================================================
+  echo  [GAGAL] Port 3000 ga listening setelah 60 detik.
+  echo  `next start` mati. Errornya ada di window "Kiosk" yang
+  echo  ke-minimize — buka dari taskbar buat baca pesannya.
+  echo  Paling sering: build korup. Tutup ^(kill.bat^) lalu jalanin
+  echo  LAUNCHER-BUILD.BAT --rebuild
+  echo ============================================================
+  echo.
+  pause
+  exit /b 1
+)
 
 REM ── Browser fullscreen (flag identik LAUNCHER.bat — dedicated profile, izin kamera, no dialog banner) ──
 set "BROWSER="

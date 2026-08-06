@@ -255,7 +255,7 @@ const id: Translations = {
   set_update_pulling: 'Meng-update…',
   set_update_ok: 'Ter-update',
   set_update_failed: 'Update gagal',
-  set_update_restart_note: 'Update terpasang. Tutup lalu buka lagi LAUNCHER.bat biar aktif.',
+  set_update_restart_note: 'Update terpasang. Tutup pakai kill.bat, lalu jalanin LAUNCHER-BUILD.BAT --rebuild.',
   set_update_disabled_note: 'Update otomatis tidak tersedia (bukan instalasi git).',
   set_logo: 'Logo',
   set_logo_hint: 'PNG/SVG · tinggi 100px · 72 dpi',

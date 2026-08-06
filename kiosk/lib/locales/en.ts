@@ -253,7 +253,7 @@ const en: Translations = {
   set_update_pulling: 'Updating…',
   set_update_ok: 'Updated',
   set_update_failed: 'Update failed',
-  set_update_restart_note: 'Update installed. Close and reopen LAUNCHER.bat to apply.',
+  set_update_restart_note: 'Update installed. Close with kill.bat, then run LAUNCHER-BUILD.BAT --rebuild.',
   set_update_disabled_note: 'Auto-update unavailable (not a git install).',
   set_logo: 'Logo',
   set_logo_hint: 'PNG/SVG · 100px height · 72 dpi',

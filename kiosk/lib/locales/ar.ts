@@ -253,7 +253,7 @@ const ar: Translations = {
   set_update_pulling: 'جارٍ التحديث…',
   set_update_ok: 'تم التحديث',
   set_update_failed: 'فشل التحديث',
-  set_update_restart_note: 'تم تثبيت التحديث. أغلِق LAUNCHER.bat وأعِد فتحه لتطبيقه.',
+  set_update_restart_note: 'تم تثبيت التحديث. أغلِق باستخدام kill.bat ثم شغّل LAUNCHER-BUILD.BAT --rebuild.',
   set_update_disabled_note: 'التحديث التلقائي غير متاح (ليس تثبيتاً عبر git).',
   set_logo: 'الشعار',
   set_logo_hint: 'PNG/SVG · ارتفاع 100 بكسل · 72 نقطة لكل بوصة',

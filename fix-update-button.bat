@@ -36,7 +36,7 @@ if errorlevel 1 (
 REM ---- Udah git repo? berarti ga perlu fix ----
 if exist "%~dp0.git" (
   echo [i] Folder ini SUDAH git repo. Tombol Update harusnya udah ada.
-  echo     Kalau masih ilang: tutup+buka lagi LAUNCHER.bat.
+  echo     Kalau masih ilang: kill.bat lalu buka lagi LAUNCHER-BUILD.BAT.
   goto :end
 )
 
@@ -82,7 +82,9 @@ echo ============================================
 echo.
 echo   Langkah berikutnya:
 echo     1. Tutup Chrome kiosk, jalanin kill.bat
-echo     2. Jalanin LAUNCHER.bat lagi
+echo     2. Jalanin: LAUNCHER-BUILD.BAT --rebuild
+echo        ^(--rebuild WAJIB: langkah di atas barusan narik source baru,
+echo         mode produksi ga bakal kepake sebelum di-compile ulang.^)
 echo     3. Settings ^(gear^) -^> Sistem -^> tombol "Cek update" SEKARANG MUNCUL
 echo.
 echo   Template + frame + secret kamu AMAN, gak kehapus.

@@ -253,7 +253,7 @@ const ko: Translations = {
   set_update_pulling: '업데이트하는 중…',
   set_update_ok: '업데이트됨',
   set_update_failed: '업데이트 실패',
-  set_update_restart_note: '업데이트가 설치되었습니다. 적용하려면 LAUNCHER.bat을 닫았다가 다시 여세요.',
+  set_update_restart_note: '업데이트가 설치되었습니다. kill.bat으로 종료한 뒤 LAUNCHER-BUILD.BAT --rebuild를 실행하세요.',
   set_update_disabled_note: '자동 업데이트를 사용할 수 없습니다(git 설치가 아님).',
   set_logo: '로고',
   set_logo_hint: 'PNG/SVG · 높이 100px · 72 dpi',

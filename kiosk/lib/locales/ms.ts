@@ -196,7 +196,7 @@ const ms: Translations = {
   set_update_pulling: 'Mengemas kini…',
   set_update_ok: 'Dikemas kini',
   set_update_failed: 'Kemas kini gagal',
-  set_update_restart_note: 'Kemas kini dipasang. Tutup dan buka semula LAUNCHER.bat untuk menggunakannya.',
+  set_update_restart_note: 'Kemas kini dipasang. Tutup dengan kill.bat, kemudian jalankan LAUNCHER-BUILD.BAT --rebuild.',
   set_update_disabled_note: 'Auto-kemas kini tidak tersedia (bukan pemasangan git).',
   set_logo: 'Logo',
   set_logo_hint: 'PNG/SVG · tinggi 100px · 72 dpi',

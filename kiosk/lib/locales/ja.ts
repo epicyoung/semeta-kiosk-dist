@@ -253,7 +253,7 @@ const ja: Translations = {
   set_update_pulling: '更新中…',
   set_update_ok: '更新しました',
   set_update_failed: '更新に失敗しました',
-  set_update_restart_note: 'アップデートをインストールしました。適用するには LAUNCHER.bat を閉じて再度開いてください。',
+  set_update_restart_note: 'アップデートをインストールしました。kill.bat で終了し、LAUNCHER-BUILD.BAT --rebuild を実行してください。',
   set_update_disabled_note: '自動更新は利用できません（git インストールではありません）。',
   set_logo: 'ロゴ',
   set_logo_hint: 'PNG/SVG · 高さ100px · 72 dpi',

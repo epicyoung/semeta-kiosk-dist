@@ -196,7 +196,7 @@ const th: Translations = {
   set_update_pulling: 'กำลังอัปเดต…',
   set_update_ok: 'อัปเดตแล้ว',
   set_update_failed: 'อัปเดตล้มเหลว',
-  set_update_restart_note: 'ติดตั้งการอัปเดตแล้ว ปิดแล้วเปิด LAUNCHER.bat ใหม่เพื่อใช้งาน',
+  set_update_restart_note: 'ติดตั้งการอัปเดตแล้ว ปิดด้วย kill.bat แล้วรัน LAUNCHER-BUILD.BAT --rebuild',
   set_update_disabled_note: 'ไม่รองรับการอัปเดตอัตโนมัติ (ไม่ใช่การติดตั้งแบบ git)',
   set_logo: 'โลโก้',
   set_logo_hint: 'PNG/SVG · สูง 100px · 72 dpi',
