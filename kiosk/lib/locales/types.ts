@@ -234,6 +234,11 @@ export interface Translations {
   set_max_templates_hint: string
   set_magic_catcher: string
   set_magic_catcher_hint: string
+  // Opsional — baru ada di en/id, locale lain fallback ke en (resolveT). Optional biar 9 locale
+  // lain ga wajib nambahin bareng.
+  set_magic_camera?: string
+  set_magic_duration?: string
+  set_magic_audio?: string
   // Camera
   // System / Update
   set_version_label: string

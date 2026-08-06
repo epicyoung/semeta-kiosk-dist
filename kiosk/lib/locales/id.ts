@@ -5,7 +5,7 @@ const id: Translations = {
   idle_title: 'Semeta Suites',
   idle_subtitle: 'Siap eksis hari ini?\nYuk bikin momen yang pantes masuk feed.',
   idle_next: 'Selanjutnya →',
-  legal_recording_notice: 'Dengan menggunakan kiosk ini, Anda menyetujui pengambilan gambar & video untuk keperluan dokumentasi serta promosi/marketing.',
+  legal_recording_notice: 'Dengan menggunakan kiosk ini, Anda menyetujui pengambilan gambar, video & audio untuk keperluan dokumentasi serta promosi/marketing.',
 
   // ── CategoryScreen ───────────────────────────────────────────────────────────
   category_title: 'Tentukan Vibe',
@@ -246,7 +246,10 @@ const id: Translations = {
   set_max_templates: 'Max Template per Tamu',
   set_max_templates_hint: 'Set >1 HANYA untuk PC kelas atas & event VIP (volume rendah). Menambah waktu proses.',
   set_magic_catcher: 'Magic Catcher (Reaction Cam)',
-  set_magic_catcher_hint: 'Rekam reaksi tamu saat hasil AI muncul (tanpa audio, tersimpan lokal). Butuh disclaimer aktif.',
+  set_magic_catcher_hint: 'Rekam reaksi tamu saat hasil final muncul (tersimpan lokal). Butuh disclaimer aktif.',
+  set_magic_camera: 'Kamera',
+  set_magic_duration: 'Durasi max',
+  set_magic_audio: 'Rekam audio',
   set_version_label: 'Versi',
   set_update_check: 'Cek update',
   set_update_checking: 'Ngecek…',

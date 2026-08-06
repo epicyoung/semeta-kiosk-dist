@@ -5,7 +5,7 @@ const en: Translations = {
   idle_title: 'Semeta Suites',
   idle_subtitle: "Ready to steal the show?\nLet's make something feed-worthy.",
   idle_next: 'Next →',
-  legal_recording_notice: 'By using this kiosk, you consent to the capture of photos & video for documentation and promotional/marketing purposes.',
+  legal_recording_notice: 'By using this kiosk, you consent to the capture of photos, video & audio for documentation and promotional/marketing purposes.',
 
   // ── CategoryScreen ───────────────────────────────────────────────────────────
   category_title: 'Set the Vibe',
@@ -244,7 +244,10 @@ const en: Translations = {
   set_max_templates: 'Max Templates Per Guest',
   set_max_templates_hint: 'Set >1 ONLY for high-end PC & VIP events (low volume). Increases processing time.',
   set_magic_catcher: 'Magic Catcher (Reaction Cam)',
-  set_magic_catcher_hint: 'Record guest reaction during the AI reveal (no audio, saved locally). Requires disclaimer visible.',
+  set_magic_catcher_hint: 'Record guest reaction at the final reveal (saved locally). Requires disclaimer visible.',
+  set_magic_camera: 'Camera',
+  set_magic_duration: 'Max duration',
+  set_magic_audio: 'Record audio',
   set_version_label: 'Version',
   set_update_check: 'Check for updates',
   set_update_checking: 'Checking…',

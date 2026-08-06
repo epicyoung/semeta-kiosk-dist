@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import type { KioskConfig, Template, TemplateSource, Locale, ComfyModelFamily, ComfyControlnetMode, VideoProvider } from '@/lib/types'
+import { MAGIC_DURATIONS } from '@/lib/use-magic-catcher'
 import { fetchPocketBaseTemplates } from '@/lib/pocketbase'
 import { isVideoUnlocked } from '@/lib/video'
 import { useT } from '@/lib/i18n'
@@ -250,6 +251,8 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   const [maxTemplates,    setMaxTemplates]    = useState(config.max_templates ?? 1)
   const [magicCatcher,    setMagicCatcher]    = useState(config.enable_magic_catcher ?? false)
   const [magicCatcherCam, setMagicCatcherCam] = useState(config.magic_catcher_device_id ?? '')
+  const [magicCatcherDur, setMagicCatcherDur] = useState(String(config.magic_catcher_duration_sec ?? 15))
+  const [magicCatcherAudio, setMagicCatcherAudio] = useState(config.magic_catcher_audio ?? false)
   // Daftar kamera buat Magic Catcher — label baru keisi kalau izin kamera pernah dikasih
   // (aturan browser). Belum ada izin → "Kamera N" generik, deviceId-nya tetep valid dipakai.
   const [camList, setCamList] = useState<{ value: string; label: string }[]>([])
@@ -735,6 +738,8 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         max_templates:      maxTemplates,
         enable_magic_catcher: magicCatcher,
         magic_catcher_device_id: magicCatcherCam,
+        magic_catcher_duration_sec: Number(magicCatcherDur),
+        magic_catcher_audio: magicCatcherAudio,
         // Photo Print = non-AI → video selalu OFF, jangan nyimpen state nyangkut dari mode lain.
         enable_video_engine: engine === 'print_local' ? false : videoEngine,
         video_provider:      videoProvider,
@@ -774,6 +779,8 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         max_templates:      maxTemplates,
         enable_magic_catcher: magicCatcher,
         magic_catcher_device_id: magicCatcherCam,
+        magic_catcher_duration_sec: Number(magicCatcherDur),
+        magic_catcher_audio: magicCatcherAudio,
         enable_video_engine: engine === 'print_local' ? false : videoEngine,
         video_provider:      videoProvider,
         video_resolution:    videoResolution,
@@ -1582,12 +1589,30 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                 {/* Pilih kamera perekam — rig Canon punya webcam terpisah (mis. Logitech di
                     monitor); tanpa ini getUserMedia pasrah ke default yang bisa salah device. */}
                 {magicCatcher && (
-                  <div style={{ marginTop: 10 }}>
-                    <Sel
-                      value={magicCatcherCam}
-                      options={[{ value: '', label: 'Default' }, ...camList.filter(c => c.value)]}
-                      onChange={setMagicCatcherCam}
-                    />
+                  <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {/* Kamera perekam */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.5)' }}>{t('set_magic_camera') as string}</span>
+                      <Sel
+                        value={magicCatcherCam}
+                        options={[{ value: '', label: 'Default' }, ...camList.filter(c => c.value)]}
+                        onChange={setMagicCatcherCam}
+                      />
+                    </div>
+                    {/* Durasi max rekam */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.5)' }}>{t('set_magic_duration') as string}</span>
+                      <Sel
+                        value={magicCatcherDur}
+                        options={MAGIC_DURATIONS.map(s => ({ value: String(s), label: s >= 60 ? `${s / 60} mnt` : `${s} dtk` }))}
+                        onChange={setMagicCatcherDur}
+                      />
+                    </div>
+                    {/* Audio — consent WAJIB lewat disclaimer idle. */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.5)' }}>{t('set_magic_audio') as string}</span>
+                      <Toggle on={magicCatcherAudio} onToggle={() => setMagicCatcherAudio(v => !v)} />
+                    </div>
                   </div>
                 )}
               </div>

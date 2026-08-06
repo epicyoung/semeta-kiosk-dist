@@ -24,7 +24,9 @@ const LocaleContext = createContext<TFn>((k) => en[k])
 
 export function LocaleProvider({ locale = 'en', children }: { locale?: string; children: React.ReactNode }) {
   const dict = LOCALES[locale] ?? en
-  const t: TFn = (key) => dict[key]
+  // Fallback ke en per-KEY: locale non-en yang belum punya key baru (mis. set_magic_*) balik ke
+  // en, bukan undefined → UI kosong. `?? en[key]` cukup — en dijamin lengkap (Translations wajib).
+  const t: TFn = (key) => dict[key] ?? en[key]
   return <LocaleContext.Provider value={t}>{children}</LocaleContext.Provider>
 }
 

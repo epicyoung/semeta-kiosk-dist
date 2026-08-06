@@ -45,6 +45,8 @@ type Props = {
     | "templates"
     | "enable_magic_catcher"
     | "magic_catcher_device_id"
+    | "magic_catcher_duration_sec"
+    | "magic_catcher_audio"
   >;
   licensed: boolean;
   eventName: string;
@@ -155,6 +157,8 @@ export function PreviewScreen({
     enabled: isFinal && (config.enable_magic_catcher ?? false) && !isPrintSession,
     eventName,
     deviceId: config.magic_catcher_device_id,
+    durationSec: config.magic_catcher_duration_sec,
+    audio: config.magic_catcher_audio,
   });
   // Video GA (2026-07-20): kebuka kalau super admin nyalain kiosks.enable_video (nyampe via
   // handshake) ATAU godmode — isVideoUnlocked. Layer kedua tetep keputusan VENDOR (toggle
