@@ -336,6 +336,10 @@ const id: Translations = {
   set_status_qr_active: 'QR AKTIF',
   set_magic_catcher_webcam_only: 'Hanya tersedia di mode Webcam (getUserMedia).',
   set_restart_booth_title: 'Restart booth (kembali ke idle) & cek ulang lisensi',
+  set_restart_booth_label: 'Restart Booth',
+  set_restart_booth_hint: 'Restart penuh — tutup semua & nyalain ulang. Ga usah nge-bat manual.',
+  set_restart_booth_btn: 'Restart',
+  set_restart_booth_running: 'Restarting…',
 
   // LocalTemplateManager (Photo Print)
   ltm_loading: 'Memuat…',

@@ -1,7 +1,6 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import path from 'path'
-import fs from 'fs'
 
 const exec = promisify(execFile)
 
@@ -14,16 +13,7 @@ export type VersionInfo = {
   latest: string | null    // remote short hash, null if offline / no remote
   hasUpdate: boolean
   isGit: boolean           // false = extracted archive, not a clone → Update disabled
-  label: string | null     // human version dari file VERSION (v2026.07.04), bump manual tiap rilis
-}
-
-// Baca file VERSION di repo root (v2026.07.04). Null kalau ga ada — hash tetep jalan.
-function readVersionLabel(): string | null {
-  try {
-    return fs.readFileSync(path.join(REPO_ROOT, 'VERSION'), 'utf8').trim() || null
-  } catch {
-    return null
-  }
+  label: string | null     // v<tanggal-commit-HEAD>, mis. v2026.08.06 — otomatis dari git, NOL bump manual
 }
 
 async function git(args: string[]): Promise<string> {
@@ -31,16 +21,27 @@ async function git(args: string[]): Promise<string> {
   return stdout.trim()
 }
 
+// Label = tanggal commit HEAD (v2026.08.06). Dulu baca file VERSION statis → nyangkut di tanggal
+// lama walau udah di-update. Tanggal commit = kapan build ini bener-bener dibikin, otomatis pas pull.
+async function readVersionLabel(): Promise<string | null> {
+  try {
+    const date = await git(['show', '-s', '--format=%cd', '--date=short', 'HEAD']) // YYYY-MM-DD
+    return date ? `v${date.replace(/-/g, '.')}` : null
+  } catch {
+    return null
+  }
+}
+
 // Compare local HEAD vs remote HEAD. Both null-safe: no git → isGit:false;
 // offline → latest:null, hasUpdate:false (never claim an update we can't fetch).
 export async function getVersionInfo(): Promise<VersionInfo> {
-  const label = readVersionLabel()
   let current: string | null = null
   try {
     current = await git(['rev-parse', '--short', 'HEAD'])
   } catch {
-    return { current: null, latest: null, hasUpdate: false, isGit: false, label }
+    return { current: null, latest: null, hasUpdate: false, isGit: false, label: null }
   }
+  const label = await readVersionLabel() // butuh git → dipanggil setelah isGit kepastiin
 
   let latest: string | null = null
   try {

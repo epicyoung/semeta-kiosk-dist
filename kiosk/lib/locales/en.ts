@@ -334,6 +334,10 @@ const en: Translations = {
   set_status_qr_active: 'QR ACTIVE',
   set_magic_catcher_webcam_only: 'Only available in Webcam (getUserMedia) mode.',
   set_restart_booth_title: 'Restart booth (back to idle) & re-check license',
+  set_restart_booth_label: 'Restart Booth',
+  set_restart_booth_hint: 'Full restart — closes everything & relaunches. No manual .bat needed.',
+  set_restart_booth_btn: 'Restart',
+  set_restart_booth_running: 'Restarting…',
 
   // LocalTemplateManager (Photo Print)
   ltm_loading: 'Loading…',

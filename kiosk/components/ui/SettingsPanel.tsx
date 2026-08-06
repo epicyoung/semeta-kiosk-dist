@@ -370,6 +370,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   const [cameraStatus,    setCameraStatus]    = useState<PbStatus>('idle')
   const [pbCreds,         setPbCreds]         = useState<{ email: string; password: string } | null>(null)
   const [updateState,     setUpdateState]     = useState<'idle'|'checking'|'available'|'uptodate'|'pulling'|'ok'|'err'>('idle')
+  const [restarting,      setRestarting]      = useState(false)
   const [version,         setVersion]         = useState<{ current: string | null; isGit: boolean; label: string | null }>({ current: null, isGit: true, label: null })
   // Accordion: which group is open
   const [openGroup,       setOpenGroup]       = useState<string>('event')
@@ -623,6 +624,15 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
       setUpdateState('err')
       setTimeout(() => setUpdateState('idle'), 3500)
     }
+  }
+
+  // Restart booth FULL (kill semua service + LAUNCHER lagi) via restart.bat. Buat operator ga
+  // usah nge-bat manual. Endpoint spawn detached lalu jeda 2 detik → chrome+node yang lagi
+  // nampilin panel ini bakal mati; toast tetep sempet keliatan. Ga ada balik — booth restart.
+  const handleRestartBooth = async () => {
+    setRestarting(true)
+    try { await fetch('/api/restart', { method: 'POST' }) } catch { /* proses bakal mati juga */ }
+    // Sengaja ga di-reset: dari sini chrome bentar lagi ke-kill sama restart.bat.
   }
 
   // Restart booth ke IDLE — reload biasa nyimpen hash (#preview dll) → balik ke layar kosong.
@@ -1673,6 +1683,31 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                   <p style={{ fontSize: 'var(--text-2xs)', color: '#a3be8c', margin: '8px 0 0' }}>
                     {t('set_update_restart_note') as string}
                   </p>
+                )}
+                {/* Restart Booth — kill semua + LAUNCHER lagi otomatis. Operator ga usah nge-bat
+                    manual. Muncul cuma kalau git install (sama kayak Update); ZIP install ga ada
+                    restart.bat-nya konsisten. */}
+                {version.isGit && (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 14, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div>
+                      <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{t('set_restart_booth_label') as string}</span>
+                      <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0' }}>
+                        {t('set_restart_booth_hint') as string}
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleRestartBooth}
+                      disabled={restarting}
+                      style={{
+                        padding: '6px 16px', borderRadius: 'var(--radius-glass)', border: '1px solid rgba(255,107,107,0.4)',
+                        background: restarting ? 'rgba(255,107,107,0.25)' : 'rgba(255,107,107,0.12)',
+                        color: '#ff8080', fontSize: 'var(--text-sm)', fontWeight: 600,
+                        fontFamily: 'var(--font-ui)', cursor: restarting ? 'default' : 'pointer', whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {restarting ? t('set_restart_booth_running') as string : t('set_restart_booth_btn') as string}
+                    </button>
+                  </div>
                 )}
               </div>
             </AccordionGroup>

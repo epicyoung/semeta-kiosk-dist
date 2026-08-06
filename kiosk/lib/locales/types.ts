@@ -328,6 +328,10 @@ export interface Translations {
   set_status_qr_active: string         // "QR ACTIVE"
   set_magic_catcher_webcam_only: string // "Only available in Webcam (getUserMedia) mode."
   set_restart_booth_title: string      // restart booth tooltip
+  set_restart_booth_label?: string
+  set_restart_booth_hint?: string
+  set_restart_booth_btn?: string
+  set_restart_booth_running?: string
 
   // ── LocalTemplateManager (Photo Print) ───────────────────────────────────────
   ltm_loading: string                  // "Loading…"
