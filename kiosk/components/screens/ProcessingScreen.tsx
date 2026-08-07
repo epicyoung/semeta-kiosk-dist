@@ -223,6 +223,19 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
   const isErrorHash = () => typeof window !== 'undefined' && window.location.hash === '#error'
   const [timedOut, setTimedOut] = useState(isErrorHash)
 
+  // Guard DOBEL FINALIZE: effect processing bisa jalan 2x (StrictMode dev, dep berubah, retry)
+  // → dua promise generate → dua finalizeLocal → dua next-seq → file & entri microsite DOBEL
+  // (#010 == #011, isi identik). next-seq counter mentah, ga dedup. Ref ini ngunci: finalize
+  // cuma jalan SEKALI per mount sesi. Same filosofi kayak uploadedBase.current di R2 upload.
+  const finalizedRef = useRef(false)
+  const finalizeOnce: typeof finalizeLocal = async (...args) => {
+    if (finalizedRef.current) return null // sesi ini udah di-finalize → run kedua no-op
+    finalizedRef.current = true
+    const base = await finalizeLocal(...args)
+    if (!base) finalizedRef.current = false // finalize GAGAL → buka lagi biar retry beneran bisa
+    return base
+  }
+
   // Magic Catcher DIPINDAH ke PreviewScreen (mulai pas tamu PERTAMA lihat hasil AI di
   // framechooser/preview — momen reaksi asli), BUKAN di sini pas layar loading generate.
 
@@ -301,7 +314,7 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
         const local = await localCopies(printShots[0], sheet, licensed)
         dispatch({ type: 'SET_PROGRESS', progress: 100 })
         const [base] = await Promise.all([
-          finalizeLocal(eventName, local.original, local.ai,
+          finalizeOnce(eventName, local.original, local.ai,
             (err) => onUploadFailed?.({ stage: 'finalize', error: String(err).slice(0, 300) })),
           new Promise(r => setTimeout(r, REVEAL_DWELL_MS)),
         ])
@@ -330,7 +343,7 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
           dispatch({ type: 'SET_PROGRESS', progress: 100 })
           // finalizeLocal jalan barengan dwell — base siap sebelum preview kebuka, no race
           const [base] = await Promise.all([
-            finalizeLocal(eventName, local.original, local.ai,
+            finalizeOnce(eventName, local.original, local.ai,
               (err) => onUploadFailed?.({ stage: 'finalize', error: String(err).slice(0, 300) })),
             new Promise(r => setTimeout(r, REVEAL_DWELL_MS)),
           ])
@@ -412,7 +425,7 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
         const local = await localCopies(state.imageUrl, url, licensed)
         dispatch({ type: 'SET_PROGRESS', progress: 100 })
         const [base] = await Promise.all([
-          finalizeLocal(eventName, local.original, local.ai,
+          finalizeOnce(eventName, local.original, local.ai,
             (err) => onUploadFailed?.({ stage: 'finalize', error: String(err).slice(0, 300) })),
           new Promise(r => setTimeout(r, REVEAL_DWELL_MS)),
         ])
