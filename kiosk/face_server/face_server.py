@@ -519,22 +519,49 @@ def comfy_start():
     deadline = time.time() + 60
     while time.time() < deadline:
         if comfy_client.comfy_alive():
+            # Toggle manual di tengah event = start-nya gak lewat lifespan startup lagi,
+            # jadi warmup gak ke-trigger otomatis. Tanpa ini tamu pertama abis operator
+            # nyalain kena cold start checkpoint ~15-20s. Sama fungsi, thread baru.
+            threading.Thread(target=_comfy_warmup, daemon=True).start()
             return {"ok": True, "already_running": False}
         time.sleep(2)
     raise HTTPException(status_code=504, detail="ComfyUI ga hidup dalam 60s")
+
+
+def _pid_on_port(port):
+    """PID yang listen di `port` via netstat (tool sama yang dipake LAUNCHER.bat probe
+    :8188/:3000 — no PowerShell spawn). None kalau ga ketemu/parse gagal."""
+    try:
+        out = subprocess.run(["netstat", "-ano"], capture_output=True, text=True, timeout=5).stdout
+    except Exception:
+        return None
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) >= 5 and parts[0] == "TCP" and f":{port}" in parts[1] and "LISTENING" in line:
+            return parts[-1]
+    return None
 
 
 @app.post("/comfy/stop")
 def comfy_stop():
     """taskkill /T wajib — 0MulaiComfy.bat = cmd /c > venv activate > python main.py,
     PID yang Popen pegang itu cmd.exe, ComfyUI proses beneran itu CHILD-nya. Tanpa /T
-    cuma shell yang mati, ComfyUI tetep nyantol VRAM."""
+    cuma shell yang mati, ComfyUI tetep nyantol VRAM.
+
+    Fallback cari-PID-by-port: comfy_proc cuma hidup di memori proses face_server ini.
+    Kalau face_server pernah restart (crash/update) sementara ComfyUI masih nyala,
+    comfy_proc balik None padahal :8188 tetep listening — tanpa fallback ini toggle OFF
+    silent no-op, FE percaya mati, ComfyUI nyantol VRAM selamanya."""
     global comfy_proc
     with comfy_proc_lock:
         if comfy_proc is not None and comfy_proc.poll() is None:
             subprocess.run(
                 ["taskkill", "/PID", str(comfy_proc.pid), "/T", "/F"],
                 capture_output=True)
+        elif comfy_client.comfy_alive():
+            pid = _pid_on_port(8188)
+            if pid:
+                subprocess.run(["taskkill", "/PID", pid, "/T", "/F"], capture_output=True)
         comfy_proc = None
     return {"ok": True}
 
