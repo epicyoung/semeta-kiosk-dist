@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef, type Dispatch } from "react";
+import { useState, useEffect, useMemo, useRef, type Dispatch } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { TouchButton } from "@/components/ui/TouchButton";
 import type { KioskAction, KioskState, KioskConfig } from "@/lib/types";
@@ -10,9 +10,13 @@ import {
   type OrientedFrame,
   type Orientation,
 } from "@/lib/frames";
-import { printPhoto } from "@/lib/print";
+import { printPhoto, printNative } from "@/lib/print";
 import { compositeFrame } from "@/lib/frame-composite";
-import { to2UpSheet } from "@/lib/print-layout";
+import { burnWatermark } from "@/lib/watermark-canvas";
+import { to2UpSheet, composePrintLayout, type SlotTransform } from "@/lib/print-layout";
+import { buildStripPool, stripSlotCount } from "@/lib/strip-pool";
+import { StripComposer } from "@/components/ui/StripComposer";
+import type { StripSource } from "@/lib/strip-pool";
 import { uploadAsset, blobUrlToDataUrl, uploadLocalFile } from "@/lib/upload";
 import { planMultiUpload } from "@/lib/multi-upload";
 import { animateImage, finalizeVideo, isVideoUnlocked } from "@/lib/video";
@@ -47,6 +51,8 @@ type Props = {
     | "magic_catcher_device_id"
     | "magic_catcher_duration_sec"
     | "magic_catcher_audio"
+    | "ai_strip_slots"
+    | "ai_strip_overlay_url"
   >;
   licensed: boolean;
   eventName: string;
@@ -218,6 +224,9 @@ export function PreviewScreen({
     frames.some((f) => f.orientation === "portrait") ? 1 : null,
   );
   const [qty, setQty] = useState<number | null>(null);
+  const [stripOpen, setStripOpen] = useState(false);
+  const [stripPrinting, setStripPrinting] = useState(false);
+  const [stripError, setStripError] = useState(false);
   const [emailMode, setEmailMode] = useState(false);
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState(false);
@@ -373,9 +382,18 @@ export function PreviewScreen({
     } catch (err) {
       console.warn("[print] composite frame gagal, print foto polos:", err);
     }
+    const isStrip = state.screen === "preview" && state.printSize === "2R_STRIP";
+
+    // Jalur 1 — queue DNP khusus (RX1-STRIP paper 2x6 + 2inch Cut). Driver yang duplikat
+    // jadi 2-up dan motong sendiri, jadi kirim SATU panel, bukan sheet 2-up.
+    // ponytail: kalau driver ternyata minta job 4R utuh, pindahin baris ini ke BAWAH blok
+    // to2UpSheet dan set queue-nya ke paper 4x6 + 2inch Cut.
+    if (await printNative(out, copies, isStrip ? "strip2" : "print4r")) return;
+
+    // Jalur 2 (fallback, perilaku lama) — queue belum ke-install / route gagal.
     // 2R: konten digital = satu panel landscape — kertas fisik dibangun 2-up di 4R
-    // pas mau print aja (printer selamanya mikir dia nyetak 4R).
-    if (state.screen === "preview" && state.printSize === "2R_STRIP") {
+    // pas mau print aja (printer selamanya mikir dia nyetak 4R), potong manual.
+    if (isStrip) {
       try {
         out = await to2UpSheet(out);
       } catch (err) {
@@ -383,6 +401,55 @@ export function PreviewScreen({
       }
     }
     await printPhoto(out, copies);
+  }
+
+  // ── Strip 2R dari hasil AI ────────────────────────────────────────────────────
+  // Nol token: cuma nyusun ulang aset yang udah dibayar pas Processing.
+  const stripPool = useMemo(
+    () =>
+      state.screen === "preview"
+        ? buildStripPool({
+            allResults: state.allResults,
+            aiUrl: state.aiUrl,
+            originalUrl: state.originalUrl,
+            rawAiUrl: state.rawAiUrl,
+            sourceUrl: state.sourceUrl,
+          })
+        : [],
+    [state],
+  );
+  const stripSlots = stripSlotCount(config.ai_strip_slots, stripPool.length);
+  // Print session (non-AI) udah punya jalur 2R sendiri lewat template — jangan dobel.
+  const canStrip = config.enable_print && !isPrintSession && stripSlots > 0;
+
+  async function doStripPrint(picked: { source: StripSource; transform: SlotTransform }[]) {
+    setStripPrinting(true);
+    setStripError(false);
+    try {
+      const sheet = await composePrintLayout(
+        picked.map((p) => p.source.cleanUrl),
+        {
+          print_size: "2R_STRIP",
+          overlay_url: config.ai_strip_overlay_url || null,
+          layout_config: null,
+        },
+        picked.map((p) => p.transform),
+      );
+      const display = licensed || config.bypassed ? sheet : await burnWatermark(sheet);
+
+      if (await printNative(display, qty ?? 1, "strip2")) {
+        setStripOpen(false);
+        return;
+      }
+      // Queue RX1-STRIP belum ke-install → 4R 2-up + garis potong, gunting manual.
+      await printPhoto(await to2UpSheet(display), qty ?? 1);
+      setStripOpen(false);
+    } catch (err) {
+      console.warn("[strip] cetak gagal:", err);
+      setStripError(true); // susunan tamu SENGAJA ga di-reset — dia cuma mau coba lagi
+    } finally {
+      setStripPrinting(false);
+    }
   }
 
   function handlePrintBtn() {
@@ -548,36 +615,23 @@ export function PreviewScreen({
     setQrStatus("uploading");
     for (let attempt = 0; attempt < attempts; attempt++) {
       try {
-        const [framedA, framedB] = await Promise.all([
-          compositeFrame(rawOriginal, frameForOriginal?.url ?? null, 1200),
-          compositeFrame(rawAi, currentFrame?.url ?? null, 1200),
-        ]);
-
-        // Multi-template: chosen (resultIndex) → _B, sisanya → _M1,_M2,… urut index (planMultiUpload).
-        // INDEX-BASED sengaja — "tamu pilih N hasil → semuanya ke-upload" persis kayak grid preview.
-        const plan = planMultiUpload(state.allResults, resultIndex);
-        let mCount = 0;
-        let framedMulti: string[] = [];
-        if (plan && plan.others.length > 0) {
-          mCount = plan.others.length;
-          // SEQUENTIAL composite to prevent GPU/RAM crash (OffscreenCanvas memory spike)
-          for (const r of plan.others) {
-            const frame = await compositeFrame(
-              r.rawAiUrl ?? r.aiUrl,
-              currentFrame?.url ?? null,
-              1200,
-            );
-            framedMulti.push(frame);
-          }
+        let resB;
+        if (isPrintSession) {
+          // Classic Print: Hanya upload _B (strip foto yang sudah di-frame).
+          // Skip _A (foto mentah) supaya microsite tidak menampilkan tab ASLI.
+          const framedB = await compositeFrame(rawAi, currentFrame?.url ?? null, 1200);
+          resB = await uploadAsset(framedB, "B", base, { ...meta, mCount: 0 });
+        } else {
+          const [framedA, framedB] = await Promise.all([
+            compositeFrame(rawOriginal, frameForOriginal?.url ?? null, 1200),
+            compositeFrame(rawAi, currentFrame?.url ?? null, 1200),
+          ]);
+          const results = await Promise.all([
+            uploadAsset(framedA, "A", base, meta),
+            uploadAsset(framedB, "B", base, { ...meta, mCount }),
+          ]);
+          resB = results[1];
         }
-
-        // A+B WAJIB sukses (QR gantung ke resB). QR di-set SEGERA setelah A+B — tamu bisa scan
-        // sementara _M masih uploading. _M di-await (Promise.allSettled) biar beneran mendarat di R2
-        // sebelum microsite retry window (12s) habis. Gagal 1 _M ga crash flow.
-        const [, resB] = await Promise.all([
-          uploadAsset(framedA, "A", base, meta),
-          uploadAsset(framedB, "B", base, { ...meta, mCount }),
-        ]);
         // QR muncul duluan — tamu scan sambil _M masih naik.
         if (uploadSeq.current === seq) {
           setShareUrl(
@@ -1708,6 +1762,18 @@ export function PreviewScreen({
                   : (t("preview_btn_print") as string)}
               </TouchButton>
             )}
+            {canStrip && (
+              <TouchButton
+                onClick={() => {
+                  setStripError(false);
+                  setStripOpen(true);
+                }}
+                className="flex-1"
+                disabled={printing}
+              >
+                {t("preview_btn_strip") as string}
+              </TouchButton>
+            )}
             {config.enable_email && (
               <TouchButton
                 onClick={handleEmailBtn}
@@ -2081,6 +2147,18 @@ export function PreviewScreen({
             </div>
           </div>
         </div>
+      )}
+
+      {stripOpen && (
+        <StripComposer
+          pool={stripPool}
+          slots={stripSlots}
+          printing={stripPrinting}
+          error={stripError}
+          overlayUrl={config.ai_strip_overlay_url}
+          onCancel={() => setStripOpen(false)}
+          onConfirm={doStripPrint}
+        />
       )}
     </div>
   );

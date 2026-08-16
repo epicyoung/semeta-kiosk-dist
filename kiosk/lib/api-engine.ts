@@ -4,7 +4,7 @@
 // lapangan tanpa deploy. Worker TETEP yang berkuasa: dia yang megang FAL key, ambil endpoint
 // dari whitelist by api_model, dan motong token dari datanya sendiri. Lihat provider.ts.
 import { injectPrompt } from './prompt-input'
-import { blobUrlToDataUrl } from './upload'
+import { resizeDataUrl } from './upload'
 import type { Template } from './types'
 
 export type ApiEditRequest = {
@@ -12,6 +12,7 @@ export type ApiEditRequest = {
   prompt: string
   reference_images: string[]
   aspect_ratio?: string
+  num_images?: number
 }
 
 export class ReferenceLoadError extends Error {}
@@ -25,11 +26,11 @@ export class ReferenceLoadError extends Error {}
  *  latar acak — token kepotong buat hasil yang bukan pesanan tamu. Mending gagal keras
  *  biar salah-konfigurasinya kelihatan. Template TANPA referensi (mis. prompt double-decker)
  *  tetap sah — yang dijaga cuma referensi yang udah didaftarin tapi ga bisa dibaca. */
-export async function buildApiEditRequest(tmpl: Template, userInput?: string): Promise<ApiEditRequest> {
+export async function buildApiEditRequest(tmpl: Template, userInput?: string, numImages?: number): Promise<ApiEditRequest> {
   const refs: string[] = []
   for (const url of tmpl.reference_urls ?? []) {
     try {
-      refs.push(await blobUrlToDataUrl(url))
+      refs.push(await resizeDataUrl(url, 1200))
     } catch (e) {
       throw new ReferenceLoadError(`referensi template gagal di-load: ${url} (${String(e).slice(0, 120)})`)
     }
@@ -39,5 +40,6 @@ export async function buildApiEditRequest(tmpl: Template, userInput?: string): P
     prompt: injectPrompt(tmpl.positive_prompt ?? '', userInput ?? ''),
     reference_images: refs,
     aspect_ratio: tmpl.aspect_ratio ?? undefined,
+    num_images: numImages ?? undefined,
   }
 }

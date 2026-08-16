@@ -51,6 +51,10 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
       return { ...state, shots: [...state.shots, action.imageUrl] }
     }
 
+    case 'POP_LAST_SHOT':
+      if (state.screen !== 'multicapture' || state.shots.length === 0) return state
+      return { ...state, shots: state.shots.slice(0, -1) }
+
     case 'RETAKE_SHOTS':
       if (state.screen !== 'multicapture') return state
       return { ...state, shots: [] }

@@ -19,7 +19,7 @@ const ENGINE_OPTS: { value: EngineKey; label: string; soon?: boolean }[] = [
   { value: 'fullbody_local', label: 'Fullbody (LOCAL)' }, // = engine comfy stylize via face_server
   { value: 'print_local',    label: 'Photo Print (non-AI)' }, // photobooth klasik: overlay PNG + N shot, nol token
   { value: 'faceswap_api',   label: 'Faceswap (API) — soon',  soon: true },
-  { value: 'fullbody_api',   label: 'Fullbody (API) — soon',  soon: true },
+  { value: 'fullbody_api',   label: 'Fullbody (API)' },
 ]
 const API_MODEL_OPTS = [
   { value: 'nanobanana2', label: 'Nano Banana Pro' },
@@ -249,6 +249,10 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   const [comfySteps,      setComfySteps]      = useState(config.comfy_steps ?? '')
   const [comfyCnStrength, setComfyCnStrength] = useState(config.comfy_cn_strength ?? '')
   const [maxTemplates,    setMaxTemplates]    = useState(config.max_templates ?? 1)
+  const [aiStripSlots,    setAiStripSlots]    = useState(config.ai_strip_slots ?? 0)
+  const [aiStripOverlay,  setAiStripOverlay]  = useState(config.ai_strip_overlay_url ?? '')
+  const stripOverlayInputRef = useRef<HTMLInputElement>(null)
+  const [stripOverlayUploading, setStripOverlayUploading] = useState(false)
   const [magicCatcher,    setMagicCatcher]    = useState(config.enable_magic_catcher ?? false)
   const [magicCatcherCam, setMagicCatcherCam] = useState(config.magic_catcher_device_id ?? '')
   const [magicCatcherDur, setMagicCatcherDur] = useState(String(config.magic_catcher_duration_sec ?? 15))
@@ -367,6 +371,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   const [pauseUsedSec,    setPauseUsedSec]    = useState(config.pause_used_sec ?? 0)
   const pauseStartRef = useRef<number | null>(null)
   const [engineStatus,    setEngineStatus]    = useState<PbStatus>('idle')
+  const [workerStatus,    setWorkerStatus]    = useState<PbStatus>('idle') // API mode: Worker connectivity
   const [cameraStatus,    setCameraStatus]    = useState<PbStatus>('idle')
   const [pbCreds,         setPbCreds]         = useState<{ email: string; password: string } | null>(null)
   const [updateState,     setUpdateState]     = useState<'idle'|'checking'|'available'|'uptodate'|'pulling'|'ok'|'err'>('idle')
@@ -444,6 +449,17 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
     fetch('http://localhost:8000/health', { signal: ctrl.signal, cache: 'no-store' })
       .then(r => { if (!ctrl.signal.aborted) setEngineStatus(r.ok ? 'connected' : 'offline') })
       .catch(() => { if (!ctrl.signal.aborted) setEngineStatus('offline') })
+    return () => ctrl.abort()
+  }, [open, engine, isApi])
+
+  // Worker connectivity — cek saat API mode dipilih (heartbeat endpoint)
+  useEffect(() => {
+    if (!open || !isApi) { setWorkerStatus('idle'); return }
+    const ctrl = new AbortController()
+    setWorkerStatus('checking')
+    fetch('/api/heartbeat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}', signal: ctrl.signal, cache: 'no-store' })
+      .then(r => { if (!ctrl.signal.aborted) setWorkerStatus(r.ok || r.status === 402 || r.status === 404 ? 'connected' : 'offline') })
+      .catch(() => { if (!ctrl.signal.aborted) setWorkerStatus('offline') })
     return () => ctrl.abort()
   }, [open, engine, isApi])
 
@@ -746,6 +762,8 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         comfy_steps:        comfySteps,
         comfy_cn_strength:  comfyCnStrength,
         max_templates:      maxTemplates,
+        ai_strip_slots:      aiStripSlots,
+        ai_strip_overlay_url: aiStripOverlay.trim(),
         enable_magic_catcher: magicCatcher,
         magic_catcher_device_id: magicCatcherCam,
         magic_catcher_duration_sec: Number(magicCatcherDur),
@@ -787,6 +805,8 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         comfy_steps:        comfySteps,
         comfy_cn_strength:  comfyCnStrength,
         max_templates:      maxTemplates,
+        ai_strip_slots:      aiStripSlots,
+        ai_strip_overlay_url: aiStripOverlay.trim(),
         enable_magic_catcher: magicCatcher,
         magic_catcher_device_id: magicCatcherCam,
         magic_catcher_duration_sec: Number(magicCatcherDur),
@@ -1012,7 +1032,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
               {/* Engine Mode */}
               <Row label={t('set_mode') as string}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  {!isApi && <StatusBadge status={engineStatus} t={t} />}
+                  {isApi ? <StatusBadge status={workerStatus} t={t} /> : <StatusBadge status={engineStatus} t={t} />}
                   <Sel value={engine} options={ENGINE_OPTS} onChange={v => {
                     const newEngine = v as EngineKey
                     setEngine(newEngine)
@@ -1023,6 +1043,16 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
               {isApi && (
                 <RowHint label={t('set_api_model') as string} hint={t('set_api_model_hint') as string}>
                   <Sel value={apiModel} options={API_MODEL_OPTS} onChange={setApiModel} />
+                </RowHint>
+              )}
+              {/* Max Templates / AI Variasi (1-4) */}
+              {engine !== 'print_local' && (
+                <RowHint label={t('set_max_templates') as string} hint={t('set_max_templates_hint') as string}>
+                  <Sel
+                    value={String(maxTemplates)}
+                    options={[{ value: '1', label: '1' }, { value: '2', label: '2' }, { value: '3', label: '3' }, { value: '4', label: '4' }]}
+                    onChange={v => setMaxTemplates(Number(v))}
+                  />
                 </RowHint>
               )}
 
@@ -1207,28 +1237,108 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
               </>)}
               </>) })()}
 
+              {/* Strip 2R dari hasil AI — tamu nyusun sendiri pas nekan Cetak 2-Strip.
+                  Nol token (nyusun ulang aset jadi). Mati = tombolnya ga muncul di Preview. */}
+              <div style={{ padding: '12px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{t('set_ai_strip') as string}</span>
+                  <Sel
+                    value={String(aiStripSlots)}
+                    options={[{ value: '0', label: t('set_ai_strip_off') as string }, { value: '2', label: '2' }, { value: '3', label: '3' }, { value: '4', label: '4' }]}
+                    onChange={v => setAiStripSlots(Number(v))}
+                  />
+                </div>
+                <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '6px 0 0' }}>
+                  {t('set_ai_strip_hint') as string}
+                </p>
+                {aiStripSlots > 0 && (
+                  <div style={{ marginTop: 12, padding: 12, background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.08)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <span style={{ fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.75)', fontWeight: 500 }}>Overlay PNG (600×1800)</span>
+                      <input
+                        type="file"
+                        accept="image/png"
+                        style={{ display: 'none' }}
+                        ref={stripOverlayInputRef}
+                        onChange={async (e) => {
+                          const f = e.target.files?.[0]
+                          if (!f) return
+                          setStripOverlayUploading(true)
+                          try {
+                            const fd = new FormData()
+                            fd.append('file', f)
+                            const res = await fetch('/api/upload-local-asset', { method: 'POST', body: fd })
+                            const data = await res.json()
+                            if (data.url) setAiStripOverlay(data.url)
+                          } catch (err) {
+                            alert('Gagal unggah overlay')
+                          } finally {
+                            setStripOverlayUploading(false)
+                            if (stripOverlayInputRef.current) stripOverlayInputRef.current.value = ''
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => stripOverlayInputRef.current?.click()}
+                        disabled={stripOverlayUploading}
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: 6,
+                          background: 'rgba(255,255,255,0.08)',
+                          border: '1px solid rgba(255,255,255,0.15)',
+                          color: '#fff',
+                          fontSize: 'var(--text-xs)',
+                          fontFamily: 'var(--font-ui)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {stripOverlayUploading ? '⟳ Memuat...' : '📁 Unggah PNG'}
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <div style={{ flex: 1 }}>
+                        <TextInput value={aiStripOverlay} onChange={setAiStripOverlay} placeholder="/overlays/strip-2r.png" mono />
+                      </div>
+                      {aiStripOverlay.trim() && (
+                        <button
+                          type="button"
+                          onClick={() => setAiStripOverlay('')}
+                          style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#ff6b6b', fontSize: 'var(--text-xs)', padding: '6px 10px', cursor: 'pointer' }}
+                          title="Hapus overlay"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Status & Preview Thumbnail */}
+                    {aiStripOverlay.trim() ? (
+                      <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 12, padding: '8px 10px', background: 'rgba(163,190,140,0.1)', border: '1px solid rgba(163,190,140,0.3)', borderRadius: 8 }}>
+                        <div style={{ width: 22, height: 66, background: '#111', borderRadius: 4, overflow: 'hidden', flexShrink: 0, border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <img src={aiStripOverlay.trim()} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={(e) => { (e.target as HTMLElement).style.display = 'none' }} />
+                        </div>
+                        <div>
+                          <p style={{ margin: 0, fontSize: 'var(--text-xs)', fontWeight: 600, color: '#a3be8c' }}>✓ Overlay 2R Terpasang</p>
+                          <p style={{ margin: '2px 0 0', fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.5)' }}>Frame 600×1800 akan otomatis dibakar pada hasil cetak 2-Strip.</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <p style={{ fontSize: 'var(--text-2xs)', color: '#f0c040', margin: '8px 0 0', lineHeight: 1.4 }}>
+                        ⚠ Belum ada overlay. Klik tombol <b>📁 Unggah PNG</b> di atas atau ketik path agar hasil cetak 2-Strip punya frame/branding.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {/* Output folder */}
               <Row label={t('set_folder') as string}>
                 <TextInput value={outputDir} onChange={setOutputDir} placeholder="C:/semeta" mono />
               </Row>
 
-              {/* VIP: max templates per guest — FACESWAP LOCAL only (multi-swap sequential via
-                  face_server :8000). Fullbody = comfy single. Faceswap API belum ada impl multi. */}
-              {(engine === 'faceswap_local' || engine === 'gohst_local') && (
-                <div style={{ padding: '12px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{t('set_max_templates') as string}</span>
-                    <Sel
-                      value={String(maxTemplates)}
-                      options={[{ value: '1', label: '1' }, { value: '2', label: '2' }, { value: '3', label: '3' }, { value: '4', label: '4' }]}
-                      onChange={v => setMaxTemplates(Number(v))}
-                    />
-                  </div>
-                  <p style={{ fontSize: 'var(--text-2xs)', color: maxTemplates > 1 ? '#f0c040' : 'rgba(255,255,255,0.3)', margin: '6px 0 0' }}>
-                    {maxTemplates > 1 ? '⚠ ' : ''}{t('set_max_templates_hint') as string}
-                  </p>
-                </div>
-              )}
+
 
               <div style={{ padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

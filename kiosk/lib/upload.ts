@@ -31,6 +31,17 @@ export async function blobUrlToDataUrl(blobUrl: string): Promise<string> {
   });
 }
 
+/** Resize image dataUrl/URL to maxPx longest edge, returning compact JPEG data URL (~200KB). */
+export async function resizeDataUrl(dataUrlOrUrl: string, maxPx: number = 1200): Promise<string> {
+  const blob = await resizeBlob(dataUrlOrUrl, maxPx);
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
 /** Upload a photo/video to R2 via the Next.js API route. Returns { url, key }.
  * S = seed img2vid: image bersih buat FAL (URL R2 publik). Di-resize kayak A/B, no watermark
  * (server skip S). Dipakai supaya FAL bisa akses seed walau hasil AI-nya blob/localhost. */

@@ -78,13 +78,16 @@ export function KioskApp({ config: initialConfig }: { config: KioskConfig }) {
     [...spindonesiaPinned.current, ...list.filter(t => t.category !== SPINDONESIA_CATEGORY)]
   // Refetch dari Settings bypass filter server (kiosk-config) — saring lagi di sini:
   // FULLBODY (LOCAL) = dunia comfy only, PRINT = dunia print only (spindonesia IKUT kesaring —
-  // flow-nya kebalik: print pilih layout dulu), mode lain = non-comfy non-print.
+  // flow-nya kebalik: print pilih layout dulu), API = dunia api only, mode lain = non-comfy non-print non-api.
+  const isApiMode = config.engine_mode?.endsWith('_api') ?? false
   const modeFilter = (list: KioskConfig['templates']) =>
     config.engine_mode === 'print_local'
       ? list.filter(t => t.engine_type === 'print')
-      : list.filter(t =>
-          t.category === SPINDONESIA_CATEGORY ||
-          (config.engine_mode === 'fullbody_local' ? t.engine_type === 'comfy' : t.engine_type !== 'comfy' && t.engine_type !== 'print'))
+      : isApiMode
+        ? list.filter(t => t.category === SPINDONESIA_CATEGORY || t.engine_type === 'api')
+        : list.filter(t =>
+            t.category === SPINDONESIA_CATEGORY ||
+            (config.engine_mode === 'fullbody_local' ? t.engine_type === 'comfy' : t.engine_type !== 'comfy' && t.engine_type !== 'print' && t.engine_type !== 'api'))
   const [templates, setTemplates] = useState(config.templates)
   const orientedFrames = useOrientedFrames(config.frames)
   const direction = useRef<'forward' | 'backward'>('forward')
@@ -259,7 +262,7 @@ export function KioskApp({ config: initialConfig }: { config: KioskConfig }) {
       case 'multicapture': return <MultiCaptureScreen state={state} dispatch={wrappedDispatch} cameraSource={config.camera_source} />
       // Engine 'api' + input_label — teks tamu masuk prompt berbayar, jadi harus fix sebelum processing.
       case 'nameinput':   return <NameInputScreen template={state.templates[0]} dispatch={wrappedDispatch} />
-      case 'processing':  return <ProcessingScreen state={state} dispatch={wrappedDispatch} generationSource={config.generation_source} eventName={config.event_name} licensed={config.licensed ?? false} videoUnlocked={isVideoUnlocked(config)} comfy={comfyCfg} enableVideoEngine={config.enable_video_engine ?? false} videoProvider={config.video_provider ?? 'PIXVERSE'} videoResolution={config.video_resolution ?? '720p'} onUploadFailed={(meta) => log('UPLOAD_FAILED', meta)} />
+      case 'processing':  return <ProcessingScreen state={state} dispatch={wrappedDispatch} generationSource={config.generation_source} eventName={config.event_name} licensed={config.licensed ?? false} videoUnlocked={isVideoUnlocked(config)} comfy={comfyCfg} enableVideoEngine={config.enable_video_engine ?? false} videoProvider={config.video_provider ?? 'PIXVERSE'} videoResolution={config.video_resolution ?? '720p'} maxTemplates={config.max_templates ?? 1} onUploadFailed={(meta) => log('UPLOAD_FAILED', meta)} />
       case 'framechooser': return <PreviewScreen mode="choose" state={state} dispatch={wrappedDispatch} frames={orientedFrames} config={config} licensed={config.licensed ?? false} eventName={config.event_name} onAction={(a) => log('VISITOR_ACTION', { action: a })} />
       case 'preview':     return <PreviewScreen mode="final" state={state} dispatch={wrappedDispatch} frames={orientedFrames} config={config} licensed={config.licensed ?? false} eventName={config.event_name} onAction={(a) => log('VISITOR_ACTION', { action: a })} />
     }

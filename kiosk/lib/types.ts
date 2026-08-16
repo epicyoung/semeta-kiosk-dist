@@ -193,6 +193,7 @@ export type KioskAction =
   | { type: 'CAPTURE'; imageUrl: string }
   | { type: 'START_CAPTURE_LOOP' } // template (engine 'print') → multicapture
   | { type: 'SHOT_TAKEN'; imageUrl: string }
+  | { type: 'POP_LAST_SHOT' }
   | { type: 'RETAKE_SHOTS' } // reset semua jepretan, ulang sequence
   | { type: 'SELECT_CATEGORY'; category: string }
   | { type: 'SELECT_TEMPLATE'; template: Template; maxTemplates: number }

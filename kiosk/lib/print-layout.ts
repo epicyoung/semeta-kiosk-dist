@@ -105,6 +105,9 @@ function stamp2Up(panel: HTMLCanvasElement): HTMLCanvasElement {
  *  pakai panel-nya — tamu jangan dapet file duplikat dua panel + garis potong. */
 export async function to2UpSheet(panelUrl: string): Promise<string> {
   const img = await loadImg(panelUrl)
+  if (img.naturalWidth === CANVAS_4R_PORTRAIT.w && img.naturalHeight === CANVAS_4R_PORTRAIT.h) {
+    return panelUrl
+  }
   const c = document.createElement('canvas')
   c.width = img.naturalWidth
   c.height = img.naturalHeight
@@ -112,10 +115,31 @@ export async function to2UpSheet(panelUrl: string): Promise<string> {
   return toJpegDataUrl(stamp2Up(c))
 }
 
+export type SlotTransform = {
+  scale?: number
+  x?: number
+  y?: number
+  fit?: 'cover' | 'contain'
+  rotation?: number
+}
+
+function fitContain(srcW: number, srcH: number, boxW: number, boxH: number) {
+  const scale = Math.min(boxW / srcW, boxH / srcH)
+  const dw = Math.round(srcW * scale)
+  const dh = Math.round(srcH * scale)
+  return { dx: Math.round((boxW - dw) / 2), dy: Math.round((boxH - dh) / 2), dw, dh }
+}
+
 /** N shot + overlay PNG → panel JPEG dataURL (full-res): 4R = 1200×1800 (langsung siap print),
  *  2R = 1050×750 (konten digital; kertas print dibangun via to2UpSheet pas tombol print).
  *  Tiap foto cover-fit + clip ke slot-nya; overlay digambar full-canvas di atasnya. */
-export async function composePrintLayout(shots: string[], template: Template): Promise<string> {
+export async function composePrintLayout(
+  shots: string[],
+  // Cuma tiga field ini yang dibaca. Dinarrow-in biar caller non-print (strip AI) bisa nyusun
+  // tanpa maksa punya Template utuh — tiap Template tetep memenuhi bentuk ini.
+  template: Pick<Template, 'print_size' | 'overlay_url' | 'layout_config'>,
+  transforms?: SlotTransform[],
+): Promise<string> {
   const size = template.print_size || '4R_PORTRAIT'
   const overlayUrl = template.overlay_url || null
   const { canvas: dims, slots } = layoutSlots(size, shots.length, template.layout_config)
@@ -131,18 +155,42 @@ export async function composePrintLayout(shots: string[], template: Template): P
   ctx.fillRect(0, 0, dims.w, dims.h)
   imgs.forEach((img, i) => {
     const s = slots[i]
-    const f = coverFit(img.naturalWidth, img.naturalHeight, s.w, s.h)
-    // Clip ke slot — overflow cover-fit gak boleh nimpa slot sebelah
+    const tf = transforms?.[i]
+    const fitMode = tf?.fit || 'cover'
+    const rotation = (tf?.rotation || 0) % 360
+
+    const isRotated90 = rotation === 90 || rotation === 270
+    const effW = isRotated90 ? img.naturalHeight : img.naturalWidth
+    const effH = isRotated90 ? img.naturalWidth : img.naturalHeight
+
+    const f = fitMode === 'contain'
+      ? fitContain(effW, effH, s.w, s.h)
+      : coverFit(effW, effH, s.w, s.h)
+
+    const scale = tf?.scale ?? 1
+    const extraDx = (tf?.x ?? 0) * s.w
+    const extraDy = (tf?.y ?? 0) * s.h
+
     ctx.save()
-    if (s.r) {
-      ctx.translate(s.x + s.w / 2, s.y + s.h / 2)
-      ctx.rotate(s.r * Math.PI / 180)
-      ctx.translate(-(s.x + s.w / 2), -(s.y + s.h / 2))
-    }
+    // Clip ke slot boundaries
     ctx.beginPath()
     ctx.rect(s.x, s.y, s.w, s.h)
     ctx.clip()
-    ctx.drawImage(img, s.x + f.dx, s.y + f.dy, f.dw, f.dh)
+
+    // Move origin ke center slot
+    const slotCenterX = s.x + s.w / 2
+    const slotCenterY = s.y + s.h / 2
+    ctx.translate(slotCenterX + extraDx, slotCenterY + extraDy)
+
+    const totalRotation = ((s.r || 0) + rotation) % 360
+    if (totalRotation) {
+      ctx.rotate((totalRotation * Math.PI) / 180)
+    }
+
+    const drawW = (isRotated90 ? f.dh : f.dw) * scale
+    const drawH = (isRotated90 ? f.dw : f.dh) * scale
+
+    ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH)
     ctx.restore()
   })
   if (overlay) {

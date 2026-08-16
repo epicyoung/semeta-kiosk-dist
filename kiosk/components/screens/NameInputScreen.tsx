@@ -26,24 +26,26 @@ export function NameInputScreen({ template, dispatch }: Props) {
   const submit = () => dispatch({ type: 'START_PROCESSING', userInput: value })
 
   return (
-    <div className="screen-split flex flex-col w-full h-full overflow-hidden">
-      <div className="screen-title text-center px-5 pt-5 pb-4">
-        <h1 className="h1-glow" style={{ fontSize: 'clamp(32px,5vw,48px)', fontWeight: 500, letterSpacing: '-0.02em', lineHeight: 1.15, marginBottom: 8 }}>
-          {template.input_label}
-        </h1>
-        <p style={{ fontSize: 'var(--text-base)', fontWeight: 300, color: 'var(--fg-muted)', lineHeight: 1.618, textWrap: 'balance' }}>
-          {t('nameinput_subtitle') as string}
-        </p>
-      </div>
+    <div className="screen-split flex flex-col w-full h-full overflow-hidden justify-between">
+      {/* Container utama: Judul + Input Nama di-center di tengah layar */}
+      <div className="flex-1 flex flex-col items-center justify-center px-5 py-6 my-auto text-center w-full">
+        <div className="px-5 pb-6">
+          <h1 className="h1-glow" style={{ fontSize: 'clamp(32px,5vw,48px)', fontWeight: 500, letterSpacing: '-0.02em', lineHeight: 1.15, marginBottom: 12 }}>
+            {template.input_label}
+          </h1>
+          <p style={{ fontSize: 'var(--text-base)', fontWeight: 300, color: 'var(--fg-muted)', lineHeight: 1.618, textWrap: 'balance' }}>
+            {t('nameinput_subtitle') as string}
+          </p>
+        </div>
 
-      <div className="screen-content flex items-center justify-center px-5">
         <div style={{ width: 560, maxWidth: '100%' }}>
           <div
             style={{
               display: 'flex', alignItems: 'center', gap: 12,
               background: 'rgba(255,255,255,0.08)',
-              border: '1px solid rgba(255,255,255,0.15)',
-              borderRadius: 18, padding: '0 22px',
+              border: '1px solid rgba(255,255,255,0.2)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.15)',
+              borderRadius: 20, padding: '0 24px',
             }}
           >
             <input
@@ -61,7 +63,7 @@ export function NameInputScreen({ template, dispatch }: Props) {
               spellCheck={false}
               style={{
                 flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none',
-                color: '#fff', caretColor: 'white', padding: '22px 0',
+                color: '#fff', caretColor: 'white', padding: '24px 0',
                 fontSize: 'var(--text-2xl)', fontFamily: 'var(--font-ui)',
                 letterSpacing: '0.06em', textTransform: 'uppercase',
               }}
@@ -71,13 +73,14 @@ export function NameInputScreen({ template, dispatch }: Props) {
             </span>
           </div>
           {/* Tamu harus tau namanya bakal KELIHATAN di cetakan — bukan cuma metadata. */}
-          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-subtle)', margin: '14px 4px 0', textWrap: 'balance' }}>
+          <p style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-subtle)', margin: '16px 4px 0', textWrap: 'balance' }}>
             {t('nameinput_hint') as string}
           </p>
         </div>
       </div>
 
-      <div className="screen-actions shrink-0 p-5 flex flex-row gap-4">
+      {/* Tombol aksi: konsisten dipasang di paling bawah (bottom) */}
+      <div className="screen-actions shrink-0 p-5 mt-auto flex flex-row gap-4 w-full">
         <TouchButton variant="ghost" className="flex-1" onClick={() => dispatch({ type: 'BACK' })}>
           {t('nameinput_back') as string}
         </TouchButton>

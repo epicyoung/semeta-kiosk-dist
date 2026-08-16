@@ -119,13 +119,17 @@ export async function fetchKioskConfig(): Promise<KioskConfig> {
     const generation_source = engineMode?.endsWith('_local') ? 'LOCAL' : 'fal'
     // Mode = dunia template, jangan campur: FULLBODY (LOCAL) cuma nampilin template
     // comfy (dari sidecar), PRINT cuma template print (spindonesia ikut kesaring — flow-nya
-    // gak kompatibel: print pilih layout dulu, AI foto dulu), mode lain non-comfy non-print.
+    // gak kompatibel: print pilih layout dulu, AI foto dulu), API cuma template api,
+    // mode lain non-comfy non-print non-api.
     const all = [...spindonesia, ...templates]
+    const isApiMode = engineMode?.endsWith('_api') ?? false
     const modeTemplates = engineMode === 'print_local'
       ? all.filter(t => t.engine_type === 'print')
-      : engineMode === 'fullbody_local'
-        ? all.filter(t => t.engine_type === 'comfy')
-        : all.filter(t => t.engine_type !== 'comfy' && t.engine_type !== 'print')
+      : isApiMode
+        ? all.filter(t => t.engine_type === 'api')
+        : engineMode === 'fullbody_local'
+          ? all.filter(t => t.engine_type === 'comfy')
+          : all.filter(t => t.engine_type !== 'comfy' && t.engine_type !== 'print' && t.engine_type !== 'api')
     return {
       ...FALLBACK,
       ...localSettings,

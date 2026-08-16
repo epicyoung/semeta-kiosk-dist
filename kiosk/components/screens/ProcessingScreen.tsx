@@ -5,9 +5,9 @@ import { comfyGenerate, type ComfyCfg } from '@/lib/comfy'
 import { proxied } from '@/lib/facedetect'
 import type { GenerationSource, KioskAction, KioskState, SwapResult, VideoProvider } from '@/lib/types'
 import { animateImage } from '@/lib/video'
-import { uploadAsset } from '@/lib/upload'
+import { uploadAsset, resizeDataUrl } from '@/lib/upload'
 import { compositeFrame } from '@/lib/frame-composite'
-import { composePrintLayout } from '@/lib/print-layout'
+import { composePrintLayout, to2UpSheet } from '@/lib/print-layout'
 import { useT } from '@/lib/i18n'
 import { finalizeLocal, localCopies } from '@/lib/local-finalize'
 import { buildApiEditRequest } from '@/lib/api-engine'
@@ -209,10 +209,11 @@ type Props = {
   enableVideoEngine: boolean
   videoProvider: VideoProvider
   videoResolution: '720p' | '1080p'
+  maxTemplates?: number
   onUploadFailed?: (metadata: Record<string, unknown>) => void
 }
 
-export function ProcessingScreen({ state, dispatch, generationSource, eventName, licensed, videoUnlocked, comfy, enableVideoEngine, videoProvider, videoResolution, onUploadFailed }: Props) {
+export function ProcessingScreen({ state, dispatch, generationSource, eventName, licensed, videoUnlocked, comfy, enableVideoEngine, videoProvider, videoResolution, maxTemplates, onUploadFailed }: Props) {
   const t = useT()
   const copy = t('processing_copy') as string[]
   const [copyIndex, setCopyIndex] = useState(0)
@@ -322,7 +323,10 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
       const timeout = setTimeout(() => { controller.abort(); setTimedOut(true) }, 120_000)
       ;(async () => {
         dispatch({ type: 'SET_PROGRESS', progress: 30 })
-        const sheet = await composePrintLayout(printShots, tmpl)
+        let sheet = await composePrintLayout(printShots, tmpl)
+        if (tmpl.print_size === '2R_STRIP') {
+          sheet = await to2UpSheet(sheet)
+        }
         if (controller.signal.aborted) return
         dispatch({ type: 'SET_PROGRESS', progress: 70 })
         // Watermark freemium tetep berlaku: display di-burn saat unlicensed, raw bersih
@@ -427,20 +431,21 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
     // Engine 'api' (Nano Banana Pro): prompt + referensi BG nyusul di body. Referensi
     // di-load duluan jadi data URI — kalau ada yang gagal, buildApiEditRequest ngelempar
     // dan generate batal SEBELUM token kepotong (bukan bikin hasil tanpa BG).
-    const apiEdit = state.templates[0].engine_type === 'api'
-      ? buildApiEditRequest(state.templates[0], state.userInput)
-      : Promise.resolve(null)
-    apiEdit
-      .then((edit) => fetch('/api/generate', {
+    const prepareApiPayload = async () => {
+      if (state.templates[0].engine_type !== 'api') return { edit: null, selfieBase64: state.imageUrl }
+      const [edit, selfieBase64] = await Promise.all([
+        buildApiEditRequest(state.templates[0], state.userInput, maxTemplates),
+        resizeDataUrl(state.imageUrl, 1200).catch(() => state.imageUrl),
+      ])
+      return { edit, selfieBase64 }
+    }
+    prepareApiPayload()
+      .then(({ edit, selfieBase64 }) => fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          // billing_id = UUID row templates di Supabase. RPC deduct_token nerima uuid,
-          // sedangkan id PocketBase string 15-char → tanpa ini RPC balas 400 dan generate
-          // mati sebelum nyentuh FAL. Template lama (source json, id-nya emang uuid) jatuh
-          // ke `id` seperti sebelumnya.
           template_id: state.templates[0].billing_id || state.templates[0].id,
-          image_base64: state.imageUrl,
+          image_base64: selfieBase64,
           assignments: state.assignments,
           ...(edit ?? {}),
         }),

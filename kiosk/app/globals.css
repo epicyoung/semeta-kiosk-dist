@@ -464,6 +464,19 @@ h1, .h1-glow { letter-spacing: -0.02em; }
 }
 .animate-slide-up { animation: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1) both; }
 
+/* Foto masuk ke slot strip. Nyampein state (slot ini baru keisi), bukan hiasan — 200ms,
+   di bawah plafon 250ms register product biar tamu ga nungguin koreografi.
+   ponytail: transisi di tempat, bukan FLIP thumbnail→slot. Badge nomor di thumbnail udah
+   nyambungin dua elemen itu; naikin ke FLIP kalau tes lapangan nunjukin tamu kehilangan jejak. */
+@keyframes slot-in {
+  from { transform: scale(1.06); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+.animate-slot-in { animation: slot-in 0.2s cubic-bezier(0.16, 1, 0.3, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .animate-slot-in { animation: none; }
+}
+
 /* Pulsing CTA ring */
 @keyframes neon-pulse {
   0%, 100% { opacity: 0.2; transform: scale(1); }

@@ -42,6 +42,23 @@ function readOrientation(dataUrl: string): Promise<'portrait' | 'landscape'> {
   })
 }
 
+/** Print ke queue Windows spesifik lewat /api/print (paper size + 2inch cut sudah
+ *  di-preset di queue-nya). Return false = route 501/404/error → caller WAJIB jatuh
+ *  ke printPhoto(). Jangan pernah nelen false diam-diam: print ga keluar itu haram. */
+export async function printNative(url: string, copies: number, mode: 'strip2' | 'print4r'): Promise<boolean> {
+  try {
+    const image = await toDataUrl(url)
+    const res = await fetch('/api/print', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode, image, copies }),
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
 /** Foto 4R, kertas ikut orientasi foto (portrait 4×6 / landscape 6×4) → landscape ga ke-crop.
  *  Print box Chrome boleh muncul — yang haram: print ga keluar. */
 export async function printPhoto(url: string, copies: number): Promise<void> {

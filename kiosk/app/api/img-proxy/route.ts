@@ -14,6 +14,8 @@ const ALLOWED_HOSTS = [
 function isAllowed(u: URL): boolean {
   if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') return true // PB lokal
   if (u.hostname.endsWith('.r2.dev') || u.hostname.endsWith('.r2.cloudflarestorage.com')) return true
+  if (u.hostname.endsWith('.fal.media') || u.hostname === 'fal.media') return true
+  if (u.hostname.endsWith('.fal.ai') || u.hostname === 'fal.ai') return true
   return ALLOWED_HOSTS.includes(u.hostname)
 }
 
