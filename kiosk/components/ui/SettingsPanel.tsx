@@ -8,14 +8,13 @@ import { useT } from '@/lib/i18n'
 import type { Translations } from '@/lib/locales/types'
 
 type TFn = (key: keyof Translations) => Translations[keyof Translations]
-type EngineKey = 'faceswap_local' | 'gohst_local' | 'fullbody_local' | 'print_local' | 'faceswap_api' | 'fullbody_api'
+type EngineKey = 'faceswap_local' | 'fullbody_local' | 'print_local' | 'faceswap_api' | 'fullbody_api'
 
 import { LocalTemplateManager } from './LocalTemplateManager'
 import { VideoPromptManager } from './VideoPromptManager'
 
 const ENGINE_OPTS: { value: EngineKey; label: string; soon?: boolean }[] = [
   { value: 'faceswap_local', label: 'Faceswap (LOCAL)' },
-  { value: 'gohst_local',    label: 'GOHST (LOCAL)' },
   { value: 'fullbody_local', label: 'Fullbody (LOCAL)' }, // = engine comfy stylize via face_server
   { value: 'print_local',    label: 'Photo Print (non-AI)' }, // photobooth klasik: overlay PNG + N shot, nol token
   { value: 'faceswap_api',   label: 'Faceswap (API) — soon',  soon: true },

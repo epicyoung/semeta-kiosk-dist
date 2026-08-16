@@ -257,7 +257,7 @@ export function KioskApp({ config: initialConfig }: { config: KioskConfig }) {
       case 'category':    return <CategoryScreen state={state} dispatch={wrappedDispatch} templates={templates} eventName={config.event_name} licensed={config.licensed ?? false} />
       // Multi-template cuma faceswap LOCAL (butuh face_server :8000 buat sequential swap).
       // Fullbody (comfy) & faceswap API = selalu single-select.
-      case 'template':    return <TemplateScreen state={state} dispatch={wrappedDispatch} templates={templates} maxTemplates={(config.engine_mode === 'faceswap_local' || config.engine_mode === 'gohst_local') ? (config.max_templates ?? 1) : 1} engineMode={config.engine_mode} />
+      case 'template':    return <TemplateScreen state={state} dispatch={wrappedDispatch} templates={templates} maxTemplates={config.engine_mode === 'faceswap_local' ? (config.max_templates ?? 1) : 1} engineMode={config.engine_mode} />
       case 'faceassign':  return <FaceAssignScreen state={state} dispatch={wrappedDispatch} />
       case 'multicapture': return <MultiCaptureScreen state={state} dispatch={wrappedDispatch} cameraSource={config.camera_source} />
       // Engine 'api' + input_label — teks tamu masuk prompt berbayar, jadi harus fix sebelum processing.
