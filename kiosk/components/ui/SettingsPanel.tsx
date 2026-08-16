@@ -1238,100 +1238,103 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
               </>) })()}
 
               {/* Strip 2R dari hasil AI — tamu nyusun sendiri pas nekan Cetak 2-Strip.
-                  Nol token (nyusun ulang aset jadi). Mati = tombolnya ga muncul di Preview. */}
-              <div style={{ padding: '12px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{t('set_ai_strip') as string}</span>
-                  <Sel
-                    value={String(aiStripSlots)}
-                    options={[{ value: '0', label: t('set_ai_strip_off') as string }, { value: '2', label: '2' }, { value: '3', label: '3' }, { value: '4', label: '4' }]}
-                    onChange={v => setAiStripSlots(Number(v))}
-                  />
-                </div>
-                <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '6px 0 0' }}>
-                  {t('set_ai_strip_hint') as string}
-                </p>
-                {aiStripSlots > 0 && (
-                  <div style={{ marginTop: 12, padding: 12, background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.08)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <span style={{ fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.75)', fontWeight: 500 }}>Overlay PNG (600×1800)</span>
-                      <input
-                        type="file"
-                        accept="image/png"
-                        style={{ display: 'none' }}
-                        ref={stripOverlayInputRef}
-                        onChange={async (e) => {
-                          const f = e.target.files?.[0]
-                          if (!f) return
-                          setStripOverlayUploading(true)
-                          try {
-                            const fd = new FormData()
-                            fd.append('file', f)
-                            const res = await fetch('/api/upload-local-asset', { method: 'POST', body: fd })
-                            const data = await res.json()
-                            if (data.url) setAiStripOverlay(data.url)
-                          } catch (err) {
-                            alert('Gagal unggah overlay')
-                          } finally {
-                            setStripOverlayUploading(false)
-                            if (stripOverlayInputRef.current) stripOverlayInputRef.current.value = ''
-                          }
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => stripOverlayInputRef.current?.click()}
-                        disabled={stripOverlayUploading}
-                        style={{
-                          padding: '4px 10px',
-                          borderRadius: 6,
-                          background: 'rgba(255,255,255,0.08)',
-                          border: '1px solid rgba(255,255,255,0.15)',
-                          color: '#fff',
-                          fontSize: 'var(--text-xs)',
-                          fontFamily: 'var(--font-ui)',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        {stripOverlayUploading ? '⟳ Memuat...' : '📁 Unggah PNG'}
-                      </button>
-                    </div>
-
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <div style={{ flex: 1 }}>
-                        <TextInput value={aiStripOverlay} onChange={setAiStripOverlay} placeholder="/overlays/strip-2r.png" mono />
-                      </div>
-                      {aiStripOverlay.trim() && (
+                  Nol token (nyusun ulang aset jadi). Mati = tombolnya ga muncul di Preview.
+                  Disembunyikan jika mode Photo Print (non-AI) agar UI tidak membingungkan. */}
+              {engine !== 'print_local' && (
+                <div style={{ padding: '12px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{t('set_ai_strip') as string}</span>
+                    <Sel
+                      value={String(aiStripSlots)}
+                      options={[{ value: '0', label: t('set_ai_strip_off') as string }, { value: '2', label: '2' }, { value: '3', label: '3' }, { value: '4', label: '4' }]}
+                      onChange={v => setAiStripSlots(Number(v))}
+                    />
+                  </div>
+                  <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '6px 0 0' }}>
+                    {t('set_ai_strip_hint') as string}
+                  </p>
+                  {aiStripSlots > 0 && (
+                    <div style={{ marginTop: 12, padding: 12, background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.08)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <span style={{ fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.75)', fontWeight: 500 }}>Overlay PNG (600×1800)</span>
+                        <input
+                          type="file"
+                          accept="image/png"
+                          style={{ display: 'none' }}
+                          ref={stripOverlayInputRef}
+                          onChange={async (e) => {
+                            const f = e.target.files?.[0]
+                            if (!f) return
+                            setStripOverlayUploading(true)
+                            try {
+                              const fd = new FormData()
+                              fd.append('file', f)
+                              const res = await fetch('/api/upload-local-asset', { method: 'POST', body: fd })
+                              const data = await res.json()
+                              if (data.url) setAiStripOverlay(data.url)
+                            } catch (err) {
+                              alert('Gagal unggah overlay')
+                            } finally {
+                              setStripOverlayUploading(false)
+                              if (stripOverlayInputRef.current) stripOverlayInputRef.current.value = ''
+                            }
+                          }}
+                        />
                         <button
                           type="button"
-                          onClick={() => setAiStripOverlay('')}
-                          style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#ff6b6b', fontSize: 'var(--text-xs)', padding: '6px 10px', cursor: 'pointer' }}
-                          title="Hapus overlay"
+                          onClick={() => stripOverlayInputRef.current?.click()}
+                          disabled={stripOverlayUploading}
+                          style={{
+                            padding: '4px 10px',
+                            borderRadius: 6,
+                            background: 'rgba(255,255,255,0.08)',
+                            border: '1px solid rgba(255,255,255,0.15)',
+                            color: '#fff',
+                            fontSize: 'var(--text-xs)',
+                            fontFamily: 'var(--font-ui)',
+                            cursor: 'pointer',
+                          }}
                         >
-                          ✕
+                          {stripOverlayUploading ? '⟳ Memuat...' : '📁 Unggah PNG'}
                         </button>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        <div style={{ flex: 1 }}>
+                          <TextInput value={aiStripOverlay} onChange={setAiStripOverlay} placeholder="/overlays/strip-2r.png" mono />
+                        </div>
+                        {aiStripOverlay.trim() && (
+                          <button
+                            type="button"
+                            onClick={() => setAiStripOverlay('')}
+                            style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#ff6b6b', fontSize: 'var(--text-xs)', padding: '6px 10px', cursor: 'pointer' }}
+                            title="Hapus overlay"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Status & Preview Thumbnail */}
+                      {aiStripOverlay.trim() ? (
+                        <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 12, padding: '8px 10px', background: 'rgba(163,190,140,0.1)', border: '1px solid rgba(163,190,140,0.3)', borderRadius: 8 }}>
+                          <div style={{ width: 22, height: 66, background: '#111', borderRadius: 4, overflow: 'hidden', flexShrink: 0, border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <img src={aiStripOverlay.trim()} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={(e) => { (e.target as HTMLElement).style.display = 'none' }} />
+                          </div>
+                          <div>
+                            <p style={{ margin: 0, fontSize: 'var(--text-xs)', fontWeight: 600, color: '#a3be8c' }}>✓ Overlay 2R Terpasang</p>
+                            <p style={{ margin: '2px 0 0', fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.5)' }}>Frame 600×1800 akan otomatis dibakar pada hasil cetak 2-Strip.</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <p style={{ fontSize: 'var(--text-2xs)', color: '#f0c040', margin: '8px 0 0', lineHeight: 1.4 }}>
+                          ⚠ Belum ada overlay. Klik tombol <b>📁 Unggah PNG</b> di atas atau ketik path agar hasil cetak 2-Strip punya frame/branding.
+                        </p>
                       )}
                     </div>
-
-                    {/* Status & Preview Thumbnail */}
-                    {aiStripOverlay.trim() ? (
-                      <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 12, padding: '8px 10px', background: 'rgba(163,190,140,0.1)', border: '1px solid rgba(163,190,140,0.3)', borderRadius: 8 }}>
-                        <div style={{ width: 22, height: 66, background: '#111', borderRadius: 4, overflow: 'hidden', flexShrink: 0, border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <img src={aiStripOverlay.trim()} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={(e) => { (e.target as HTMLElement).style.display = 'none' }} />
-                        </div>
-                        <div>
-                          <p style={{ margin: 0, fontSize: 'var(--text-xs)', fontWeight: 600, color: '#a3be8c' }}>✓ Overlay 2R Terpasang</p>
-                          <p style={{ margin: '2px 0 0', fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.5)' }}>Frame 600×1800 akan otomatis dibakar pada hasil cetak 2-Strip.</p>
-                        </div>
-                      </div>
-                    ) : (
-                      <p style={{ fontSize: 'var(--text-2xs)', color: '#f0c040', margin: '8px 0 0', lineHeight: 1.4 }}>
-                        ⚠ Belum ada overlay. Klik tombol <b>📁 Unggah PNG</b> di atas atau ketik path agar hasil cetak 2-Strip punya frame/branding.
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
 
               {/* Output folder */}
               <Row label={t('set_folder') as string}>
