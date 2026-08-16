@@ -96,7 +96,7 @@ const vi: Translations = {
   preview_video_dialog_cancel: 'Hủy',
   preview_video_cost_note: 'Chi Phí Token',
   preview_btn_print: 'In',
-  preview_btn_strip: 'Dải 2 ô',
+  preview_btn_strip: 'Layout',
   preview_btn_email: 'Email',
   strip_title: 'Sắp xếp dải ảnh của bạn',
   strip_hint: 'Chạm vào ảnh để điền vào ô tiếp theo',

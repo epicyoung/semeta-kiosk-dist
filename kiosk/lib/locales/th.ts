@@ -96,7 +96,7 @@ const th: Translations = {
   preview_video_dialog_cancel: 'ยกเลิก',
   preview_video_cost_note: 'ค่าโทเค็น',
   preview_btn_print: 'พิมพ์',
-  preview_btn_strip: 'สตริป 2 ช่อง',
+  preview_btn_strip: 'Layout',
   preview_btn_email: 'อีเมล',
   strip_title: 'จัดสตริปของคุณ',
   strip_hint: 'แตะรูปเพื่อใส่ในช่องถัดไป',

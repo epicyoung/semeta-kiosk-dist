@@ -1,18 +1,21 @@
 // Engine 'api' (Nano Banana Pro): rakit payload tambahan buat POST /api/generate.
 //
 // Prompt & referensi datang dari sidecar (via PocketBase) supaya operator bisa tweak di
-// lapangan tanpa deploy. Worker TETEP yang berkuasa: dia yang megang FAL key, ambil endpoint
-// dari whitelist by api_model, dan motong token dari datanya sendiri. Lihat provider.ts.
+// lapangan tanpa deploy — dua-duanya gak ngubah ongkos. Worker TETEP yang berkuasa: dia yang
+// megang FAL key, nentuin model & jumlah gambar dari datanya sendiri, dan motong token dari
+// row yang sama. Lihat provider.ts.
 import { injectPrompt } from './prompt-input'
 import { resizeDataUrl } from './upload'
 import type { Template } from './types'
 
+// api_model & num_images SENGAJA gak dikirim. Dua-duanya nentuin ongkos FAL sementara yang
+// ditagih ke tenant flat templates.token_cost — kalau kiosk yang mutusin, operator bisa
+// naikin ongkos kita tanpa naikin tagihan ke dia. Worker baca keduanya dari payload_json
+// Supabase, row yang sama yang nagih. Lihat worker/src/provider.ts.
 export type ApiEditRequest = {
-  api_model: string
   prompt: string
   reference_images: string[]
   aspect_ratio?: string
-  num_images?: number
 }
 
 export class ReferenceLoadError extends Error {}
@@ -26,7 +29,7 @@ export class ReferenceLoadError extends Error {}
  *  latar acak — token kepotong buat hasil yang bukan pesanan tamu. Mending gagal keras
  *  biar salah-konfigurasinya kelihatan. Template TANPA referensi (mis. prompt double-decker)
  *  tetap sah — yang dijaga cuma referensi yang udah didaftarin tapi ga bisa dibaca. */
-export async function buildApiEditRequest(tmpl: Template, userInput?: string, numImages?: number): Promise<ApiEditRequest> {
+export async function buildApiEditRequest(tmpl: Template, userInput?: string): Promise<ApiEditRequest> {
   const refs: string[] = []
   for (const url of tmpl.reference_urls ?? []) {
     try {
@@ -36,10 +39,8 @@ export async function buildApiEditRequest(tmpl: Template, userInput?: string, nu
     }
   }
   return {
-    api_model: tmpl.api_model ?? '',
     prompt: injectPrompt(tmpl.positive_prompt ?? '', userInput ?? ''),
     reference_images: refs,
     aspect_ratio: tmpl.aspect_ratio ?? undefined,
-    num_images: numImages ?? undefined,
   }
 }

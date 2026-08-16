@@ -255,14 +255,16 @@ export function KioskApp({ config: initialConfig }: { config: KioskConfig }) {
       case 'consent':     return <ConsentScreen dispatch={wrappedDispatch} />
       case 'liveview':    return <LiveViewScreen state={state} dispatch={wrappedDispatch} cameraSource={config.camera_source} originalCaptures={config.original_captures} />
       case 'category':    return <CategoryScreen state={state} dispatch={wrappedDispatch} templates={templates} eventName={config.event_name} licensed={config.licensed ?? false} />
-      // Multi-template cuma faceswap LOCAL (butuh face_server :8000 buat sequential swap).
-      // Fullbody (comfy) & faceswap API = selalu single-select.
-      case 'template':    return <TemplateScreen state={state} dispatch={wrappedDispatch} templates={templates} maxTemplates={config.engine_mode === 'faceswap_local' ? (config.max_templates ?? 1) : 1} engineMode={config.engine_mode} />
+      // Multi-template = engine LOKAL doang (faceswap & fullbody/comfy): dua-duanya sequential
+      // di GPU sendiri, nol token per variasi, jadi jumlahnya boleh jadi dial operator.
+      // Engine API dikunci 1 — di sana tiap variasi = duit ke FAL, jumlahnya ditentuin
+      // num_images di payload_json Supabase (row yang sama yang nagih), bukan kiosk.
+      case 'template':    return <TemplateScreen state={state} dispatch={wrappedDispatch} templates={templates} maxTemplates={config.engine_mode === 'faceswap_local' || config.engine_mode === 'fullbody_local' ? (config.max_templates ?? 1) : 1} engineMode={config.engine_mode} />
       case 'faceassign':  return <FaceAssignScreen state={state} dispatch={wrappedDispatch} />
       case 'multicapture': return <MultiCaptureScreen state={state} dispatch={wrappedDispatch} cameraSource={config.camera_source} />
       // Engine 'api' + input_label — teks tamu masuk prompt berbayar, jadi harus fix sebelum processing.
       case 'nameinput':   return <NameInputScreen template={state.templates[0]} dispatch={wrappedDispatch} />
-      case 'processing':  return <ProcessingScreen state={state} dispatch={wrappedDispatch} generationSource={config.generation_source} eventName={config.event_name} licensed={config.licensed ?? false} videoUnlocked={isVideoUnlocked(config)} comfy={comfyCfg} enableVideoEngine={config.enable_video_engine ?? false} videoProvider={config.video_provider ?? 'PIXVERSE'} videoResolution={config.video_resolution ?? '720p'} maxTemplates={config.max_templates ?? 1} onUploadFailed={(meta) => log('UPLOAD_FAILED', meta)} />
+      case 'processing':  return <ProcessingScreen state={state} dispatch={wrappedDispatch} generationSource={config.generation_source} eventName={config.event_name} licensed={config.licensed ?? false} videoUnlocked={isVideoUnlocked(config)} comfy={comfyCfg} enableVideoEngine={config.enable_video_engine ?? false} videoProvider={config.video_provider ?? 'PIXVERSE'} videoResolution={config.video_resolution ?? '720p'} onUploadFailed={(meta) => log('UPLOAD_FAILED', meta)} />
       case 'framechooser': return <PreviewScreen mode="choose" state={state} dispatch={wrappedDispatch} frames={orientedFrames} config={config} licensed={config.licensed ?? false} eventName={config.event_name} onAction={(a) => log('VISITOR_ACTION', { action: a })} />
       case 'preview':     return <PreviewScreen mode="final" state={state} dispatch={wrappedDispatch} frames={orientedFrames} config={config} licensed={config.licensed ?? false} eventName={config.event_name} onAction={(a) => log('VISITOR_ACTION', { action: a })} />
     }

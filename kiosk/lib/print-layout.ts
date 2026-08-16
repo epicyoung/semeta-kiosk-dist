@@ -10,7 +10,7 @@
 //   2R 600×1800 (panel strip) — 1: full · 2: atas-bawah 600×900 · 3: 600×600 · 4: 600×450 (grid 1×N vertikal)
 import { coverFit } from './frame-composite'
 import { proxied } from './facedetect'
-import type { PrintSize, Template } from './types'
+import type { PrintSize, Template, Ai4RLayout } from './types'
 
 export type Rect = { x: number; y: number; w: number; h: number; r?: number }
 
@@ -34,22 +34,69 @@ const GRID_2R_S: [number, number][] = [[1, 1], [1, 1], [1, 2], [1, 3], [1, 4]]
 
 /** Kanvas + slot foto per (ukuran cetak, jumlah shot). shots di-clamp 1..4.
  *  Slot > shots (mis. 3 shot di grid 4) → sisa slot dibiarin — overlay yang nutup. */
-export function layoutSlots(size: PrintSize, shots: number, customLayout?: { slots: Rect[] } | null): { canvas: { w: number; h: number }; slots: Rect[] } {
+export function layoutSlots(
+  size: PrintSize,
+  shots: number,
+  customLayout?: { slots: Rect[] } | null,
+  ai4rLayout?: Ai4RLayout
+): { canvas: { w: number; h: number }; slots: Rect[] } {
+  if (customLayout?.slots) {
+    return { canvas: size === '4R_LANDSCAPE' ? CANVAS_4R_LANDSCAPE : size === '2R_STRIP' ? PANEL_2R_STRIP : CANVAS_4R_PORTRAIT, slots: customLayout.slots }
+  }
+
+  if (size === '4R_LANDSCAPE' && ai4rLayout) {
+    const canvas = CANVAS_4R_LANDSCAPE
+    if (ai4rLayout === 'TRIO_3') {
+      return {
+        canvas,
+        slots: [
+          { x: 0, y: 0, w: 900, h: 1200 },       // Kiri Berdiri (Portrait)
+          { x: 900, y: 0, w: 900, h: 600 },      // Kanan Atas Tidur (Landscape)
+          { x: 900, y: 600, w: 900, h: 600 },    // Kanan Bawah Tidur (Landscape)
+        ],
+      }
+    }
+    if (ai4rLayout === 'GRID_3') {
+      return {
+        canvas,
+        slots: [
+          { x: 0, y: 0, w: 600, h: 1200 },
+          { x: 600, y: 0, w: 600, h: 1200 },
+          { x: 1200, y: 0, w: 600, h: 1200 },
+        ],
+      }
+    }
+    if (ai4rLayout === 'SPLIT_2') {
+      return {
+        canvas,
+        slots: [
+          { x: 0, y: 0, w: 900, h: 1200 },
+          { x: 900, y: 0, w: 900, h: 1200 },
+        ],
+      }
+    }
+    if (ai4rLayout === 'GRID_4') {
+      return {
+        canvas,
+        slots: [
+          { x: 0, y: 0, w: 900, h: 600 },
+          { x: 900, y: 0, w: 900, h: 600 },
+          { x: 0, y: 600, w: 900, h: 600 },
+          { x: 900, y: 600, w: 900, h: 600 },
+        ],
+      }
+    }
+  }
+
   const n = Math.min(4, Math.max(1, Math.trunc(shots) || 1))
-  
   let canvas = CANVAS_4R_PORTRAIT
   let gridConfig = GRID_4R_P
-  
   if (size === '4R_LANDSCAPE') {
     canvas = CANVAS_4R_LANDSCAPE
     gridConfig = GRID_4R_L
   } else if (size === '2R_STRIP') {
     canvas = PANEL_2R_STRIP
     gridConfig = GRID_2R_S
-  }
-
-  if (customLayout?.slots) {
-    return { canvas, slots: customLayout.slots }
   }
 
   const [cols, rows] = gridConfig[n]
@@ -119,12 +166,18 @@ export type SlotTransform = {
   scale?: number
   x?: number
   y?: number
-  fit?: 'cover' | 'contain'
+  // Sumbu mana yang dipaskan ke slot. 'width' = default (lebar foto = lebar slot; sisi
+  // atas-bawah kepotong atau nyisa), 'height' = kebalikannya. Bukan cover/contain:
+  // cover ngambil sumbu TERBESAR, contain yang TERKECIL — dua-duanya milih sendiri
+  // tergantung orientasi foto, jadi tamu ga bisa nebak hasilnya sebelum nge-tap.
+  fit?: 'width' | 'height'
   rotation?: number
 }
 
-function fitContain(srcW: number, srcH: number, boxW: number, boxH: number) {
-  const scale = Math.min(boxW / srcW, boxH / srcH)
+/** Paskan satu sumbu ke slot, sumbu lain ngikut rasio. Ke-center dua-duanya; yang lewat
+ *  slot dipotong sama clip di composePrintLayout. */
+export function fitAxis(srcW: number, srcH: number, boxW: number, boxH: number, axis: 'width' | 'height') {
+  const scale = axis === 'width' ? boxW / srcW : boxH / srcH
   const dw = Math.round(srcW * scale)
   const dh = Math.round(srcH * scale)
   return { dx: Math.round((boxW - dw) / 2), dy: Math.round((boxH - dh) / 2), dw, dh }
@@ -135,14 +188,13 @@ function fitContain(srcW: number, srcH: number, boxW: number, boxH: number) {
  *  Tiap foto cover-fit + clip ke slot-nya; overlay digambar full-canvas di atasnya. */
 export async function composePrintLayout(
   shots: string[],
-  // Cuma tiga field ini yang dibaca. Dinarrow-in biar caller non-print (strip AI) bisa nyusun
-  // tanpa maksa punya Template utuh — tiap Template tetep memenuhi bentuk ini.
   template: Pick<Template, 'print_size' | 'overlay_url' | 'layout_config'>,
   transforms?: SlotTransform[],
+  ai4rLayout?: Ai4RLayout,
 ): Promise<string> {
   const size = template.print_size || '4R_PORTRAIT'
   const overlayUrl = template.overlay_url || null
-  const { canvas: dims, slots } = layoutSlots(size, shots.length, template.layout_config)
+  const { canvas: dims, slots } = layoutSlots(size, shots.length, template.layout_config, ai4rLayout)
   const [imgs, overlay] = await Promise.all([
     Promise.all(shots.slice(0, slots.length).map(loadImg)),
     overlayUrl ? loadImg(overlayUrl) : Promise.resolve(null),
@@ -156,16 +208,14 @@ export async function composePrintLayout(
   imgs.forEach((img, i) => {
     const s = slots[i]
     const tf = transforms?.[i]
-    const fitMode = tf?.fit || 'cover'
+    const fitMode = tf?.fit || 'width'
     const rotation = (tf?.rotation || 0) % 360
 
     const isRotated90 = rotation === 90 || rotation === 270
     const effW = isRotated90 ? img.naturalHeight : img.naturalWidth
     const effH = isRotated90 ? img.naturalWidth : img.naturalHeight
 
-    const f = fitMode === 'contain'
-      ? fitContain(effW, effH, s.w, s.h)
-      : coverFit(effW, effH, s.w, s.h)
+    const f = fitAxis(effW, effH, s.w, s.h, fitMode)
 
     const scale = tf?.scale ?? 1
     const extraDx = (tf?.x ?? 0) * s.w

@@ -166,7 +166,11 @@ export function GlassShell({ screenKey, direction, children, config, onLogoClick
       {/* Glass card — konten full height, padding 20px (inset header/footer dibuang) */}
       <div className="glass-wrap">
         <div className="glass-border">
-          <div className="glass">
+          {/* id = target portal buat overlay full-panel (mis. StripComposer). Screen biasa
+              dirender di dalam kotak ber-padding di bawah, jadi overlay yang mau mepet ke
+              tepi kaca WAJIB nempel di sini — bukan di body (nutupin wordmark + footer),
+              bukan juga di dalam kotak padding (keklip 20px di empat sisi). */}
+          <div className="glass" id="glass-panel">
             <div style={{ position: 'absolute', inset: 'var(--pad-screen)', overflow: 'hidden' }}>
               {pages.map(p => (
                 <div key={p.key} style={{ position: 'absolute', inset: 0, willChange: 'transform', animation: p.anim }}>

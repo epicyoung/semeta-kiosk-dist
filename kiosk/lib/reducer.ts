@@ -124,11 +124,11 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
       // direct (Photo Print): overlay udah dibakar di composite — skip framechooser yang
       // auto-preselect frame (bakal numpuk PNG kedua di print+upload). selectedFrame null.
       if (action.direct)
-        return { screen: 'preview', aiUrl: action.aiUrl, originalUrl: action.originalUrl, sourceUrl: action.sourceUrl, rawAiUrl: action.rawAiUrl, base: action.base, processingSec: action.processingSec, selectedFrame: null, videoUrl: action.videoUrl, printSize: action.printSize, templateId: action.templateId, shots: (state.screen === 'processing' || state.screen === 'multicapture') ? state.shots : undefined }
+        return { screen: 'preview', aiUrl: action.aiUrl, originalUrl: action.originalUrl, sourceUrl: action.sourceUrl, rawAiUrl: action.rawAiUrl, base: action.base, processingSec: action.processingSec, selectedFrame: null, videoUrl: action.videoUrl, printSize: action.printSize, templateId: action.templateId, shots: 'shots' in state ? state.shots : undefined }
       // Landing di frame chooser dulu — tamu pilih frame, baru NEXT ke preview (upload+print).
       // videoUrl = hasil video engine (opsional) — kebawa terus sampai preview buat tab Video.
       // allResults = multi-template (2-4 hasil): kebawa langsung ke preview grid TANPA resultchooser.
-      return { screen: 'framechooser', aiUrl: action.aiUrl, originalUrl: action.originalUrl, sourceUrl: action.sourceUrl, rawAiUrl: action.rawAiUrl, base: action.base, processingSec: action.processingSec, videoUrl: action.videoUrl, templateId: action.templateId, allResults: action.allResults, shots: (state.screen === 'processing' || state.screen === 'multicapture') ? state.shots : undefined }
+      return { screen: 'framechooser', aiUrl: action.aiUrl, originalUrl: action.originalUrl, sourceUrl: action.sourceUrl, rawAiUrl: action.rawAiUrl, base: action.base, processingSec: action.processingSec, videoUrl: action.videoUrl, templateId: action.templateId, allResults: action.allResults, shots: 'shots' in state ? state.shots : undefined }
 
     case 'CONFIRM_FRAME':
       if (state.screen !== 'framechooser') return state

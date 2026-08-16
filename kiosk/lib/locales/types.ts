@@ -120,6 +120,12 @@ export interface Translations {
   strip_two_copies: string        // printer motong jadi 2 strip identik — tamu wajib dikasih tau
   strip_print_failed: string
   strip_print_btn: string
+  strip_title_4r: string
+  strip_print_4r: string
+  strip_locked_4r: string
+  strip_tip: string
+  strip_fit_width: string
+  strip_fit_height: string
   preview_btn_make_video: string
   preview_btn_video_ready: string
   preview_btn_rechoose: string
@@ -253,6 +259,8 @@ export interface Translations {
   set_mode: string
   set_api_model: string
   // VIP multi-template + Magic Catcher
+  set_original_captures: string
+  set_original_captures_hint: string
   set_max_templates: string
   set_max_templates_hint: string
   set_ai_strip: string

@@ -96,7 +96,7 @@ const ms: Translations = {
   preview_video_dialog_cancel: 'Batal',
   preview_video_cost_note: 'Kos Token',
   preview_btn_print: 'Cetak',
-  preview_btn_strip: '2-Jalur',
+  preview_btn_strip: 'Layout',
   preview_btn_email: 'E-mel',
   strip_title: 'Susun jalur anda',
   strip_hint: 'Ketik gambar untuk mengisi slot seterusnya',

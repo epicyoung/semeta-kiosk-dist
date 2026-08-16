@@ -209,11 +209,10 @@ type Props = {
   enableVideoEngine: boolean
   videoProvider: VideoProvider
   videoResolution: '720p' | '1080p'
-  maxTemplates?: number
   onUploadFailed?: (metadata: Record<string, unknown>) => void
 }
 
-export function ProcessingScreen({ state, dispatch, generationSource, eventName, licensed, videoUnlocked, comfy, enableVideoEngine, videoProvider, videoResolution, maxTemplates, onUploadFailed }: Props) {
+export function ProcessingScreen({ state, dispatch, generationSource, eventName, licensed, videoUnlocked, comfy, enableVideoEngine, videoProvider, videoResolution, onUploadFailed }: Props) {
   const t = useT()
   const copy = t('processing_copy') as string[]
   const [copyIndex, setCopyIndex] = useState(0)
@@ -352,28 +351,46 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
     }
 
     // Engine per-template: comfy menang atas generation_source (konsumen pertama engine_type).
-    // Comfy selalu single-template (ga pernah multi-select) → templates[0] aman.
+    // Multi-template DIDUKUNG di sini, persis kayak faceswap LOCAL di bawah: sequential
+    // (HARAM Promise.all — satu GPU), tiap hasil masuk allResults. Ongkosnya GPU sendiri,
+    // nol token per variasi, jadi jumlahnya boleh jadi dial operator. Bandingin engine API:
+    // di sana tiap variasi = duit ke FAL, makanya jumlahnya dikunci server.
     if (state.templates[0].engine_type === 'comfy') {
       const controller = new AbortController()
-      const timeout = setTimeout(() => { controller.abort(); setTimedOut(true) }, 120_000)
-      comfyGenerate(state.imageUrl, state.templates[0], comfy, (pct) => dispatch({ type: 'SET_PROGRESS', progress: pct }), controller.signal)
-        .then(async (aiUrl) => {
-          if (controller.signal.aborted) return // StrictMode double-invoke / unmount — jangan dispatch
+      // Timeout ikut jumlah template — N generate sequential, jangan abort di tengah antrian.
+      const timeout = setTimeout(() => { controller.abort(); setTimedOut(true) }, 120_000 * state.templates.length)
+      ;(async () => {
+        const results: SwapResult[] = []
+        const total = state.templates.length
+        for (let i = 0; i < total; i++) {
+          if (controller.signal.aborted) return
+          setMultiIdx(i)
+          const tmpl = state.templates[i]
+          // Skala pct per-template ke rentang penuh → bar ga reset tiap template.
+          const aiUrl = await comfyGenerate(state.imageUrl, tmpl, comfy,
+            (pct) => dispatch({ type: 'SET_PROGRESS', progress: Math.round((i * 100 + pct) / total) }),
+            controller.signal)
           const local = await localCopies(state.imageUrl, aiUrl, licensed)
-          dispatch({ type: 'SET_PROGRESS', progress: 100 })
-          // finalizeLocal jalan barengan dwell — base siap sebelum preview kebuka, no race
-          const [base] = await Promise.all([
-            finalizeOnce(eventName, local.original, local.ai,
-              (err) => onUploadFailed?.({ stage: 'finalize', error: String(err).slice(0, 300) })),
-            new Promise(r => setTimeout(r, REVEAL_DWELL_MS)),
-          ])
-          const videoUrl = await maybeAnimate(aiUrl, base ?? undefined)
-          dispatch({
-            type: 'SHOW_PREVIEW', aiUrl: local.ai, originalUrl: local.original,
+          const base = await finalizeLocal(eventName, local.original, local.ai,
+            (err) => onUploadFailed?.({ stage: 'finalize', error: String(err).slice(0, 300) }))
+          results.push({
+            templateId: tmpl.id, aiUrl: local.ai, originalUrl: local.original,
             sourceUrl: state.imageUrl, rawAiUrl: aiUrl, base: base ?? undefined,
-            processingSec: Math.round((performance.now() - genStart) / 1000), videoUrl, templateId: state.templates[0].id,
+            processingSec: Math.round((performance.now() - genStart) / 1000),
           })
+        }
+        dispatch({ type: 'SET_PROGRESS', progress: 100 })
+        await new Promise(r => setTimeout(r, REVEAL_DWELL_MS))
+        if (controller.signal.aborted) return // StrictMode double-invoke / unmount — jangan dispatch
+        const r = results[0]
+        const videoUrl = await maybeAnimate(r.rawAiUrl ?? r.aiUrl, r.base)
+        dispatch({
+          type: 'SHOW_PREVIEW', aiUrl: r.aiUrl, originalUrl: r.originalUrl,
+          sourceUrl: r.sourceUrl, rawAiUrl: r.rawAiUrl, base: r.base,
+          processingSec: r.processingSec, videoUrl, templateId: r.templateId,
+          allResults: results.length > 1 ? results : undefined,
         })
+      })()
         .catch(() => { if (!controller.signal.aborted) setTimedOut(true) })
         .finally(() => clearTimeout(timeout))
       return () => { controller.abort(); clearTimeout(timeout); clearInterval(interval) }
@@ -434,7 +451,7 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
     const prepareApiPayload = async () => {
       if (state.templates[0].engine_type !== 'api') return { edit: null, selfieBase64: state.imageUrl }
       const [edit, selfieBase64] = await Promise.all([
-        buildApiEditRequest(state.templates[0], state.userInput, maxTemplates),
+        buildApiEditRequest(state.templates[0], state.userInput),
         resizeDataUrl(state.imageUrl, 1200).catch(() => state.imageUrl),
       ])
       return { edit, selfieBase64 }

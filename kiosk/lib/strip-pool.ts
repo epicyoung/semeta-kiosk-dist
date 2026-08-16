@@ -29,15 +29,22 @@ type PoolInput = {
   shots?: string[]
 }
 
+/** `''` / spasi doang / bukan string = bukan gambar. burnWatermark ngebalikin input apa
+ *  adanya kalau gagal, jadi string kosong dari hulu lewat tanpa dicegat sampai ke <img>. */
+function isUsableUrl(u: unknown): u is string {
+  return typeof u === 'string' && u.trim().length > 0
+}
+
 /** Ori + semua hasil AI jadi satu kolam. Ori duluan — dia satu-satunya yang unik,
- *  sisanya varian. Kosong ga mungkin: minimal selalu ada Ori + 1 AI. */
+ *  sisanya varian. Bisa KOSONG kalau semua URL-nya ga kepakai — pemanggil wajib siap
+ *  (stripSlotCount ngasih 0 → tombol 2-Strip ga muncul sama sekali). */
 export function buildStripPool(input: PoolInput): StripSource[] {
   const results: SwapResult[] = input.allResults?.length
     ? input.allResults
     : [{ templateId: 'single', aiUrl: input.aiUrl, originalUrl: input.originalUrl, rawAiUrl: input.rawAiUrl, sourceUrl: input.sourceUrl }]
 
   const first = results[0]
-  const pool: StripSource[] = (input.shots && input.shots.length > 0)
+  const originals: StripSource[] = (input.shots && input.shots.length > 0)
     ? input.shots.map((shot, idx) => ({
         id: `original-${idx}`,
         kind: 'original',
@@ -51,12 +58,26 @@ export function buildStripPool(input: PoolInput): StripSource[] {
         cleanUrl: first.sourceUrl || first.originalUrl,
       }]
 
+  // Entri tanpa URL kepakai DIBUANG di sini, bukan dijaga di komponen. Kartu kosong bukan
+  // cuma warning `src=""` di console: dia bisa dipilih tamu, ngisi slot, dan nyetak bidang
+  // kosong di kertas yang udah kepotong. Pilihan yang ga ada gambarnya bukan pilihan.
+  const pool = originals.filter(p => isUsableUrl(p.thumbUrl) && isUsableUrl(p.cleanUrl))
+
+  // "Skip AI" ngirim SHOW_PREVIEW dengan aiUrl = foto asli (lihat skipToPreview di
+  // CategoryScreen) — ga ada AI yang dibikin, cuma disalin. Tanpa saringan ini kolamnya
+  // nampilin kartu berlabel "AI" yang isinya foto yang sama persis: tamu ngira dapet dua
+  // hasil beda, dan bisa masukin foto kembar ke satu strip tanpa sadar.
+  const originalCleanUrls = new Set(pool.map(p => p.cleanUrl))
+
   results.forEach((r, i) => {
+    const cleanUrl = r.rawAiUrl || r.aiUrl
+    if (!isUsableUrl(r.aiUrl) || !isUsableUrl(cleanUrl)) return
+    if (originalCleanUrls.has(cleanUrl)) return
     pool.push({
       id: `ai-${r.templateId}-${i}`, // templateId bisa kembar kalau operator pilih template sama 2x
       kind: 'ai',
       thumbUrl: r.aiUrl,
-      cleanUrl: r.rawAiUrl || r.aiUrl,
+      cleanUrl,
     })
   })
 

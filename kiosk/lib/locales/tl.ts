@@ -96,7 +96,7 @@ const tl: Translations = {
   preview_video_dialog_cancel: 'Kanselahin',
   preview_video_cost_note: 'Halaga sa Token',
   preview_btn_print: 'I-print',
-  preview_btn_strip: '2-Strip',
+  preview_btn_strip: 'Layout',
   preview_btn_email: 'Email',
   strip_title: 'Ayusin ang strip mo',
   strip_hint: 'I-tap ang larawan para punan ang susunod na puwang',

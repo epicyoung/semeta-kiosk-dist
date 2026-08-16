@@ -226,32 +226,13 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures }: Pro
 
       <div className="screen-title text-center px-5 pt-5 pb-4">
         <h1 className="h1-glow" style={{ fontSize: 'clamp(32px,5vw,48px)', fontWeight: 500, letterSpacing: '-0.02em', lineHeight: 1.15, marginBottom: 8 }}>
-          {t('liveview_title') as string}
+          {maxShots > 1 ? (t('multicapture_title') as string) : (t('liveview_title') as string)}
         </h1>
         <p style={{ fontSize: 'var(--text-base)', fontWeight: 300, color: 'var(--fg-muted)', lineHeight: 1.618, whiteSpace: 'pre-line' }}>
           {maxShots > 1
-            ? `Ambil hingga ${maxShots} foto asli. Foto pertama dipakai untuk AI, foto lainnya tersedia untuk 2-Strip.`
+            ? `${t('multicapture_counter') as string} ${shots.length === 0 ? 1 : Math.min(shots.length, maxShots)}/${maxShots}`
             : (t('liveview_subtitle') as string)}
         </p>
-
-        {/* Multi-shot thumbnail badges */}
-        {maxShots > 1 && shots.length > 0 && (
-          <div className="flex gap-3 justify-center items-center mt-3">
-            {shots.map((s, idx) => (
-              <div key={idx} className="relative rounded-lg overflow-hidden border-2 shadow-md transition-all" style={{ width: 44, height: 60, borderColor: idx === 0 ? '#a3be8c' : 'rgba(255,255,255,0.3)' }}>
-                <img src={s} alt="" className="w-full h-full object-cover" />
-                <span className="absolute bottom-0 left-0 right-0 text-[9px] text-center font-bold py-0.5" style={{ background: idx === 0 ? 'rgba(163,190,140,0.9)' : 'rgba(0,0,0,0.7)', color: idx === 0 ? '#111' : '#fff' }}>
-                  {idx === 0 ? 'AI Face' : `#${idx + 1}`}
-                </span>
-              </div>
-            ))}
-            {shots.length < maxShots && (
-              <span className="text-xs text-white/60 ml-2">
-                Foto {shots.length} dari {maxShots} diambil
-              </span>
-            )}
-          </div>
-        )}
       </div>
 
       <div className="screen-content">
@@ -379,6 +360,47 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures }: Pro
 
         </div>
         </div>
+
+        {maxShots > 1 && (
+          <div className="shrink-0 flex justify-center gap-2 px-5 pb-5 mt-[-10px]">
+            {Array.from({ length: maxShots }, (_, i) => {
+              const url = shots[i] || null
+              const isCurrent = i === (captured ? shots.length - 1 : shots.length)
+
+              return (
+                <div
+                  key={i}
+                  onClick={() => {
+                    if (i < shots.length) {
+                      setShots(prev => prev.slice(0, i))
+                      setCaptured(null)
+                    }
+                  }}
+                  style={{
+                    width: 45,
+                    height: 60,
+                    borderRadius: 6,
+                    border: isCurrent
+                      ? '2px solid #a78bfa'
+                      : url
+                      ? '1.5px solid rgba(167,139,250,0.6)'
+                      : '1.5px dashed rgba(255,255,255,0.2)',
+                    background: url ? `url(${url}) center/cover no-repeat` : 'rgba(0,0,0,0.2)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: i < shots.length ? 'pointer' : 'default',
+                    transition: 'all 0.2s ease',
+                    position: 'relative',
+                  }}
+                >
+                  {!url && <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.2)', fontWeight: 600 }}>{i + 1}</span>}
+                  {i === 0 && url && (
+                    <span style={{ position: 'absolute', bottom: 2, left: 2, right: 2, fontSize: 8, fontWeight: 700, background: 'rgba(167,139,250,0.85)', color: '#000', borderRadius: 3, textAlign: 'center', lineHeight: 1.2 }}>AI</span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       <div className="screen-actions shrink-0 p-5 flex gap-3">
@@ -400,33 +422,28 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures }: Pro
           </>
         ) : (
           <>
-            <label className="glass-btn h-[72px] px-4 cursor-pointer flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.08)', color: '#ffffff', boxShadow: 'inset 1px 1px 0 rgba(255,255,255,0.15), inset -1px -1px 0 rgba(0,0,0,0.15)' }}>
-              <input type="file" accept="image/*" className="sr-only" onChange={handleBrowse} />
-              📁 Browse
-            </label>
-
-            {shots.length > 0 && (
-              <TouchButton onClick={handleRetakeLast} className="px-4" style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)' }}>
-                ↺ Ulang #{shots.length}
-              </TouchButton>
-            )}
-
-            {shots.length < maxShots ? (
-              captured ? (
-                <TouchButton onClick={() => setCaptured(null)} className="flex-1">
-                  Ambil Foto Ke-{shots.length + 1} →
+            {captured ? (
+              <>
+                <TouchButton variant="secondary" onClick={handleRetakeLast} className="flex-1">
+                  {t('multicapture_retake') as string}
                 </TouchButton>
-              ) : (
+                <TouchButton onClick={() => { if (shots.length < maxShots) setCaptured(null); else handleNextScreen(); }} className="flex-1">
+                  {t('nav_next') as string}
+                </TouchButton>
+              </>
+            ) : (
+              <>
+                <TouchButton variant="secondary" onClick={() => { if (shots.length > 0) handleRetakeLast(); else dispatch({ type: 'BACK' }); }} className="flex-1">
+                  {shots.length > 0 ? `← Previous` : (t('nav_back') as string)}
+                </TouchButton>
+                <label className="glass-btn h-[72px] flex-1 cursor-pointer" style={{ background: 'rgba(255,255,255,0.08)', color: '#ffffff', boxShadow: 'inset 1px 1px 0 rgba(255,255,255,0.15), inset -1px -1px 0 rgba(0,0,0,0.15)' }}>
+                  <input type="file" accept="image/*" className="sr-only" onChange={handleBrowse} />
+                  {t('liveview_browse') as string}
+                </label>
                 <TouchButton onClick={handleCapture} disabled={countdown !== null || !cameraReady} className="flex-1">
-                  📸 Jepret Foto Ke-{shots.length + 1}
+                  {t('liveview_capture') as string}
                 </TouchButton>
-              )
-            ) : null}
-
-            {shots.length > 0 && (
-              <TouchButton onClick={handleNextScreen} className="flex-1" style={{ background: 'var(--brand-btn, #7c3aed)' }}>
-                Lanjut Ke Template →
-              </TouchButton>
+              </>
             )}
           </>
         )}

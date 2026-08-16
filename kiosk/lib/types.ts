@@ -43,7 +43,10 @@ export type Template = {
   overlay_url?: string | null  // PNG transparan (alpha utuh) dibakar di atas slot foto
   layout_config?: { slots: { x: number; y: number; w: number; h: number; r?: number }[] } | null
   // Engine 'api' only (Nano Banana Pro) — semua null/undefined buat engine lain
-  api_model?: string | null      // key ke whitelist Worker; URL asli TIDAK pernah di kiosk
+  // CATATAN: sejak model jadi milik server, field ini TIDAK ikut ke /api/generate. Yang
+  // dipakai Worker = payload_json.api_model di row Supabase (sepaket sama token_cost yang
+  // nagih). Di sini tinggal keterangan template doang — ngubahnya gak ngubah apa pun.
+  api_model?: string | null
   reference_urls?: string[]      // gambar BG dari PB, ikut ke image_urls sebelum foto tamu
   input_label?: string | null    // ada ⇒ screen nameinput muncul; isinya nempel di {input}
   aspect_ratio?: string | null   // enum FAL; null ⇒ biarin FAL yang mutusin
@@ -97,6 +100,8 @@ export type VideoDefaults = {
 
 export type TemplateSource = 'pocketbase' | 'json'
 
+export type Ai4RLayout = 'GRID_4' | 'TRIO_3' | 'GRID_3' | 'SPLIT_2'
+
 export type KioskConfig = {
   brand_color: string
   logo_url?: string
@@ -120,6 +125,9 @@ export type KioskConfig = {
   // Nol token — cuma nyusun ulang aset yang udah jadi. 0/undefined ⇒ tombolnya ga muncul sama sekali.
   ai_strip_slots?: number         // batas atas slot (2–4). Slot nyata = min(ini, isi kolam).
   ai_strip_overlay_url?: string   // overlay PNG 2R (600×1800) — dibakar SEKALI di sheet, bukan per-slot.
+  ai_4r_overlay_url?: string      // overlay PNG 4R Landscape (1800×1200) — dibakar SEKALI di sheet 4R.
+  ai_4r_layout?: Ai4RLayout       // Layout preset 4R (GRID_4 = 2x2, TRIO_3 = 1 portrait + 2 landscape, GRID_3, SPLIT_2).
+  require_4r_overlay?: boolean    // Jika true, mode 4R wajib memiliki overlay 4R terpasang.
   enable_magic_catcher?: boolean  // reaction cam toggle. undefined ⇒ false.
   magic_catcher_device_id?: string // kamera reaction cam (deviceId getUserMedia). ''/undefined ⇒ default.
   magic_catcher_duration_sec?: number // durasi max rekam (detik). undefined ⇒ 15.

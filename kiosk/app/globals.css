@@ -728,6 +728,53 @@ h1, .h1-glow { letter-spacing: -0.02em; }
   .screen-actions-row > * { flex: 1 1 40%; }
 }
 
+/* ── Papan catur "kosong" (composer) ─────────────────────────────────────────
+   Konvensi yang semua orang udah ngerti dari editor gambar: kotak-kotak = ga ada isinya.
+   Dipakai DUA rasa yang beda arti, jangan disamain:
+     bawaan `.checker` → bidang yang bakal KECETAK PUTIH (sisa letterbox di slot terisi).
+                         Putih & nyaris putih, jadi tamu tetep baca "kertas kosong", bukan
+                         "ada motif yang bakal ikut kecetak".
+     .checker--void    → slot yang BELUM diisi. Gelap, nyatu sama panel — belum ada
+                         keputusan apa pun di situ, jadi jangan kelihatan kayak area cetak.
+
+   Nada kertas ditaruh di `.checker` sendiri, BUKAN cuma di modifier: `background-color:
+   var(--x)` tanpa nilai itu invalid-at-computed-value-time → background-color balik ke
+   transparent, dan yang nongol malah latar kanvas yang gelap. Gagalnya diam-diam dan
+   kelihatan "disengaja", persis kasus yang bikin preview beda sama hasil cetak.
+
+   conic-gradient, bukan file PNG: nol request, tajam di DPI berapa pun. */
+.checker {
+  --checker-a: #ffffff;
+  --checker-b: #e6e6e6;
+  background-color: var(--checker-a);
+  background-image: conic-gradient(var(--checker-b) 25%, transparent 0 50%, var(--checker-b) 0 75%, transparent 0);
+  background-size: var(--checker-size, 14px) var(--checker-size, 14px);
+}
+.checker--void { --checker-a: rgba(255,255,255,0.03); --checker-b: rgba(255,255,255,0.05); }
+
+/* Kolam foto composer: satu baris yang di-swipe. Scrollbar disembunyiin — di layar sentuh
+   dia cuma makan tinggi, dan tepi kartu yang kepotong udah jadi petunjuk "masih ada lagi". */
+.strip-pool-scroll { scrollbar-width: none; }
+.strip-pool-scroll::-webkit-scrollbar { height: 0; width: 0; }
+
+/* ── Panggung kanvas composer (2-Strip / 4R) ─────────────────────────────────
+   Kanvas WAJIB seukuran kertas aslinya: 2R strip 1:3, 4R postcard 3:2.
+
+   Bikin kotaknya pakai `aspect-ratio` + `max-width`/`max-height` doang GA CUKUP:
+   begitu salah satu max- nge-clamp, sumbu satunya tetep di nilai eksplisitnya →
+   rasio jebol. Itu persis bug "slot 1-4 jadi kotak lebar gepeng" di portrait —
+   tingginya dipatok min(72vh,620px) sementara lebarnya kena max-width:100%.
+
+   Container query ngitung DUA batas itu sekaligus: tinggi = yang terkecil antara
+   tinggi panggung dan (lebar panggung × rasio). Jadi lebar hasilnya dijamin ga
+   pernah lewat panggung, dan rasio ga pernah jebol — di portrait maupun landscape. */
+.composer-stage { container-type: size; }
+.composer-paper {
+  aspect-ratio: var(--paper-w) / var(--paper-h);
+  height: min(100cqh, calc(100cqw * var(--paper-h) / var(--paper-w)));
+  width: auto;
+}
+
 /* Tab switcher: portrait = normal flow di atas foto, landscape = absolute di flex row container */
 .preview-tab-switcher          { display: flex !important; }
 .preview-tab-switcher-landscape { display: none !important; }

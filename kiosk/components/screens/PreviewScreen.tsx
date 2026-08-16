@@ -53,6 +53,9 @@ type Props = {
     | "magic_catcher_audio"
     | "ai_strip_slots"
     | "ai_strip_overlay_url"
+    | "ai_4r_overlay_url"
+    | "ai_4r_layout"
+    | "require_4r_overlay"
   >;
   licensed: boolean;
   eventName: string;
@@ -423,27 +426,42 @@ export function PreviewScreen({
   // Print session (non-AI) udah punya jalur 2R sendiri lewat template — jangan dobel.
   const canStrip = config.enable_print && !isPrintSession && stripSlots > 0;
 
-  async function doStripPrint(picked: { source: StripSource; transform: SlotTransform }[]) {
+  async function doStripPrint(
+    picked: { source: StripSource; transform: SlotTransform }[],
+    mode: "2R_STRIP" | "4R_LANDSCAPE" = "2R_STRIP",
+  ) {
     setStripPrinting(true);
     setStripError(false);
     try {
+      const is4R = mode === "4R_LANDSCAPE";
       const sheet = await composePrintLayout(
         picked.map((p) => p.source.cleanUrl),
         {
-          print_size: "2R_STRIP",
-          overlay_url: config.ai_strip_overlay_url || null,
+          print_size: is4R ? "4R_LANDSCAPE" : "2R_STRIP",
+          overlay_url: is4R
+            ? (config.ai_4r_overlay_url || null)
+            : (config.ai_strip_overlay_url || null),
           layout_config: null,
         },
         picked.map((p) => p.transform),
+        is4R ? config.ai_4r_layout : undefined,
       );
       const display = licensed || config.bypassed ? sheet : await burnWatermark(sheet);
 
-      if (await printNative(display, qty ?? 1, "strip2")) {
-        setStripOpen(false);
-        return;
+      if (is4R) {
+        if (await printNative(display, qty ?? 1, "print4r")) {
+          setStripOpen(false);
+          return;
+        }
+        await printPhoto(display, qty ?? 1);
+      } else {
+        if (await printNative(display, qty ?? 1, "strip2")) {
+          setStripOpen(false);
+          return;
+        }
+        // Queue RX1-STRIP belum ke-install → 4R 2-up + garis potong, gunting manual.
+        await printPhoto(await to2UpSheet(display), qty ?? 1);
       }
-      // Queue RX1-STRIP belum ke-install → 4R 2-up + garis potong, gunting manual.
-      await printPhoto(await to2UpSheet(display), qty ?? 1);
       setStripOpen(false);
     } catch (err) {
       console.warn("[strip] cetak gagal:", err);
@@ -617,6 +635,9 @@ export function PreviewScreen({
     for (let attempt = 0; attempt < attempts; attempt++) {
       try {
         let resB;
+        // Per-attempt, JANGAN di luar loop — retry ga boleh numpuk _M dari percobaan lama.
+        let mCount = 0;
+        const framedMulti: string[] = [];
         if (isPrintSession) {
           // Classic Print: Hanya upload _B (strip foto yang sudah di-frame).
           // Skip _A (foto mentah) supaya microsite tidak menampilkan tab ASLI.
@@ -627,6 +648,24 @@ export function PreviewScreen({
             compositeFrame(rawOriginal, frameForOriginal?.url ?? null, 1200),
             compositeFrame(rawAi, currentFrame?.url ?? null, 1200),
           ]);
+
+          // Multi-template: chosen (resultIndex) → _B, sisanya → _M1,_M2,… urut index (planMultiUpload).
+          // INDEX-BASED sengaja — "tamu pilih N hasil → semuanya ke-upload" persis kayak grid preview.
+          const plan = planMultiUpload(state.allResults, resultIndex);
+          if (plan && plan.others.length > 0) {
+            mCount = plan.others.length;
+            // SEQUENTIAL composite to prevent GPU/RAM crash (OffscreenCanvas memory spike)
+            for (const r of plan.others) {
+              framedMulti.push(
+                await compositeFrame(
+                  r.rawAiUrl ?? r.aiUrl,
+                  currentFrame?.url ?? null,
+                  1200,
+                ),
+              );
+            }
+          }
+
           const results = await Promise.all([
             uploadAsset(framedA, "A", base, meta),
             uploadAsset(framedB, "B", base, { ...meta, mCount }),
@@ -2157,6 +2196,9 @@ export function PreviewScreen({
           printing={stripPrinting}
           error={stripError}
           overlayUrl={config.ai_strip_overlay_url}
+          overlay4rUrl={config.ai_4r_overlay_url}
+          ai4rLayout={config.ai_4r_layout}
+          require4rOverlay={config.require_4r_overlay ?? true}
           onCancel={() => setStripOpen(false)}
           onConfirm={doStripPrint}
         />

@@ -306,7 +306,7 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource }: Props) {
           </div>
         </div>
 
-        {isPrint && (
+        {target > 1 && (
           <div className="shrink-0 flex justify-center gap-2 px-5 pb-5 mt-[-10px]">
             {Array.from({ length: target }, (_, i) => {
               const isConfirmed = i < confirmedCount
@@ -350,7 +350,7 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource }: Props) {
         {!done && !isReviewingPending && (
           <>
             <TouchButton variant="secondary" onClick={handlePopPrevious} className="flex-1">
-              {confirmedCount > 0 ? `← Foto ${confirmedCount}` : (t('nav_back') as string)}
+              {confirmedCount > 0 ? `← Previous` : (t('nav_back') as string)}
             </TouchButton>
             <label className="glass-btn h-[72px] flex-1 cursor-pointer" style={{ background: 'rgba(255,255,255,0.08)', color: '#ffffff', boxShadow: 'inset 1px 1px 0 rgba(255,255,255,0.15), inset -1px -1px 0 rgba(0,0,0,0.15)' }}>
               <input type="file" accept="image/*" className="sr-only" onChange={handleBrowse} />
