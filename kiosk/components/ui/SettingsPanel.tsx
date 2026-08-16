@@ -21,10 +21,11 @@ const ENGINE_OPTS: { value: EngineKey; label: string; soon?: boolean }[] = [
   { value: 'fullbody_api',   label: 'Fullbody (API)' },
 ]
 const API_MODEL_OPTS = [
-  { value: 'nanobanana2', label: 'Nano Banana Pro' },
-  { value: 'gptimg2',     label: 'GPT Image 2'     },
-  { value: 'flux1dev',    label: 'Flux.1 dev'      },
-  { value: 'flux2pro',    label: 'Flux 2 Pro'      },
+  { value: 'nano-banana-pro', label: 'Nano Banana Pro' },
+  { value: 'nano-banana-2',   label: 'Nano Banana 2 (Flash)' },
+  { value: 'gptimg2',         label: 'GPT Image 2 — soon', soon: true },
+  { value: 'flux1dev',        label: 'Flux.1 dev — soon',  soon: true },
+  { value: 'flux2pro',        label: 'Flux 2 Pro — soon',  soon: true },
 ]
 const CAMERA_OPTS = [
   { value: 'webcam', label: 'Webcam (getUserMedia)' },
@@ -235,7 +236,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   const [pbUrl,           setPbUrl]           = useState(config.pocketbase_url ?? 'http://localhost:8090')
   const [pbStatus,        setPbStatus]        = useState<PbStatus>('idle')
   const [engine,          setEngine]          = useState<EngineKey>((config.engine_mode as EngineKey) || 'faceswap_local')
-  const [apiModel,        setApiModel]        = useState(config.api_model || 'nanobanana2')
+  const [apiModel,        setApiModel]        = useState(config.api_model || 'nano-banana-pro')
   const [camera,          setCamera]          = useState(config.camera_source || 'webcam')
   const [comfyFamily,     setComfyFamily]     = useState<ComfyModelFamily>(config.comfy_model_family ?? 'sd15')
   const [comfyCheckpoint, setComfyCheckpoint] = useState(config.comfy_checkpoint ?? 'epicrealism_pureEvolutionV5.safetensors')
