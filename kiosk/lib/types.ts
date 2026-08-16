@@ -42,6 +42,12 @@ export type Template = {
   print_size?: PrintSize | null // null ⇒ '4R_PORTRAIT'
   overlay_url?: string | null  // PNG transparan (alpha utuh) dibakar di atas slot foto
   layout_config?: { slots: { x: number; y: number; w: number; h: number; r?: number }[] } | null
+  // Engine 'api' only (Nano Banana Pro) — semua null/undefined buat engine lain
+  api_model?: string | null      // key ke whitelist Worker; URL asli TIDAK pernah di kiosk
+  reference_urls?: string[]      // gambar BG dari PB, ikut ke image_urls sebelum foto tamu
+  input_label?: string | null    // ada ⇒ screen nameinput muncul; isinya nempel di {input}
+  aspect_ratio?: string | null   // enum FAL; null ⇒ biarin FAL yang mutusin
+  billing_id?: string | null     // UUID row templates SUPABASE buat nagih token (id PB bukan uuid)
 }
 
 export type Face = {
@@ -109,6 +115,10 @@ export type KioskConfig = {
   camera_source?: string
   api_model?: string
   max_templates?: number          // VIP multi-template: 1 (default) — 4. undefined ⇒ 1.
+  // Strip 2R dari hasil AI: tamu nyusun sendiri hasil AI + Ori jadi strip pas tombol Cetak 2-Strip.
+  // Nol token — cuma nyusun ulang aset yang udah jadi. 0/undefined ⇒ tombolnya ga muncul sama sekali.
+  ai_strip_slots?: number         // batas atas slot (2–4). Slot nyata = min(ini, isi kolam).
+  ai_strip_overlay_url?: string   // overlay PNG 2R (600×1800) — dibakar SEKALI di sheet, bukan per-slot.
   enable_magic_catcher?: boolean  // reaction cam toggle. undefined ⇒ false.
   magic_catcher_device_id?: string // kamera reaction cam (deviceId getUserMedia). ''/undefined ⇒ default.
   magic_catcher_duration_sec?: number // durasi max rekam (detik). undefined ⇒ 15.
@@ -158,10 +168,14 @@ export type KioskState =
   | { screen: 'faceassign'; imageUrl: string; templates: Template[]; category: string; faces: Face[]; currentTemplateIndex: number; templateSlots: FaceSlot[]; assignments: FaceAssignments; allMappings: (number | null)[][] }
   // Photo Print: layout dipilih dulu → jepret N kali di sini (kebalikan flow AI yang foto duluan)
   | { screen: 'multicapture'; template: Template; shots: string[] }
+  // Engine 'api' dengan input_label: tamu ngetik nama SEBELUM processing (nilainya masuk prompt
+  // berbayar, jadi harus udah pasti pas /api/generate ditembak). Template tanpa input_label lewat.
+  | { screen: 'nameinput'; imageUrl: string; templates: Template[]; category: string }
   // faceMapping[i] = index selfie face (L-R) buat slot template ke-i (L-R). null = slot dilewat.
   // templates: 1 (biasa) atau 2-4 (VIP multi). Swap sequential, 1 selfie mapping dipakai semua.
   // shots: engine 'print' only — N jepretan buat compose layout, imageUrl = shots[0]
-  | { screen: 'processing'; progress: number; step: 1 | 2 | 3; imageUrl: string; templates: Template[]; faceMappings?: (number | null)[][]; shots?: string[]; assignments?: FaceAssignments }
+  // userInput = teks tamu yang udah disanitasi (lihat lib/prompt-input.ts), disuntik ke {input}
+  | { screen: 'processing'; progress: number; step: 1 | 2 | 3; imageUrl: string; templates: Template[]; faceMappings?: (number | null)[][]; shots?: string[]; assignments?: FaceAssignments; userInput?: string }
   // sourceUrl = selfie bersih (pre-watermark) buat BACK/re-edit + upload _A. originalUrl bisa
   // ke-burn watermark (freemium), jangan dipakai sbg sumber re-detect/upload.
   // rawAiUrl = hasil AI bersih (pre-watermark) buat upload _B. base = seq key dari finalizeLocal.
@@ -187,7 +201,8 @@ export type KioskAction =
   | { type: 'ASSIGN_FACE'; faceId: string; slotId: string }
   | { type: 'UNASSIGN_FACE'; faceId: string }
   | { type: 'NEXT_FACE_ASSIGN'; mappings: (number | null)[] }
-  | { type: 'START_PROCESSING'; faceMappings?: (number | null)[][] }
+  | { type: 'GO_NAME_INPUT' } // template (engine 'api' + input_label) → nameinput
+  | { type: 'START_PROCESSING'; faceMappings?: (number | null)[][]; userInput?: string }
   | { type: 'SET_PROGRESS'; progress: number }
   // direct = skip framechooser langsung ke preview (Photo Print: overlay udah dibakar, frame dobel haram)
   | { type: 'SHOW_PREVIEW'; aiUrl: string; originalUrl: string; sourceUrl?: string; rawAiUrl?: string; base?: string; processingSec?: number; videoUrl?: string; direct?: boolean; printSize?: PrintSize; templateId?: string; allResults?: SwapResult[] }

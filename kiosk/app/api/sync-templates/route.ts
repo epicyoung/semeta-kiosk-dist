@@ -4,6 +4,7 @@ import path from 'path'
 import sharp from 'sharp'
 import { computeTargetHeight, computeTargetWidth, computeCropTop, computeCropLeft, HEADROOM_RATIO } from '@/lib/crop'
 import { parseSidecar, type TemplateSidecar } from '@/lib/template-sidecar'
+import { hasPlaceholder } from '@/lib/prompt-input'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -138,7 +139,16 @@ function scanFolder(inbox: string): FolderFile[] {
       result.push({ name: toTitleCase(entry.name), category: DEFAULT_CATEGORY, fp, sidecar: readSidecar(fp) })
     }
   }
-  return result
+  // Gambar referensi (engine 'api') tinggal SEFOLDER sama thumbnail, jadi loop di atas
+  // ngangkat dia jadi template sendiri — halte kosong nongol di grid pilihan tamu.
+  // Buang berdasarkan yang beneran dirujuk sidecar, bukan tebak-tebakan nama file.
+  const referenced = new Set<string>()
+  for (const f of result) {
+    for (const ref of f.sidecar?.reference_images ?? []) {
+      referenced.add(path.resolve(path.dirname(f.fp), ref))
+    }
+  }
+  return referenced.size === 0 ? result : result.filter(f => !referenced.has(path.resolve(f.fp)))
 }
 
 // ── PocketBase calls ──────────────────────────────────────────────────────────
@@ -194,6 +204,26 @@ async function uploadTemplate(token: string, f: FolderFile, buf: Buffer, mime: s
       const raw = fs.readFileSync(f.fp)
       fd.append('overlay', new Blob([new Uint8Array(raw)], { type: 'image/png' }), path.basename(f.fp))
     }
+  }
+  // Engine 'api' (Nano Banana Pro): model + label input + rasio, lalu gambar referensi BG.
+  if (f.sidecar?.api_model) fd.append('api_model', f.sidecar.api_model)
+  if (f.sidecar?.input_field) fd.append('input_label', f.sidecar.input_field.label)
+  if (f.sidecar?.aspect_ratio) fd.append('aspect_ratio', f.sidecar.aspect_ratio)
+  if (f.sidecar?.billing_id) fd.append('billing_id', f.sidecar.billing_id)
+  for (const refName of f.sidecar?.reference_images ?? []) {
+    const dir = path.dirname(f.fp)
+    const refPath = path.join(dir, refName)
+    // parseSidecar udah nolak path traversal; ini sabuk kedua — kalau resolve-nya nyasar
+    // keluar folder template, jangan dibaca sama sekali.
+    if (path.relative(dir, refPath).startsWith('..')) continue
+    // Keberadaan file udah dicek di addTasks (template di-SKIP kalau hilang) — kalau
+    // sampai di sini masih gak ada, lebih baik meledak daripada naik tanpa BG diam-diam.
+    if (!fs.existsSync(refPath)) throw new Error(`referensi hilang: ${refName}`)
+    // Di-downscale pakai pipeline yang sama — referensi ini bakal jadi data URI di tiap
+    // request generate, jadi ukurannya kena ongkos berulang, bukan sekali.
+    const refBuf = await normalizeJpeg(sharp(refPath))
+    fd.append('reference', new Blob([new Uint8Array(refBuf)], { type: 'image/jpeg' }),
+      path.basename(refName, path.extname(refName)) + '.jpg')
   }
   fd.append('is_active', 'true')
   // ponytail: isi selalu JPEG (normalizeJpeg) → paksa ekstensi .jpg biar filename ga bohong (input .png)
@@ -271,6 +301,23 @@ export async function POST(req: Request) {
         const addTasks = toAdd.map(f => async () => {
           const dims = await readDims(f.fp)
           if (!dims) { skipped.push({ name: `${f.category}/${f.name}`, reason: 'tidak bisa baca dimensi' }); current++; send({ kind: 'progress', current, total, name: f.name }); return }
+          // Sidecar minta tamu ngetik tapi prompt-nya gak punya {input} → tamu tetep disuruh
+          // ngetik, nama dibuang diam-diam, token tetep kepotong. Tolak di sini, bukan nanti.
+          if (f.sidecar?.input_field && !hasPlaceholder(f.sidecar.positive_prompt ?? '')) {
+            skipped.push({ name: `${f.category}/${f.name}`, reason: 'input_field diisi tapi positive_prompt gak punya {input}' })
+            current++; send({ kind: 'progress', current, total, name: f.name }); return
+          }
+          // Referensi didaftarin tapi filenya gak ada → SKIP seluruh template. Gambar
+          // put-template-here di-gitignore sedangkan sidecar-nya enggak, jadi "JSON ada,
+          // gambar gak ikut" itu kejadian normal pas clone/pull. Kalau cuma referensinya
+          // yang dilewat, template tetep naik dan tamu bayar token buat hasil TANPA BG —
+          // gagal diam-diam yang cuma ketauan setelah cetakan keluar.
+          const missingRef = (f.sidecar?.reference_images ?? [])
+            .find(r => !fs.existsSync(path.join(path.dirname(f.fp), r)))
+          if (missingRef) {
+            skipped.push({ name: `${f.category}/${f.name}`, reason: `file referensi gak ada: ${missingRef}` })
+            current++; send({ kind: 'progress', current, total, name: f.name }); return
+          }
           try {
             const out = f.sidecar?.engine_type === 'print'
               ? { buf: await normalizeJpeg(sharp(f.fp)), mime: 'image/jpeg', cropped: false, detectDown: false }

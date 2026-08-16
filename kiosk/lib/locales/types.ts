@@ -52,6 +52,16 @@ export interface Translations {
   multicapture_review_title: string // judul review grid setelah semua shot
   multicapture_retake: string
 
+  // ── NameInputScreen ──────────────────────────────────────────────────────────
+  // Engine 'api': teks tamu yang disuntik ke {input} di prompt. Judul screen pakai
+  // input_label dari template (per-template), jadi ga ada key buat itu di sini.
+  nameinput_subtitle: string
+  nameinput_placeholder: string
+  nameinput_hint: string          // wajib: kasih tau tamu namanya KELIHATAN di cetakan
+  nameinput_back: string
+  nameinput_next: string
+  nameinput_skip: string          // nama opsional — label tombol pas field masih kosong
+
   // ── ProcessingScreen ─────────────────────────────────────────────────────────
   processing_title: string
   processing_subtitle: string
@@ -96,7 +106,20 @@ export interface Translations {
   preview_video_cost_note: string   // "Cost Token" sub-label
   // Main action buttons
   preview_btn_print: string
+  preview_btn_strip: string
   preview_btn_email: string
+
+  // ── StripComposer (susun strip 2R dari hasil AI) ─────────────────────────────
+  strip_title: string
+  strip_hint: string
+  strip_hint_full: string
+  strip_slot_empty: string        // aria-label slot kosong
+  strip_slot_clear: string        // aria-label slot terisi (tap = buang)
+  strip_label_original: string
+  strip_label_ai: string
+  strip_two_copies: string        // printer motong jadi 2 strip identik — tamu wajib dikasih tau
+  strip_print_failed: string
+  strip_print_btn: string
   preview_btn_make_video: string
   preview_btn_video_ready: string
   preview_btn_rechoose: string
@@ -232,6 +255,10 @@ export interface Translations {
   // VIP multi-template + Magic Catcher
   set_max_templates: string
   set_max_templates_hint: string
+  set_ai_strip: string
+  set_ai_strip_off: string
+  set_ai_strip_hint: string
+  set_ai_strip_overlay_hint: string
   set_magic_catcher: string
   set_magic_catcher_hint: string
   // Opsional — baru ada di en/id, locale lain fallback ke en (resolveT). Optional biar 9 locale

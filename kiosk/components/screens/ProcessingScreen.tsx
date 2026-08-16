@@ -10,6 +10,7 @@ import { compositeFrame } from '@/lib/frame-composite'
 import { composePrintLayout } from '@/lib/print-layout'
 import { useT } from '@/lib/i18n'
 import { finalizeLocal, localCopies } from '@/lib/local-finalize'
+import { buildApiEditRequest } from '@/lib/api-engine'
 
 // dataUrl or regular URL → Blob
 async function toBlob(url: string): Promise<Blob> {
@@ -236,6 +237,21 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
     return base
   }
 
+  // Versi batch buat N variasi dari SATU generate (num_images > 1). Tiap variasi tetep dapet
+  // seq sendiri (file & entri microsite kepisah), tapi guard-nya sama: sekali per sesi.
+  // Tanpa ini, effect yang jalan 2x bikin 4 variasi jadi 8 file — bug bf04ca4 versi kali empat.
+  const finalizeAllOnce = async (pairs: { original: string; ai: string }[]): Promise<(string | null)[]> => {
+    if (finalizedRef.current) return pairs.map(() => null)
+    finalizedRef.current = true
+    const bases: (string | null)[] = []
+    for (const p of pairs) {
+      bases.push(await finalizeLocal(eventName, p.original, p.ai,
+        (err) => onUploadFailed?.({ stage: 'finalize', error: String(err).slice(0, 300) })))
+    }
+    if (bases.every(b => !b)) finalizedRef.current = false // semua gagal → retry beneran boleh jalan
+    return bases
+  }
+
   // Magic Catcher DIPINDAH ke PreviewScreen (mulai pas tamu PERTAMA lihat hasil AI di
   // framechooser/preview — momen reaksi asli), BUKAN di sini pas layar loading generate.
 
@@ -408,35 +424,72 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
     const timeout = setTimeout(() => { controller.abort(); setTimedOut(true) }, 120_000)
 
     dispatch({ type: 'SET_PROGRESS', progress: 10 })
-    fetch('/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        template_id: state.templates[0].id,
-        image_base64: state.imageUrl,
-        assignments: state.assignments,
-      }),
-      signal: controller.signal,
-    })
+    // Engine 'api' (Nano Banana Pro): prompt + referensi BG nyusul di body. Referensi
+    // di-load duluan jadi data URI — kalau ada yang gagal, buildApiEditRequest ngelempar
+    // dan generate batal SEBELUM token kepotong (bukan bikin hasil tanpa BG).
+    const apiEdit = state.templates[0].engine_type === 'api'
+      ? buildApiEditRequest(state.templates[0], state.userInput)
+      : Promise.resolve(null)
+    apiEdit
+      .then((edit) => fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          // billing_id = UUID row templates di Supabase. RPC deduct_token nerima uuid,
+          // sedangkan id PocketBase string 15-char → tanpa ini RPC balas 400 dan generate
+          // mati sebelum nyentuh FAL. Template lama (source json, id-nya emang uuid) jatuh
+          // ke `id` seperti sebelumnya.
+          template_id: state.templates[0].billing_id || state.templates[0].id,
+          image_base64: state.imageUrl,
+          assignments: state.assignments,
+          ...(edit ?? {}),
+        }),
+        signal: controller.signal,
+      }))
       .then(async (res) => {
         dispatch({ type: 'SET_PROGRESS', progress: 90 })
         if (!res.ok) { setTimedOut(true); return }
-        const { url } = await res.json()
-        const local = await localCopies(state.imageUrl, url, licensed)
+        // urls = semua variasi (num_images dari payload_json Supabase). Worker lama yang
+        // cuma balikin `url` tetep kelayan lewat fallback ini.
+        const { url, urls } = await res.json()
+        const list: string[] = Array.isArray(urls) && urls.length > 0 ? urls : [url]
+
+        // Sequential, HARAM Promise.all: tiap localCopies bikin canvas full-res buat burn
+        // watermark — empat sekaligus bikin mesin lapangan mepet memori.
+        const locals: { raw: string; original: string; ai: string }[] = []
+        for (const u of list) locals.push({ raw: u, ...(await localCopies(state.imageUrl, u, licensed)) })
         dispatch({ type: 'SET_PROGRESS', progress: 100 })
-        const [base] = await Promise.all([
-          finalizeOnce(eventName, local.original, local.ai,
-            (err) => onUploadFailed?.({ stage: 'finalize', error: String(err).slice(0, 300) })),
+
+        const [bases] = await Promise.all([
+          finalizeAllOnce(locals.map(l => ({ original: l.original, ai: l.ai }))),
           new Promise(r => setTimeout(r, REVEAL_DWELL_MS)),
         ])
-        const videoUrl = await maybeAnimate(url, base ?? undefined)
+        const results: SwapResult[] = locals.map((l, i) => ({
+          templateId: state.templates[0].id,
+          aiUrl: l.ai, originalUrl: l.original,
+          sourceUrl: state.imageUrl, rawAiUrl: l.raw,
+          base: bases[i] ?? undefined,
+          processingSec: Math.round((performance.now() - genStart) / 1000),
+        }))
+        // Variasi ke-0 = default kepilih. Sama persis bentuknya kayak multi-template lokal,
+        // jadi grid pemilih + planMultiUpload + print/video di PreviewScreen kepake apa adanya.
+        const r0 = results[0]
+        const base = r0.base ?? null
+        const videoUrl = await maybeAnimate(r0.rawAiUrl ?? r0.aiUrl, base ?? undefined)
         dispatch({
-          type: 'SHOW_PREVIEW', aiUrl: local.ai, originalUrl: local.original,
-          sourceUrl: state.imageUrl, rawAiUrl: url, base: base ?? undefined,
-          processingSec: Math.round((performance.now() - genStart) / 1000), videoUrl, templateId: state.templates[0].id,
+          type: 'SHOW_PREVIEW', aiUrl: r0.aiUrl, originalUrl: r0.originalUrl,
+          allResults: results.length > 1 ? results : undefined,
+          sourceUrl: r0.sourceUrl, rawAiUrl: r0.rawAiUrl, base: base ?? undefined,
+          processingSec: r0.processingSec, videoUrl, templateId: r0.templateId,
         })
       })
-      .catch((err) => { if (err.name !== 'AbortError') setTimedOut(true) })
+      // Log dulu baru layar error: sebabnya (referensi ga ke-load / FAL nolak) cuma
+      // kelihatan di sini. Tanpa ini operator cuma liat "gagal" tanpa petunjuk apa pun.
+      .catch((err) => {
+        if (err?.name === 'AbortError') return
+        console.error('[generate] gagal:', err)
+        setTimedOut(true)
+      })
       .finally(() => clearTimeout(timeout))
 
     return () => { controller.abort(); clearTimeout(timeout); clearInterval(interval) }

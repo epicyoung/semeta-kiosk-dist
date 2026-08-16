@@ -80,12 +80,28 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
       }
     }
 
+    case 'GO_NAME_INPUT':
+      // Engine 'api' + input_label → tamu ngetik dulu. Guard input_label: screen ini ga ada
+      // gunanya tanpa {input} di prompt, dan jangan sampai jadi jalan buntu buat engine lain.
+      if (state.screen !== 'template' || state.selected.length !== 1) return state
+      if (state.selected[0].engine_type !== 'api' || !state.selected[0].input_label) return state
+      if (state.imageUrl === '') return state
+      return { screen: 'nameinput', imageUrl: state.imageUrl, category: state.category, templates: state.selected }
+
     case 'START_PROCESSING':
       // Template comfy skip FaceAssign — NEXT di TemplateScreen langsung ke processing.
       // Comfy TIDAK pernah multi-select → cuma jalur single (selected.length === 1).
       // Guard engine_type: defense-in-depth, non-comfy wajib lewat faceassign.
       if (state.screen === 'template' && state.selected.length === 1 && state.selected[0].engine_type === 'comfy')
         return { screen: 'processing', progress: 0, step: 1, imageUrl: state.imageUrl, templates: state.selected, assignments: {} }
+      // Engine 'api' tanpa input_label (mis. prompt double-decker) — ga ada yang perlu diketik,
+      // lompat langsung kayak comfy. Yang PUNYA input_label wajib lewat nameinput (cabang bawah).
+      if (state.screen === 'template' && state.selected.length === 1
+        && state.selected[0].engine_type === 'api' && !state.selected[0].input_label)
+        return { screen: 'processing', progress: 0, step: 1, imageUrl: state.imageUrl, templates: state.selected, assignments: {} }
+      // nameinput → processing, bawa teks yang udah disanitasi di screen-nya.
+      if (state.screen === 'nameinput')
+        return { screen: 'processing', progress: 0, step: 1, imageUrl: state.imageUrl, templates: state.templates, assignments: {}, userInput: action.userInput }
       // Photo Print: multicapture selesai → processing bawa semua shot (compose lokal, bukan AI)
       if (state.screen === 'multicapture') {
         if (state.shots.length === 0) return state
@@ -133,6 +149,7 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
       // Flow print (imageUrl '' — belum ada foto): BACK dari pemilih layout = pulang ke idle
       if (state.screen === 'template') return state.imageUrl === '' ? { screen: 'idle' } : { screen: 'category', imageUrl: state.imageUrl, selected: state.selected }
       if (state.screen === 'multicapture') return { screen: 'template', imageUrl: '', category: '', selected: [] }
+      if (state.screen === 'nameinput') return { screen: 'template', imageUrl: state.imageUrl, category: state.category, selected: state.templates }
       if (state.screen === 'faceassign') {
         if (state.currentTemplateIndex > 0) {
           return { ...state, currentTemplateIndex: state.currentTemplateIndex - 1, assignments: {}, templateSlots: [] }

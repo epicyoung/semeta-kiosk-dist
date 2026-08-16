@@ -114,6 +114,12 @@ export function TemplateScreen({ state, dispatch, templates, maxTemplates, engin
             const first = state.selected[0]
             // print = photobooth non-AI → masuk capture loop (foto N kali setelah pilih layout)
             if (state.selected.length === 1 && first.engine_type === 'print') { dispatch({ type: 'START_CAPTURE_LOOP' }); return }
+            // api = Nano Banana Pro, regenerate penuh dari prompt+referensi → gak ada slot muka.
+            // Punya input_label → tamu ngetik dulu; enggak → langsung processing kayak comfy.
+            if (state.selected.length === 1 && first.engine_type === 'api') {
+              dispatch(first.input_label ? { type: 'GO_NAME_INPUT' } : { type: 'START_PROCESSING' })
+              return
+            }
             // comfy = img2img dari prompt, gak ada slot muka → skip FaceAssign. Comfy selalu single.
             dispatch(state.selected.length === 1 && first.engine_type === 'comfy' ? { type: 'START_PROCESSING' } : { type: 'CONFIRM_TEMPLATE' })
           }}

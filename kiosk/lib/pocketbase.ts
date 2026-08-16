@@ -59,9 +59,16 @@ export async function fetchPocketBaseFrames(pbUrl: string): Promise<Frame[]> {
   }
 }
 
+// Enum aspect_ratio FAL. PB Admin bisa diedit tangan — nilai ngawur di sini bikin FAL
+// balas 422 SETELAH token kepotong, jadi disaring di kiosk juga (Worker tetep nyaring lagi).
+const FAL_ASPECT_RATIOS = ['21:9', '16:9', '3:2', '4:3', '5:4', '1:1', '4:5', '3:4', '2:3', '9:16']
+
 export function mapPbTemplate(pbUrl: string, item: Record<string, unknown>): Template {
   const thumb = item.thumbnail as string | null | undefined
   const overlay = item.overlay as string | null | undefined
+  // file field maxSelect>1 → PB balikin array nama file. Nilai selain string dibuang.
+  const refs = Array.isArray(item.reference) ? item.reference.filter((f): f is string => typeof f === 'string' && f.length > 0) : []
+  const aspect = String(item.aspect_ratio ?? '')
   return {
     id: String(item.id ?? ''),
     name: String(item.name ?? ''),
@@ -83,5 +90,11 @@ export function mapPbTemplate(pbUrl: string, item: Record<string, unknown>): Tem
     shot_count: Number(item.shot_count) > 0 ? Math.min(6, Math.trunc(Number(item.shot_count))) : null,
     print_size: (['4R_PORTRAIT', '4R_LANDSCAPE', '2R_STRIP'] as const).includes(String(item.print_size) as PrintSize) ? (item.print_size as PrintSize) : null,
     overlay_url: overlay ? `${pbUrl}/api/files/templates/${String(item.id)}/${overlay}` : null,
+    // Engine 'api' — unset di PB = null/[] (template lain gak kesentuh sama sekali).
+    api_model: (item.api_model as string) || null,
+    reference_urls: refs.map(f => `${pbUrl}/api/files/templates/${String(item.id)}/${f}`),
+    input_label: (item.input_label as string) || null,
+    aspect_ratio: FAL_ASPECT_RATIOS.includes(aspect) ? aspect : null,
+    billing_id: (item.billing_id as string) || null,
   }
 }
