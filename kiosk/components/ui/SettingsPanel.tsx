@@ -249,6 +249,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   const [comfySteps,      setComfySteps]      = useState(config.comfy_steps ?? '')
   const [comfyCnStrength, setComfyCnStrength] = useState(config.comfy_cn_strength ?? '')
   const [maxTemplates,    setMaxTemplates]    = useState(config.max_templates ?? 1)
+  const [originalCaptures, setOriginalCaptures] = useState(config.original_captures ?? 1)
   const [aiStripSlots,    setAiStripSlots]    = useState(config.ai_strip_slots ?? 0)
   const [aiStripOverlay,  setAiStripOverlay]  = useState(config.ai_strip_overlay_url ?? '')
   const stripOverlayInputRef = useRef<HTMLInputElement>(null)
@@ -762,6 +763,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         comfy_steps:        comfySteps,
         comfy_cn_strength:  comfyCnStrength,
         max_templates:      maxTemplates,
+        original_captures:  originalCaptures,
         ai_strip_slots:      aiStripSlots,
         ai_strip_overlay_url: aiStripOverlay.trim(),
         enable_magic_catcher: magicCatcher,
@@ -1242,6 +1244,18 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                   Disembunyikan jika mode Photo Print (non-AI) agar UI tidak membingungkan. */}
               {engine !== 'print_local' && (
                 <div style={{ padding: '12px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>Original Photo Captures</span>
+                    <Sel
+                      value={String(originalCaptures)}
+                      options={[{ value: '1', label: '1 Photo' }, { value: '2', label: '2 Photos' }, { value: '3', label: '3 Photos' }, { value: '4', label: '4 Photos' }]}
+                      onChange={v => setOriginalCaptures(Number(v))}
+                    />
+                  </div>
+                  <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '0 0 12px' }}>
+                    Berapa foto asli yang diambil tamu. Foto ke-1 dipakai untuk AI (pose fixed), foto lainnya tersedia untuk disusun di 2-Strip.
+                  </p>
+
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{t('set_ai_strip') as string}</span>
                     <Sel

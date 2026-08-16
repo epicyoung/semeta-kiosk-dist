@@ -253,7 +253,7 @@ export function KioskApp({ config: initialConfig }: { config: KioskConfig }) {
     switch (state.screen) {
       case 'idle':        return <IdleScreen dispatch={wrappedDispatch} isPaused={isPaused} />
       case 'consent':     return <ConsentScreen dispatch={wrappedDispatch} />
-      case 'liveview':    return <LiveViewScreen state={state} dispatch={wrappedDispatch} cameraSource={config.camera_source} />
+      case 'liveview':    return <LiveViewScreen state={state} dispatch={wrappedDispatch} cameraSource={config.camera_source} originalCaptures={config.original_captures} />
       case 'category':    return <CategoryScreen state={state} dispatch={wrappedDispatch} templates={templates} eventName={config.event_name} licensed={config.licensed ?? false} />
       // Multi-template cuma faceswap LOCAL (butuh face_server :8000 buat sequential swap).
       // Fullbody (comfy) & faceswap API = selalu single-select.

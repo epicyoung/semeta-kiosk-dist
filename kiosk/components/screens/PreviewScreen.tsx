@@ -414,6 +414,7 @@ export function PreviewScreen({
             originalUrl: state.originalUrl,
             rawAiUrl: state.rawAiUrl,
             sourceUrl: state.sourceUrl,
+            shots: state.shots,
           })
         : [],
     [state],

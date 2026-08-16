@@ -26,6 +26,7 @@ type PoolInput = {
   originalUrl: string
   rawAiUrl?: string
   sourceUrl?: string
+  shots?: string[]
 }
 
 /** Ori + semua hasil AI jadi satu kolam. Ori duluan — dia satu-satunya yang unik,
@@ -36,12 +37,19 @@ export function buildStripPool(input: PoolInput): StripSource[] {
     : [{ templateId: 'single', aiUrl: input.aiUrl, originalUrl: input.originalUrl, rawAiUrl: input.rawAiUrl, sourceUrl: input.sourceUrl }]
 
   const first = results[0]
-  const pool: StripSource[] = [{
-    id: 'original',
-    kind: 'original',
-    thumbUrl: first.originalUrl,
-    cleanUrl: first.sourceUrl || first.originalUrl,
-  }]
+  const pool: StripSource[] = (input.shots && input.shots.length > 0)
+    ? input.shots.map((shot, idx) => ({
+        id: `original-${idx}`,
+        kind: 'original',
+        thumbUrl: idx === 0 ? first.originalUrl : shot,
+        cleanUrl: idx === 0 ? (first.sourceUrl || first.originalUrl) : shot,
+      }))
+    : [{
+        id: 'original',
+        kind: 'original',
+        thumbUrl: first.originalUrl,
+        cleanUrl: first.sourceUrl || first.originalUrl,
+      }]
 
   results.forEach((r, i) => {
     pool.push({

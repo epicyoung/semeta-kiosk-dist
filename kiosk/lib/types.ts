@@ -115,6 +115,7 @@ export type KioskConfig = {
   camera_source?: string
   api_model?: string
   max_templates?: number          // VIP multi-template: 1 (default) — 4. undefined ⇒ 1.
+  original_captures?: number      // Jumlah foto asli per tamu (1–4). undefined/1 ⇒ 1. Foto #1 diproses AI, sisanya masuk ke 2-Strip pool.
   // Strip 2R dari hasil AI: tamu nyusun sendiri hasil AI + Ori jadi strip pas tombol Cetak 2-Strip.
   // Nol token — cuma nyusun ulang aset yang udah jadi. 0/undefined ⇒ tombolnya ga muncul sama sekali.
   ai_strip_slots?: number         // batas atas slot (2–4). Slot nyata = min(ini, isi kolam).
@@ -163,26 +164,26 @@ export type KioskState =
   | { screen: 'idle' }
   | { screen: 'consent' }
   | { screen: 'liveview' }
-  | { screen: 'category'; imageUrl: string; selected?: Template[] }
-  | { screen: 'template'; selected: Template[]; category: string; imageUrl: string }
-  | { screen: 'faceassign'; imageUrl: string; templates: Template[]; category: string; faces: Face[]; currentTemplateIndex: number; templateSlots: FaceSlot[]; assignments: FaceAssignments; allMappings: (number | null)[][] }
+  | { screen: 'category'; imageUrl: string; selected?: Template[]; shots?: string[] }
+  | { screen: 'template'; selected: Template[]; category: string; imageUrl: string; shots?: string[] }
+  | { screen: 'faceassign'; imageUrl: string; templates: Template[]; category: string; faces: Face[]; currentTemplateIndex: number; templateSlots: FaceSlot[]; assignments: FaceAssignments; allMappings: (number | null)[][]; shots?: string[] }
   // Photo Print: layout dipilih dulu → jepret N kali di sini (kebalikan flow AI yang foto duluan)
   | { screen: 'multicapture'; template: Template; shots: string[] }
   // Engine 'api' dengan input_label: tamu ngetik nama SEBELUM processing (nilainya masuk prompt
   // berbayar, jadi harus udah pasti pas /api/generate ditembak). Template tanpa input_label lewat.
-  | { screen: 'nameinput'; imageUrl: string; templates: Template[]; category: string }
+  | { screen: 'nameinput'; imageUrl: string; templates: Template[]; category: string; shots?: string[] }
   // faceMapping[i] = index selfie face (L-R) buat slot template ke-i (L-R). null = slot dilewat.
   // templates: 1 (biasa) atau 2-4 (VIP multi). Swap sequential, 1 selfie mapping dipakai semua.
-  // shots: engine 'print' only — N jepretan buat compose layout, imageUrl = shots[0]
+  // shots: engine 'print' / multi-original AI — N jepretan buat compose layout, imageUrl = shots[0]
   // userInput = teks tamu yang udah disanitasi (lihat lib/prompt-input.ts), disuntik ke {input}
   | { screen: 'processing'; progress: number; step: 1 | 2 | 3; imageUrl: string; templates: Template[]; faceMappings?: (number | null)[][]; shots?: string[]; assignments?: FaceAssignments; userInput?: string }
   // sourceUrl = selfie bersih (pre-watermark) buat BACK/re-edit + upload _A. originalUrl bisa
   // ke-burn watermark (freemium), jangan dipakai sbg sumber re-detect/upload.
   // rawAiUrl = hasil AI bersih (pre-watermark) buat upload _B. base = seq key dari finalizeLocal.
   // framechooser = pilih frame dulu (cycling), NEXT bawa selectedFrame ke preview. No upload/print di sini.
-  | { screen: 'framechooser'; aiUrl: string; originalUrl: string; sourceUrl?: string; rawAiUrl?: string; base?: string; processingSec?: number; videoUrl?: string; templateId?: string; allResults?: SwapResult[] }
+  | { screen: 'framechooser'; aiUrl: string; originalUrl: string; sourceUrl?: string; rawAiUrl?: string; base?: string; processingSec?: number; videoUrl?: string; templateId?: string; allResults?: SwapResult[]; shots?: string[] }
   // printSize set = sesi Photo Print (video tab & toggle AI/Asli disembunyiin, BACK balik ke template)
-  | { screen: 'preview'; aiUrl: string; originalUrl: string; sourceUrl?: string; rawAiUrl?: string; base?: string; processingSec?: number; selectedFrame: Frame | null; videoUrl?: string; templateId?: string; printSize?: PrintSize; allResults?: SwapResult[] }
+  | { screen: 'preview'; aiUrl: string; originalUrl: string; sourceUrl?: string; rawAiUrl?: string; base?: string; processingSec?: number; selectedFrame: Frame | null; videoUrl?: string; templateId?: string; printSize?: PrintSize; allResults?: SwapResult[]; shots?: string[] }
   // aiUrl/originalUrl = display (burned+framed). uploadAiUrl/uploadOriginalUrl = raw+framed → R2.
   | { screen: 'delivery'; aiUrl: string; originalUrl: string; uploadAiUrl: string; uploadOriginalUrl: string; base?: string; processingSec?: number; r2OriginalUrl?: string; r2AiUrl?: string }
   | { screen: 'force_locked'; reason?: LockReason; message?: string }
@@ -190,7 +191,7 @@ export type KioskState =
 export type KioskAction =
   | { type: 'START' }
   | { type: 'CONSENT_GIVEN'; print?: boolean } // print = mode print_local → skip liveview+category, langsung template
-  | { type: 'CAPTURE'; imageUrl: string }
+  | { type: 'CAPTURE'; imageUrl: string; shots?: string[] }
   | { type: 'START_CAPTURE_LOOP' } // template (engine 'print') → multicapture
   | { type: 'SHOT_TAKEN'; imageUrl: string }
   | { type: 'POP_LAST_SHOT' }

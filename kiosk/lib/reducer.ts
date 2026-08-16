@@ -16,11 +16,11 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
 
     case 'CAPTURE':
       if (state.screen !== 'liveview') return state
-      return { screen: 'category', imageUrl: action.imageUrl }
+      return { screen: 'category', imageUrl: action.imageUrl, shots: action.shots || [action.imageUrl] }
 
     case 'SELECT_CATEGORY':
       if (state.screen !== 'category') return state
-      return { screen: 'template', imageUrl: state.imageUrl, category: action.category, selected: state.selected || [] }
+      return { screen: 'template', imageUrl: state.imageUrl, category: action.category, selected: state.selected || [], shots: state.shots }
 
     case 'SELECT_TEMPLATE': {
       if (state.screen !== 'template') return state
@@ -37,7 +37,7 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
       // Flow print (imageUrl '' — belum ada selfie): FaceAssign gak punya bahan → block.
       // Kejadian cuma kalau print_local nyala tanpa template print (fallback dummy faceswap).
       if (state.imageUrl === '') return state
-      return { screen: 'faceassign', imageUrl: state.imageUrl, category: state.category, templates: state.selected, faces: [], currentTemplateIndex: 0, templateSlots: [], assignments: {}, allMappings: [] }
+      return { screen: 'faceassign', imageUrl: state.imageUrl, category: state.category, templates: state.selected, faces: [], currentTemplateIndex: 0, templateSlots: [], assignments: {}, allMappings: [], shots: state.shots }
 
     case 'START_CAPTURE_LOOP':
       // Guard engine_type kayak comfy (defense-in-depth): cuma template print yang boleh ke capture loop.
@@ -90,29 +90,29 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
       if (state.screen !== 'template' || state.selected.length !== 1) return state
       if (state.selected[0].engine_type !== 'api' || !state.selected[0].input_label) return state
       if (state.imageUrl === '') return state
-      return { screen: 'nameinput', imageUrl: state.imageUrl, category: state.category, templates: state.selected }
+      return { screen: 'nameinput', imageUrl: state.imageUrl, category: state.category, templates: state.selected, shots: state.shots }
 
     case 'START_PROCESSING':
       // Template comfy skip FaceAssign — NEXT di TemplateScreen langsung ke processing.
       // Comfy TIDAK pernah multi-select → cuma jalur single (selected.length === 1).
       // Guard engine_type: defense-in-depth, non-comfy wajib lewat faceassign.
       if (state.screen === 'template' && state.selected.length === 1 && state.selected[0].engine_type === 'comfy')
-        return { screen: 'processing', progress: 0, step: 1, imageUrl: state.imageUrl, templates: state.selected, assignments: {} }
+        return { screen: 'processing', progress: 0, step: 1, imageUrl: state.imageUrl, templates: state.selected, assignments: {}, shots: state.shots }
       // Engine 'api' tanpa input_label (mis. prompt double-decker) — ga ada yang perlu diketik,
       // lompat langsung kayak comfy. Yang PUNYA input_label wajib lewat nameinput (cabang bawah).
       if (state.screen === 'template' && state.selected.length === 1
         && state.selected[0].engine_type === 'api' && !state.selected[0].input_label)
-        return { screen: 'processing', progress: 0, step: 1, imageUrl: state.imageUrl, templates: state.selected, assignments: {} }
+        return { screen: 'processing', progress: 0, step: 1, imageUrl: state.imageUrl, templates: state.selected, assignments: {}, shots: state.shots }
       // nameinput → processing, bawa teks yang udah disanitasi di screen-nya.
       if (state.screen === 'nameinput')
-        return { screen: 'processing', progress: 0, step: 1, imageUrl: state.imageUrl, templates: state.templates, assignments: {}, userInput: action.userInput }
+        return { screen: 'processing', progress: 0, step: 1, imageUrl: state.imageUrl, templates: state.templates, assignments: {}, userInput: action.userInput, shots: state.shots }
       // Photo Print: multicapture selesai → processing bawa semua shot (compose lokal, bukan AI)
       if (state.screen === 'multicapture') {
         if (state.shots.length === 0) return state
         return { screen: 'processing', progress: 0, step: 1, imageUrl: state.shots[0], templates: [state.template], assignments: {}, shots: state.shots }
       }
       if (state.screen !== 'faceassign' || state.templates.length === 0) return state
-      return { screen: 'processing', progress: 0, step: 1, imageUrl: state.imageUrl, templates: state.templates, faceMappings: action.faceMappings }
+      return { screen: 'processing', progress: 0, step: 1, imageUrl: state.imageUrl, templates: state.templates, faceMappings: action.faceMappings, shots: state.shots }
 
     case 'SET_PROGRESS': {
       if (state.screen !== 'processing') return state
@@ -124,15 +124,15 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
       // direct (Photo Print): overlay udah dibakar di composite — skip framechooser yang
       // auto-preselect frame (bakal numpuk PNG kedua di print+upload). selectedFrame null.
       if (action.direct)
-        return { screen: 'preview', aiUrl: action.aiUrl, originalUrl: action.originalUrl, sourceUrl: action.sourceUrl, rawAiUrl: action.rawAiUrl, base: action.base, processingSec: action.processingSec, selectedFrame: null, videoUrl: action.videoUrl, printSize: action.printSize, templateId: action.templateId }
+        return { screen: 'preview', aiUrl: action.aiUrl, originalUrl: action.originalUrl, sourceUrl: action.sourceUrl, rawAiUrl: action.rawAiUrl, base: action.base, processingSec: action.processingSec, selectedFrame: null, videoUrl: action.videoUrl, printSize: action.printSize, templateId: action.templateId, shots: (state.screen === 'processing' || state.screen === 'multicapture') ? state.shots : undefined }
       // Landing di frame chooser dulu — tamu pilih frame, baru NEXT ke preview (upload+print).
       // videoUrl = hasil video engine (opsional) — kebawa terus sampai preview buat tab Video.
       // allResults = multi-template (2-4 hasil): kebawa langsung ke preview grid TANPA resultchooser.
-      return { screen: 'framechooser', aiUrl: action.aiUrl, originalUrl: action.originalUrl, sourceUrl: action.sourceUrl, rawAiUrl: action.rawAiUrl, base: action.base, processingSec: action.processingSec, videoUrl: action.videoUrl, templateId: action.templateId, allResults: action.allResults }
+      return { screen: 'framechooser', aiUrl: action.aiUrl, originalUrl: action.originalUrl, sourceUrl: action.sourceUrl, rawAiUrl: action.rawAiUrl, base: action.base, processingSec: action.processingSec, videoUrl: action.videoUrl, templateId: action.templateId, allResults: action.allResults, shots: (state.screen === 'processing' || state.screen === 'multicapture') ? state.shots : undefined }
 
     case 'CONFIRM_FRAME':
       if (state.screen !== 'framechooser') return state
-      return { screen: 'preview', aiUrl: state.aiUrl, originalUrl: state.originalUrl, sourceUrl: state.sourceUrl, rawAiUrl: state.rawAiUrl, base: state.base, processingSec: state.processingSec, selectedFrame: action.frame, videoUrl: state.videoUrl, templateId: state.templateId, allResults: state.allResults }
+      return { screen: 'preview', aiUrl: state.aiUrl, originalUrl: state.originalUrl, sourceUrl: state.sourceUrl, rawAiUrl: state.rawAiUrl, base: state.base, processingSec: state.processingSec, selectedFrame: action.frame, videoUrl: state.videoUrl, templateId: state.templateId, allResults: state.allResults, shots: state.shots }
 
     case 'GO_DELIVERY':
       if (state.screen !== 'preview') return state

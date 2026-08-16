@@ -9,6 +9,7 @@ type Props = {
   state: Extract<KioskState, { screen: 'liveview' }>
   dispatch: Dispatch<KioskAction>
   cameraSource?: string
+  originalCaptures?: number
 }
 
 // pure: source dims + rotasi → ukuran canvas output. Quarter-turn (90/270) tuker w/h.
@@ -24,9 +25,10 @@ const ROT_KEY = 'semeta.cameraRotation'
 export const CANON_LIVE = '/api/canon-live'
 export const CANON_LIVE_MS = 200
 
-export function LiveViewScreen({ dispatch, cameraSource }: Props) {
+export function LiveViewScreen({ dispatch, cameraSource, originalCaptures }: Props) {
   const t = useT()
   const isCanon = cameraSource === 'canon'
+  const maxShots = originalCaptures ?? 1
   const containerRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
 
@@ -36,6 +38,7 @@ export function LiveViewScreen({ dispatch, cameraSource }: Props) {
   const [countdown, setCountdown] = useState<number | null>(null)
   const [flash, setFlash] = useState(false)
   const [captured, setCaptured] = useState<string | null>(null)
+  const [shots, setShots] = useState<string[]>([])
   // null = capture webcam (box ikut rotasi). Di-set pas Browse → box snap 2:3/3:2 ikut orientasi foto.
   const [browseAspect, setBrowseAspect] = useState<'portrait' | 'landscape' | null>(null)
 
@@ -137,31 +140,36 @@ export function LiveViewScreen({ dispatch, cameraSource }: Props) {
     setFlash(true)
     await new Promise(r => setTimeout(r, 200))
     setFlash(false)
+    let url: string | null = null
     if (isCanon) {
       // DSLR full-res dari backend, lalu rotate ikut tombol (sama kayak webcam) — DSLR ga bisa
       // diputer fisik, jadi rotasi di canvas. deg 0 = passthrough.
       setCapturing(true)
-      try { const url = await rotateDataUrl(await triggerCanonCapture(), rotation); setBrowseAspect(null); setCaptured(url) }
+      try { url = await rotateDataUrl(await triggerCanonCapture(), rotation) }
       catch { setCameraError(true) }
       finally { setCapturing(false) }
-      return
+    } else {
+      const video = videoRef.current
+      if (video) {
+        const vw = video.videoWidth
+        const vh = video.videoHeight
+        const { w, h } = rotatedSize(vw, vh, rotation)
+        const canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        const ctx = canvas.getContext('2d')!
+        ctx.translate(w / 2, h / 2)
+        ctx.rotate((rotation * Math.PI) / 180)
+        ctx.drawImage(video, -vw / 2, -vh / 2)
+        url = canvas.toDataURL('image/jpeg', 0.92)
+      }
     }
-    const video = videoRef.current
-    if (!video) return
-    const vw = video.videoWidth
-    const vh = video.videoHeight
-    const { w, h } = rotatedSize(vw, vh, rotation)
-    const canvas = document.createElement('canvas')
-    canvas.width = w
-    canvas.height = h
-    const ctx = canvas.getContext('2d')!
-    // ponytail: capture = frame di-rotate penuh. Pas banget sama box 9:16 kalau kamera 16:9 di 90/270.
-    // Kamera 4:3 atau mau WYSIWYG persis di tiap sudut → crop canvas ke aspect box dulu (cover-crop).
-    ctx.translate(w / 2, h / 2)
-    ctx.rotate((rotation * Math.PI) / 180)
-    ctx.drawImage(video, -vw / 2, -vh / 2)
-    setBrowseAspect(null) // capture webcam → box balik ikut rotasi, bukan 2:3/3:2
-    setCaptured(canvas.toDataURL('image/jpeg', 0.92))
+
+    if (url) {
+      setBrowseAspect(null)
+      setCaptured(url)
+      setShots(prev => [...prev, url!])
+    }
   }, [rotation, isCanon])
 
   const handleBrowse = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -172,12 +180,28 @@ export function LiveViewScreen({ dispatch, cameraSource }: Props) {
       const url = ev.target?.result as string
       // Ukur orientasi foto → box snap ke 2:3 (portrait) / 3:2 (landscape) biar ngisi penuh tanpa bar
       const img = new Image()
-      img.onload = () => { setBrowseAspect(img.naturalHeight >= img.naturalWidth ? 'portrait' : 'landscape'); setCaptured(url) }
-      img.onerror = () => { setBrowseAspect(null); setCaptured(url) } // gagal ukur → fallback box rotasi
+      img.onload = () => { setBrowseAspect(img.naturalHeight >= img.naturalWidth ? 'portrait' : 'landscape'); setCaptured(url); setShots(prev => [...prev, url]) }
+      img.onerror = () => { setBrowseAspect(null); setCaptured(url); setShots(prev => [...prev, url]) } // gagal ukur → fallback box rotasi
       img.src = url
     }
     reader.readAsDataURL(file)
     e.target.value = ''
+  }
+
+  const handleRetakeLast = () => {
+    setShots(prev => {
+      const next = prev.slice(0, -1)
+      setCaptured(next.length > 0 ? next[next.length - 1] : null)
+      return next
+    })
+  }
+
+  const handleNextScreen = () => {
+    if (shots.length === 0 && captured) {
+      dispatch({ type: 'CAPTURE', imageUrl: captured, shots: [captured] })
+    } else if (shots.length > 0) {
+      dispatch({ type: 'CAPTURE', imageUrl: shots[0], shots })
+    }
   }
 
   const quarter = rotation === 90 || rotation === 270
@@ -205,8 +229,29 @@ export function LiveViewScreen({ dispatch, cameraSource }: Props) {
           {t('liveview_title') as string}
         </h1>
         <p style={{ fontSize: 'var(--text-base)', fontWeight: 300, color: 'var(--fg-muted)', lineHeight: 1.618, whiteSpace: 'pre-line' }}>
-          {t('liveview_subtitle') as string}
+          {maxShots > 1
+            ? `Ambil hingga ${maxShots} foto asli. Foto pertama dipakai untuk AI, foto lainnya tersedia untuk 2-Strip.`
+            : (t('liveview_subtitle') as string)}
         </p>
+
+        {/* Multi-shot thumbnail badges */}
+        {maxShots > 1 && shots.length > 0 && (
+          <div className="flex gap-3 justify-center items-center mt-3">
+            {shots.map((s, idx) => (
+              <div key={idx} className="relative rounded-lg overflow-hidden border-2 shadow-md transition-all" style={{ width: 44, height: 60, borderColor: idx === 0 ? '#a3be8c' : 'rgba(255,255,255,0.3)' }}>
+                <img src={s} alt="" className="w-full h-full object-cover" />
+                <span className="absolute bottom-0 left-0 right-0 text-[9px] text-center font-bold py-0.5" style={{ background: idx === 0 ? 'rgba(163,190,140,0.9)' : 'rgba(0,0,0,0.7)', color: idx === 0 ? '#111' : '#fff' }}>
+                  {idx === 0 ? 'AI Face' : `#${idx + 1}`}
+                </span>
+              </div>
+            ))}
+            {shots.length < maxShots && (
+              <span className="text-xs text-white/60 ml-2">
+                Foto {shots.length} dari {maxShots} diambil
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="screen-content">
@@ -300,8 +345,6 @@ export function LiveViewScreen({ dispatch, cameraSource }: Props) {
                       opacity: countdown !== null || lvResetting ? 0.4 : 1,
                     }}
                   >
-                    {/* Huruf "R" — dulu ikon panah melengkung, ketuker sama tombol rotate di
-                        atasnya (dua-duanya panah). Muter pas lagi reset = feedback proses jalan. */}
                     <span style={{
                       fontFamily: 'var(--font-ui)', fontSize: 18, fontWeight: 700, lineHeight: 1,
                       display: 'inline-block',
@@ -316,7 +359,7 @@ export function LiveViewScreen({ dispatch, cameraSource }: Props) {
           {captured && cameraReady && (
             <div className="absolute inset-0 flex items-end justify-end p-4" style={{ zIndex: 30 }}>
               <button
-                onClick={() => { setCaptured(null); handleCapture() }}
+                onClick={handleRetakeLast}
                 disabled={countdown !== null}
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -324,6 +367,7 @@ export function LiveViewScreen({ dispatch, cameraSource }: Props) {
                   background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.3)',
                   color: '#fff', cursor: 'pointer', backdropFilter: 'blur(8px)',
                 }}
+                title="Ulang foto terakhir"
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
@@ -338,18 +382,53 @@ export function LiveViewScreen({ dispatch, cameraSource }: Props) {
       </div>
 
       <div className="screen-actions shrink-0 p-5 flex gap-3">
-        <label className="glass-btn h-[72px] flex-1 cursor-pointer" style={{ background: 'rgba(255,255,255,0.08)', color: '#ffffff', boxShadow: 'inset 1px 1px 0 rgba(255,255,255,0.15), inset -1px -1px 0 rgba(0,0,0,0.15)' }}>
-          <input type="file" accept="image/*" className="sr-only" onChange={handleBrowse} />
-          {t('liveview_browse') as string}
-        </label>
-        {captured ? (
-          <TouchButton onClick={() => dispatch({ type: 'CAPTURE', imageUrl: captured })} className="flex-1">
-            Next →
-          </TouchButton>
+        {maxShots === 1 ? (
+          <>
+            <label className="glass-btn h-[72px] flex-1 cursor-pointer" style={{ background: 'rgba(255,255,255,0.08)', color: '#ffffff', boxShadow: 'inset 1px 1px 0 rgba(255,255,255,0.15), inset -1px -1px 0 rgba(0,0,0,0.15)' }}>
+              <input type="file" accept="image/*" className="sr-only" onChange={handleBrowse} />
+              {t('liveview_browse') as string}
+            </label>
+            {captured ? (
+              <TouchButton onClick={handleNextScreen} className="flex-1">
+                Next →
+              </TouchButton>
+            ) : (
+              <TouchButton onClick={handleCapture} disabled={countdown !== null || !cameraReady} className="flex-1">
+                {t('liveview_capture') as string}
+              </TouchButton>
+            )}
+          </>
         ) : (
-          <TouchButton onClick={handleCapture} disabled={countdown !== null || !cameraReady} className="flex-1">
-            {t('liveview_capture') as string}
-          </TouchButton>
+          <>
+            <label className="glass-btn h-[72px] px-4 cursor-pointer flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.08)', color: '#ffffff', boxShadow: 'inset 1px 1px 0 rgba(255,255,255,0.15), inset -1px -1px 0 rgba(0,0,0,0.15)' }}>
+              <input type="file" accept="image/*" className="sr-only" onChange={handleBrowse} />
+              📁 Browse
+            </label>
+
+            {shots.length > 0 && (
+              <TouchButton onClick={handleRetakeLast} className="px-4" style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)' }}>
+                ↺ Ulang #{shots.length}
+              </TouchButton>
+            )}
+
+            {shots.length < maxShots ? (
+              captured ? (
+                <TouchButton onClick={() => setCaptured(null)} className="flex-1">
+                  Ambil Foto Ke-{shots.length + 1} →
+                </TouchButton>
+              ) : (
+                <TouchButton onClick={handleCapture} disabled={countdown !== null || !cameraReady} className="flex-1">
+                  📸 Jepret Foto Ke-{shots.length + 1}
+                </TouchButton>
+              )
+            ) : null}
+
+            {shots.length > 0 && (
+              <TouchButton onClick={handleNextScreen} className="flex-1" style={{ background: 'var(--brand-btn, #7c3aed)' }}>
+                Lanjut Ke Template →
+              </TouchButton>
+            )}
+          </>
         )}
       </div>
 
