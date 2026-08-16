@@ -335,6 +335,12 @@ const id: Translations = {
   set_denoise_hint: 'template bisa override',
 
   // Video engine
+  set_fullbody_engine: 'Fullbody Engine (ComfyUI)',
+  set_fullbody_hint: 'Nyalakan sebelum jual paket Fullbody — mati = hemat VRAM.',
+  set_fullbody_starting: '(menyalakan…)',
+  set_fullbody_stopping: '(mematikan…)',
+  set_fullbody_start_failed: 'Gagal menyalakan ComfyUI — cek C:\\ComfyUI ada',
+  set_fullbody_stop_failed: 'Gagal mematikan ComfyUI',
   set_video_engine: 'Aktifkan Video Engine (img2vid)',
   set_video_locked_badge: 'TERKUNCI',
   set_video_need_rental: 'Video butuh sewa aktif — mulai sesi (key + waktu rental) dulu.',

@@ -271,6 +271,33 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
     return () => { dead = true }
   }, [magicCatcher])
   const [showPromptDesigner, setShowPromptDesigner] = useState(false)
+  // Fullbody engine (ComfyUI) — toggle langsung tembak face_server, bukan nunggu Save global
+  // (ini side-effect proses OS real-time). fetchStatus dipanggil sekali on-mount biar toggle
+  // render kondisi asli proses, bukan cuma config lama yang mungkin udah gak sinkron
+  // (mis. ComfyUI dimatiin manual dari Task Manager pas config masih nyimpen true).
+  const [fullbodyEngine,  setFullbodyEngine]  = useState(config.enable_fullbody_engine ?? false)
+  const [fullbodyBusy,    setFullbodyBusy]    = useState(false)
+  const [fullbodyError,   setFullbodyError]   = useState<string | null>(null)
+  useEffect(() => {
+    let dead = false
+    fetch('http://localhost:8000/comfy/status').then(r => r.json()).then(d => {
+      if (!dead) setFullbodyEngine(Boolean(d.alive))
+    }).catch(() => {})
+    return () => { dead = true }
+  }, [])
+  const toggleFullbody = async (next: boolean) => {
+    setFullbodyBusy(true)
+    setFullbodyError(null)
+    try {
+      const res = await fetch(`http://localhost:8000/comfy/${next ? 'start' : 'stop'}`, { method: 'POST' })
+      if (!res.ok) throw new Error(await res.text())
+      setFullbodyEngine(next)
+    } catch {
+      setFullbodyError(next ? 'set_fullbody_start_failed' : 'set_fullbody_stop_failed')
+    } finally {
+      setFullbodyBusy(false)
+    }
+  }
   const [videoEngine,     setVideoEngine]     = useState(config.enable_video_engine ?? false)
   // Default LTX — 1080p native, murah & tajam. Provider dipangkas ke 3 tier (LTX/PIXVERSE/SEEDANCE);
   // config lama yg ke-set VEO/WAN/VIDU/KLING udah ga ada di dropdown → jatuhin ke LTX biar select ga
@@ -770,6 +797,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         magic_catcher_duration_sec: Number(magicCatcherDur),
         magic_catcher_audio: magicCatcherAudio,
         // Photo Print = non-AI → video selalu OFF, jangan nyimpen state nyangkut dari mode lain.
+        enable_fullbody_engine: fullbodyEngine,
         enable_video_engine: engine === 'print_local' ? false : videoEngine,
         video_provider:      videoProvider,
         video_resolution:    videoResolution,
@@ -815,6 +843,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         magic_catcher_device_id: magicCatcherCam,
         magic_catcher_duration_sec: Number(magicCatcherDur),
         magic_catcher_audio: magicCatcherAudio,
+        enable_fullbody_engine: fullbodyEngine,
         enable_video_engine: engine === 'print_local' ? false : videoEngine,
         video_provider:      videoProvider,
         video_resolution:    videoResolution,
@@ -1365,6 +1394,30 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                   )}
                 </div>
               )}
+
+              {/* Fullbody Engine (ComfyUI) — LAUNCHER gak auto-start lagi (VRAM idle mahal
+                  buat tenant yang gak jual paket Fullbody). Toggle nembak face_server
+                  langsung (POST /comfy/start|stop) — bukan config yang nunggu Save, karena
+                  ini side-effect proses OS beneran. Restart PC TETAP mati sampai operator
+                  nyalain manual lagi — sengaja, biar VRAM gak kepakai diam-diam. */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', gap: 16 }}>
+                <div style={{ minWidth: 0 }}>
+                  <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>
+                    {t('set_fullbody_engine') as string}
+                    {fullbodyBusy && (
+                      <span style={{ marginLeft: 8, fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.4)' }}>
+                        {t(fullbodyEngine ? 'set_fullbody_stopping' : 'set_fullbody_starting') as string}
+                      </span>
+                    )}
+                  </span>
+                  <p style={{ fontSize: 'var(--text-2xs)', color: fullbodyError ? '#f0604a' : 'rgba(255,255,255,0.3)', margin: '2px 0 0', lineHeight: 1.4 }}>
+                    {fullbodyError ? t(fullbodyError as keyof Translations) as string : t('set_fullbody_hint') as string}
+                  </p>
+                </div>
+                <div style={{ flexShrink: 0 }}>
+                  <Toggle on={fullbodyEngine} disabled={fullbodyBusy} onToggle={() => toggleFullbody(!fullbodyEngine)} />
+                </div>
+              </div>
 
               {/* Video engine (img2vid) — img output terakhir jadi seed ke provider video via
                   Worker. API key hidup di Worker (FAL), gak pernah ke browser. Default OFF.

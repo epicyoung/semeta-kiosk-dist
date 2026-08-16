@@ -143,6 +143,9 @@ export type KioskConfig = {
   comfy_cfg?: string            // override CFG ('3'..'10'); '' / undefined = default; flux dikunci 1.0
   comfy_steps?: string          // override steps ('15'|'20'|'25'|'30'); '' / undefined = default; flux dikunci 20
   comfy_cn_strength?: string    // override ControlNet strength ('0.3'..'1.0'); '' / undefined = default 0.8
+  // Fullbody engine (ComfyUI) — operator toggle di Settings, LAUNCHER gak auto-start lagi.
+  // undefined/false ⇒ mati, template engine_type='comfy' gak bisa jalan sampai dinyalain.
+  enable_fullbody_engine?: boolean
   // Video engine (img2vid) — routing di Worker. undefined ⇒ OFF.
   enable_video_engine?: boolean
   video_provider?: VideoProvider  // dipakai kalau enable_video_engine true. undefined ⇒ PIXVERSE (HPP termurah).

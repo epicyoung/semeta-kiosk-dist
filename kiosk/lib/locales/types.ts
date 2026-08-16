@@ -331,6 +331,12 @@ export interface Translations {
   set_denoise_hint: string             // "template can override"
 
   // ── SettingsPanel — video engine section ─────────────────────────────────────
+  set_fullbody_engine: string          // "Fullbody Engine (ComfyUI)"
+  set_fullbody_hint: string            // "Nyalakan sebelum jual paket Fullbody. VRAM idle kalau mati."
+  set_fullbody_starting: string        // "(menyalakan…)"
+  set_fullbody_stopping: string        // "(mematikan…)"
+  set_fullbody_start_failed: string    // "Gagal menyalakan ComfyUI"
+  set_fullbody_stop_failed: string     // "Gagal mematikan ComfyUI"
   set_video_engine: string             // "Enable Video Engine (img2vid)"
   set_video_locked_badge: string       // "LOCKED"
   set_video_need_rental: string        // needs active rental note

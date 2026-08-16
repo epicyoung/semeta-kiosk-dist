@@ -12,6 +12,7 @@ GPU (optional):
 """
 
 import os
+import subprocess
 import threading
 import time
 
@@ -151,6 +152,14 @@ def load_models():
 # pertama generate: dua job numpuk di satu GPU, /stylize/interrupt jadi nembak job yang
 # salah (ComfyUI /api/interrupt stop yang LAGI JALAN, gak scoped per prompt_id).
 comfy_lock = threading.Lock()
+
+# Toggle "Fullbody Engine" FE — operator nyalain ComfyUI manual pas jual paket Fullbody,
+# bukan auto-start tiap boot LAUNCHER. Proses OS ComfyUI, dipegang sini (bukan kiosk Next.js —
+# kiosk browser tetep gak pernah kenal :8188, cuma face_server yang punya akses OS).
+COMFY_DIR = r"C:\ComfyUI"
+COMFY_BAT = "0MulaiComfy.bat"
+comfy_proc = None          # subprocess.Popen handle — None kalau kita gak yang nyalain
+comfy_proc_lock = threading.Lock()  # serialize start/stop, cegah race dobel-klik toggle
 
 
 def _comfy_warmup():
@@ -486,6 +495,48 @@ def stylize_interrupt():
     (Restore perilaku v1 yang manggil /api/interrupt langsung — sekarang lewat
     boundary face_server, kiosk tetep gak kenal :8188.) Fire-and-forget semantics."""
     return {"ok": comfy_client.interrupt()}
+
+
+@app.get("/comfy/status")
+def comfy_status():
+    return {"alive": comfy_client.comfy_alive()}
+
+
+@app.post("/comfy/start")
+def comfy_start():
+    """Spawn C:\\ComfyUI\\0MulaiComfy.bat. Poll sampai :8188 hidup (cold start ~15s+) atau
+    60s timeout — FE nunggu respons ini biar toggle-nya kepastian, bukan fire-and-forget."""
+    global comfy_proc
+    if comfy_client.comfy_alive():
+        return {"ok": True, "already_running": True}
+    if not os.path.exists(os.path.join(COMFY_DIR, COMFY_BAT)):
+        raise HTTPException(status_code=404, detail=f"{COMFY_BAT} ga ada di {COMFY_DIR}")
+    with comfy_proc_lock:
+        if comfy_proc is None or comfy_proc.poll() is not None:
+            comfy_proc = subprocess.Popen(
+                ["cmd", "/c", COMFY_BAT], cwd=COMFY_DIR,
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+    deadline = time.time() + 60
+    while time.time() < deadline:
+        if comfy_client.comfy_alive():
+            return {"ok": True, "already_running": False}
+        time.sleep(2)
+    raise HTTPException(status_code=504, detail="ComfyUI ga hidup dalam 60s")
+
+
+@app.post("/comfy/stop")
+def comfy_stop():
+    """taskkill /T wajib — 0MulaiComfy.bat = cmd /c > venv activate > python main.py,
+    PID yang Popen pegang itu cmd.exe, ComfyUI proses beneran itu CHILD-nya. Tanpa /T
+    cuma shell yang mati, ComfyUI tetep nyantol VRAM."""
+    global comfy_proc
+    with comfy_proc_lock:
+        if comfy_proc is not None and comfy_proc.poll() is None:
+            subprocess.run(
+                ["taskkill", "/PID", str(comfy_proc.pid), "/T", "/F"],
+                capture_output=True)
+        comfy_proc = None
+    return {"ok": True}
 
 
 if __name__ == "__main__":

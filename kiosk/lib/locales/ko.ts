@@ -333,6 +333,12 @@ const ko: Translations = {
   set_denoise_hint: '템플릿에서 재정의 가능',
 
   // 비디오 엔진
+  set_fullbody_engine: '풀바디 엔진 (ComfyUI)',
+  set_fullbody_hint: '풀바디 패키지 판매 전에 켜세요 — 끄면 VRAM 절약.',
+  set_fullbody_starting: '(시작 중…)',
+  set_fullbody_stopping: '(종료 중…)',
+  set_fullbody_start_failed: 'ComfyUI 시작 실패 — C:\\ComfyUI 존재 확인',
+  set_fullbody_stop_failed: 'ComfyUI 종료 실패',
   set_video_engine: '비디오 엔진 활성화 (img2vid)',
   set_video_locked_badge: '잠김',
   set_video_need_rental: '비디오는 활성 대여가 필요합니다 — 먼저 세션(키 + 대여 시간)을 시작하세요.',

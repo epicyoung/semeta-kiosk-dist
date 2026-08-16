@@ -333,6 +333,12 @@ const nl: Translations = {
   set_denoise_hint: 'sjabloon kan overschrijven',
 
   // Video-engine
+  set_fullbody_engine: 'Fullbody Engine (ComfyUI)',
+  set_fullbody_hint: 'Zet aan voordat u Fullbody-pakketten verkoopt — uit bespaart VRAM.',
+  set_fullbody_starting: '(starten…)',
+  set_fullbody_stopping: '(stoppen…)',
+  set_fullbody_start_failed: 'ComfyUI starten mislukt — controleer of C:\\ComfyUI bestaat',
+  set_fullbody_stop_failed: 'ComfyUI stoppen mislukt',
   set_video_engine: 'Video-engine inschakelen (img2vid)',
   set_video_locked_badge: 'VERGRENDELD',
   set_video_need_rental: 'Video vereist een actieve huur — start eerst een sessie (sleutel + huurtijd).',

@@ -333,6 +333,12 @@ const zh: Translations = {
   set_denoise_hint: '模板可覆盖',
 
   // 视频引擎
+  set_fullbody_engine: '全身引擎 (ComfyUI)',
+  set_fullbody_hint: '销售全身套餐前请开启 — 关闭可节省显存。',
+  set_fullbody_starting: '(启动中…)',
+  set_fullbody_stopping: '(关闭中…)',
+  set_fullbody_start_failed: '启动 ComfyUI 失败 — 请检查 C:\\ComfyUI 是否存在',
+  set_fullbody_stop_failed: '关闭 ComfyUI 失败',
   set_video_engine: '启用视频引擎 (img2vid)',
   set_video_locked_badge: '已锁定',
   set_video_need_rental: '视频需要有效的租用 — 请先开始会话（密钥 + 租用时间）。',

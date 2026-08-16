@@ -333,6 +333,12 @@ const ja: Translations = {
   set_denoise_hint: 'テンプレートで上書き可能',
 
   // ビデオエンジン
+  set_fullbody_engine: 'フルボディエンジン (ComfyUI)',
+  set_fullbody_hint: 'フルボディパッケージ販売前にオンにしてください — オフでVRAM節約。',
+  set_fullbody_starting: '(起動中…)',
+  set_fullbody_stopping: '(停止中…)',
+  set_fullbody_start_failed: 'ComfyUI起動失敗 — C:\\ComfyUI の存在を確認',
+  set_fullbody_stop_failed: 'ComfyUI停止失敗',
   set_video_engine: 'ビデオエンジンを有効化 (img2vid)',
   set_video_locked_badge: 'ロック',
   set_video_need_rental: 'ビデオには有効なレンタルが必要です — 先にセッション（キー + レンタル時間）を開始してください。',

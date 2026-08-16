@@ -254,6 +254,12 @@ const tl: Translations = {
   set_denoise: 'Denoise (default)',
   set_denoise_hint: 'puwedeng i-override ng template',
 
+  set_fullbody_engine: 'Fullbody Engine (ComfyUI)',
+  set_fullbody_hint: 'I-on bago magbenta ng Fullbody package — naka-off para makatipid ng VRAM.',
+  set_fullbody_starting: '(sinisimulan…)',
+  set_fullbody_stopping: '(inihihinto…)',
+  set_fullbody_start_failed: 'Bigo ang pagsisimula ng ComfyUI — tingnan kung meron C:\\ComfyUI',
+  set_fullbody_stop_failed: 'Bigo ang paghinto ng ComfyUI',
   set_video_engine: 'I-enable ang Video Engine (img2vid)',
   set_video_locked_badge: 'NAKA-LOCK',
   set_video_need_rental: 'Kailangan ng video ng aktibong rental — simulan muna ang session (key + oras ng rental).',

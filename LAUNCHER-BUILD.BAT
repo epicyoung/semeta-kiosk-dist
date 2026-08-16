@@ -105,19 +105,10 @@ if exist "%ROOT%\kiosk\face_server\venv\Scripts\python.exe" (
   echo [--] Face server skip — jalanin setup.bat dulu
 )
 
-REM ── ComfyUI — kompor stylize buat mode Fullbody. Reuse 0MulaiComfy.bat (flags cuma di satu tempat). ──
-netstat -ano | findstr /C:":8188 " | findstr LISTENING >nul 2>&1
-if not errorlevel 1 (
-  echo [OK] ComfyUI udah nyala — port 8188
-  goto :comfy_done
-)
-if exist "C:\ComfyUI\0MulaiComfy.bat" (
-  start /min "ComfyUI" cmd /c "C:\ComfyUI\0MulaiComfy.bat"
-  echo [OK] ComfyUI — port 8188, model ke-load pas job stylize pertama
-) else (
-  echo [--] ComfyUI skip — C:\ComfyUI ga ada, mode Fullbody butuh ini
-)
-:comfy_done
+REM ── ComfyUI — TIDAK auto-start lagi. Toggle "Fullbody Engine" di kiosk Settings yang
+REM    nyalain/matiin (POST /comfy/start|stop ke face_server). VRAM idle mahal buat tenant
+REM    yang gak jual paket Fullbody — operator nyalain manual pas emang jual. ──
+echo [--] ComfyUI — nyalain manual via Settings ^> Fullbody Engine kalau jual paket Fullbody
 
 REM ── Kiosk UI — PRODUKSI: next start (bukan dev). Butuh .next dari build di atas. ──
 start /min "Kiosk" cmd /k "cd /d "%ROOT%\kiosk" && npm run start"

@@ -333,6 +333,12 @@ const en: Translations = {
   set_denoise_hint: 'template can override',
 
   // Video engine
+  set_fullbody_engine: 'Fullbody Engine (ComfyUI)',
+  set_fullbody_hint: 'Turn on before selling Fullbody packages — off saves VRAM.',
+  set_fullbody_starting: '(starting…)',
+  set_fullbody_stopping: '(stopping…)',
+  set_fullbody_start_failed: 'Failed to start ComfyUI — check C:\\ComfyUI exists',
+  set_fullbody_stop_failed: 'Failed to stop ComfyUI',
   set_video_engine: 'Enable Video Engine (img2vid)',
   set_video_locked_badge: 'LOCKED',
   set_video_need_rental: 'Video needs an active rental — start a session (key + rental time) first.',

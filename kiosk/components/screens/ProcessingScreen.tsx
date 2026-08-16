@@ -360,6 +360,10 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
       // Timeout ikut jumlah template — N generate sequential, jangan abort di tengah antrian.
       const timeout = setTimeout(() => { controller.abort(); setTimedOut(true) }, 120_000 * state.templates.length)
       ;(async () => {
+        // ComfyUI toggle mati (operator lupa nyalain) → gagal cepat dalam detik, bukan
+        // nunggu 120s×N timeout kosong buat request yang emang gak bakal pernah kejawab.
+        const status = await fetch('http://localhost:8000/comfy/status').then(r => r.json()).catch(() => ({ alive: false }))
+        if (!status.alive) throw new Error('ComfyUI belum aktif — nyalakan lewat Settings > Fullbody Engine')
         const results: SwapResult[] = []
         const total = state.templates.length
         for (let i = 0; i < total; i++) {

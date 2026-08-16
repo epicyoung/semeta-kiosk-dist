@@ -254,6 +254,12 @@ const ms: Translations = {
   set_denoise: 'Denoise (lalai)',
   set_denoise_hint: 'templat boleh menimpa',
 
+  set_fullbody_engine: 'Enjin Fullbody (ComfyUI)',
+  set_fullbody_hint: 'Hidupkan sebelum jual pakej Fullbody — mati untuk jimat VRAM.',
+  set_fullbody_starting: '(menghidupkan…)',
+  set_fullbody_stopping: '(mematikan…)',
+  set_fullbody_start_failed: 'Gagal hidupkan ComfyUI — semak C:\\ComfyUI wujud',
+  set_fullbody_stop_failed: 'Gagal matikan ComfyUI',
   set_video_engine: 'Aktifkan Enjin Video (img2vid)',
   set_video_locked_badge: 'DIKUNCI',
   set_video_need_rental: 'Video perlukan sewaan aktif — mulakan sesi (kunci + masa sewaan) dahulu.',

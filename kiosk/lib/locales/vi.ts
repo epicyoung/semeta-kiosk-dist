@@ -254,6 +254,12 @@ const vi: Translations = {
   set_denoise: 'Denoise (mặc định)',
   set_denoise_hint: 'mẫu có thể ghi đè giá trị này',
 
+  set_fullbody_engine: 'Fullbody Engine (ComfyUI)',
+  set_fullbody_hint: 'Bật trước khi bán gói Fullbody — tắt để tiết kiệm VRAM.',
+  set_fullbody_starting: '(đang khởi động…)',
+  set_fullbody_stopping: '(đang tắt…)',
+  set_fullbody_start_failed: 'Khởi động ComfyUI thất bại — kiểm tra C:\\ComfyUI có tồn tại',
+  set_fullbody_stop_failed: 'Tắt ComfyUI thất bại',
   set_video_engine: 'Bật Công Cụ Video (img2vid)',
   set_video_locked_badge: 'ĐÃ KHÓA',
   set_video_need_rental: 'Video cần có gói thuê đang hoạt động — bắt đầu phiên (khóa + thời gian thuê) trước.',

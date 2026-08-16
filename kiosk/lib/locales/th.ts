@@ -254,6 +254,12 @@ const th: Translations = {
   set_denoise: 'Denoise (ค่าเริ่มต้น)',
   set_denoise_hint: 'เทมเพลตสามารถกำหนดค่าทับได้',
 
+  set_fullbody_engine: 'เอนจิน Fullbody (ComfyUI)',
+  set_fullbody_hint: 'เปิดก่อนขายแพ็กเกจ Fullbody — ปิดเพื่อประหยัด VRAM',
+  set_fullbody_starting: '(กำลังเปิด…)',
+  set_fullbody_stopping: '(กำลังปิด…)',
+  set_fullbody_start_failed: 'เปิด ComfyUI ไม่สำเร็จ — ตรวจสอบว่ามี C:\\ComfyUI',
+  set_fullbody_stop_failed: 'ปิด ComfyUI ไม่สำเร็จ',
   set_video_engine: 'เปิดใช้งานเอนจินวิดีโอ (img2vid)',
   set_video_locked_badge: 'ล็อกอยู่',
   set_video_need_rental: 'วิดีโอต้องการการเช่าที่ใช้งานอยู่ — เริ่มเซสชัน (คีย์ + ระยะเวลาเช่า) ก่อน',

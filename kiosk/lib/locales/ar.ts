@@ -333,6 +333,12 @@ const ar: Translations = {
   set_denoise_hint: 'يمكن للقالب تجاوزه',
 
   // محرك الفيديو
+  set_fullbody_engine: 'محرك الجسم الكامل (ComfyUI)',
+  set_fullbody_hint: 'شغّله قبل بيع باقات الجسم الكامل — إيقافه يوفر ذاكرة GPU.',
+  set_fullbody_starting: '(جارٍ التشغيل…)',
+  set_fullbody_stopping: '(جارٍ الإيقاف…)',
+  set_fullbody_start_failed: 'فشل تشغيل ComfyUI — تحقق من وجود C:\\ComfyUI',
+  set_fullbody_stop_failed: 'فشل إيقاف ComfyUI',
   set_video_engine: 'تفعيل محرك الفيديو (img2vid)',
   set_video_locked_badge: 'مقفل',
   set_video_need_rental: 'يتطلب الفيديو إيجارًا نشطًا — ابدأ جلسة أولاً (مفتاح + وقت إيجار).',
