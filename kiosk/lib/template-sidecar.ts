@@ -40,7 +40,7 @@ const MAX_SHOTS = 6
 
 // Cermin whitelist Worker. Worker tetep yang berkuasa (dia yang megang FAL key + URL asli) —
 // ini cuma nyegah nilai liar nyangkut di PB dan bingungin operator pas debug.
-const KNOWN_API_MODELS = ['nano-banana-pro']
+const KNOWN_API_MODELS = ['nano-banana-pro', 'nano-banana-2']
 // Enum aspect_ratio FAL nano-banana-pro/edit.
 const FAL_ASPECT_RATIOS = ['21:9', '16:9', '3:2', '4:3', '5:4', '1:1', '4:5', '3:4', '2:3', '9:16']
 const MAX_REFERENCE_IMAGES = 3 // BG doang; foto tamu nyusul di runtime, ga dihitung di sini
