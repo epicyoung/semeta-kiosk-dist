@@ -74,7 +74,18 @@ export async function uploadAsset(
     method: "POST",
     body: form,
   });
-  if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+  if (!res.ok) {
+    // Route /api/upload-asset udah nerusin alasan ASLI dari Worker (workerStatus + workerBody).
+    // Dulu dibuang dan cuma dilempar angka status — "Upload failed: 502" ga ngasih tau apa-apa,
+    // alasannya cuma nongol di terminal server yang ga kelihatan pas lagi di depan booth.
+    const detail = await res
+      .json()
+      .then((d: { error?: string; workerStatus?: number; workerBody?: string }) =>
+        d.workerStatus ? `worker ${d.workerStatus}: ${d.workerBody ?? ""}` : (d.error ?? ""),
+      )
+      .catch(() => "");
+    throw new Error(`Upload ${type} gagal (${res.status})${detail ? ` — ${detail}` : ""}`);
+  }
   const { url, key } = await res.json();
   return { url, key };
 }
