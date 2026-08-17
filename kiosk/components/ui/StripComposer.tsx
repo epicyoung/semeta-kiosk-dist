@@ -268,28 +268,16 @@ export function StripComposer({
     const src = picked[i] ? pool.find(p => p.id === picked[i]) : undefined
     const tf = getTransform(i)
     const isTrioHero = is4R && ai4rLayout === 'TRIO_3' && i === 0
-    const isMirrorRight = side === 'right'
 
-    // Slot yang lagi disentuh naik DI ATAS overlay PNG (z-20) supaya badge fit/scale &
-    // tombol rotate di dalemnya bisa diklik. Nge-z-index badge doang percuma — badge kekunci
-    // di stacking context slot, jadi slot-nya yang harus naik.
-    //
-    // Cuma slot AKTIF yang naik, bukan semuanya: kalau semua slot di atas overlay, frame-nya
-    // ketutup foto terus dan tamu ga bisa liat hasil akhirnya. Begitu jari diangkat &
-    // pindah slot lain, yang lama balik ke bawah overlay — frame kelihatan lagi.
-    const liftForControls = activeSlot === i ? { zIndex: 30 } : null
     const customStyle: React.CSSProperties = rect && containerW && containerH
-      ? { position: 'absolute', left: `${(rect.x / containerW) * 100}%`, top: `${(rect.y / containerH) * 100}%`, width: `${(rect.w / containerW) * 100}%`, height: `${(rect.h / containerH) * 100}%`, transform: rect.r ? `rotate(${rect.r}deg)` : undefined, ...liftForControls, ['--checker-size' as string]: '10px' }
-      : { ...liftForControls, ['--checker-size' as string]: is4R || activeSlots >= 3 ? '10px' : '14px' }
+      ? { position: 'absolute', left: `${(rect.x / containerW) * 100}%`, top: `${(rect.y / containerH) * 100}%`, width: `${(rect.w / containerW) * 100}%`, height: `${(rect.h / containerH) * 100}%`, transform: rect.r ? `rotate(${rect.r}deg)` : undefined, ['--checker-size' as string]: '10px' }
+      : { ['--checker-size' as string]: is4R || activeSlots >= 3 ? '10px' : '14px' }
 
     return (
       <div
         key={`${side}-${i}`}
         className={`block overflow-hidden border border-white/5 checker ${src ? '' : 'checker--void'} ${rect ? 'absolute' : (is4R ? 'h-full relative w-full' : 'flex-1 min-h-0 relative w-full')} ${isTrioHero ? 'col-span-2 row-span-1' : ''}`}
         style={customStyle}
-        // Sentuh di mana pun dalam slot = slot ini aktif → naik di atas overlay, badge-nya
-        // kebuka. Tanpa ini slot cuma aktif pas foto-nya digeser, jadi badge yang ketutup
-        // PNG ga akan pernah bisa diklik — tamu kejebak.
         onPointerDown={() => setActiveSlot(i)}
         onDoubleClick={(e) => {
           e.stopPropagation()
@@ -318,75 +306,111 @@ export function StripComposer({
                 }}
               />
             </div>
-            {/* z-30 ini cuma ngalahin isi slot lain (foto). Yang bikin badge menang lawan
-                overlay PNG itu zIndex di slot induknya pas aktif — lihat liftForControls
-                di renderSlot. Beda stacking context, angka di sini ga ada urusan sama z-20
-                punya overlay. */}
-            {!isMirrorRight && (
-              <div className="absolute inset-x-1.5 top-1.5 z-30 flex items-center justify-between pointer-events-none">
-                {/* Fit / Scale Badge — bisa diklik langsung atau double-tap foto */}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    flipFit(i)
-                  }}
-                  className={`pointer-events-auto flex items-center rounded-full text-white backdrop-blur-md transition-all active:scale-95 shadow-md ${
-                    is4R || activeSlots >= 3 ? 'gap-1 px-2 py-0.5 text-[9px]' : 'gap-1.5 px-2.5 py-1 text-[11px]'
-                  }`}
-                  style={{ background: 'rgba(0,0,0,0.7)', border: '1px solid rgba(255,255,255,0.2)' }}
-                  title="Klik atau ketuk 2x foto untuk ganti Fit Lebar / Fit Tinggi"
-                >
-                  <span className="font-mono">{(tf.scale * 100).toFixed(0)}%</span>
-                  <span style={{ opacity: 0.35 }}>|</span>
-                  <span className="font-semibold tracking-wider">
-                    {tf.fit === 'width'
-                      ? `↔ ${t('strip_fit_width') as string}`
-                      : `↕ ${t('strip_fit_height') as string}`}
-                  </span>
-                  {tf.rotation > 0 && (
-                    <>
-                      <span style={{ opacity: 0.35 }}>|</span>
-                      <span>{tf.rotation}°</span>
-                    </>
-                  )}
-                </button>
-
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      rotateSlot(i)
-                    }}
-                    className={`pointer-events-auto flex items-center justify-center rounded-full text-white shadow-lg transition-transform active:scale-95 ${
-                      is4R || activeSlots >= 3 ? 'h-6 w-6 text-[10px]' : 'h-7 w-7 text-xs'
-                    }`}
-                    style={{ background: 'rgba(0,0,0,0.75)', border: '1px solid rgba(255,255,255,0.2)', lineHeight: 1 }}
-                    title="Putar 90°"
-                  >
-                    ⟳
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      clear(i)
-                    }}
-                    className={`pointer-events-auto flex items-center justify-center rounded-full text-white shadow-lg transition-transform active:scale-95 ${
-                      is4R || activeSlots >= 3 ? 'h-6 w-6 text-xs' : 'h-7 w-7 text-sm'
-                    }`}
-                    style={{ background: 'rgba(220,38,38,0.85)', lineHeight: 1 }}
-                    title="Hapus foto dari slot"
-                  >
-                    ×
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         ) : (
           <span className="absolute inset-0 flex items-center justify-center font-bold text-white/20">{i + 1}</span>
+        )}
+      </div>
+    )
+  }
+
+  // Kontrol slot (badge fit/scale + rotate + clear) dirender di layer z-30 TERPISAH
+  // di atas overlay PNG (z-20), bukan di dalam wadah slot foto.
+  // Dengan begini:
+  // 1. Foto tetep rapi di bawah overlay frame (z-10).
+  // 2. Overlay PNG ada di tengah (z-20, pointer-events-none).
+  // 3. Badge & tombol rotate/delete SELALU terapung di atas overlay (z-30), ga akan pernah
+  //    ketutup logo/teks/art frame PNG, dan 100% bisa diklik.
+  const renderControls = (
+    i: number,
+    rect?: { x: number; y: number; w: number; h: number; r?: number },
+    containerW?: number,
+    containerH?: number
+  ) => {
+    const src = picked[i] ? pool.find(p => p.id === picked[i]) : undefined
+    const tf = getTransform(i)
+    const isTrioHero = is4R && ai4rLayout === 'TRIO_3' && i === 0
+
+    const customStyle: React.CSSProperties = rect && containerW && containerH
+      ? {
+          position: 'absolute',
+          left: `${(rect.x / containerW) * 100}%`,
+          top: `${(rect.y / containerH) * 100}%`,
+          width: `${(rect.w / containerW) * 100}%`,
+          height: `${(rect.h / containerH) * 100}%`,
+          transform: rect.r ? `rotate(${rect.r}deg)` : undefined,
+        }
+      : {}
+
+    return (
+      <div
+        key={`ctrl-${i}`}
+        className={`pointer-events-none ${
+          rect ? 'absolute' : (is4R ? 'h-full relative w-full' : 'flex-1 min-h-0 relative w-full')
+        } ${isTrioHero ? 'col-span-2 row-span-1' : ''}`}
+        style={customStyle}
+      >
+        {src && (
+          <div className="absolute inset-x-1.5 top-1.5 flex items-center justify-between pointer-events-none">
+            {/* Fit / Scale Badge — bisa diklik langsung atau double-tap foto */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                flipFit(i)
+              }}
+              className={`pointer-events-auto flex items-center rounded-full text-white backdrop-blur-md transition-all active:scale-95 shadow-md ${
+                is4R || activeSlots >= 3 ? 'gap-1 px-2 py-0.5 text-[9px]' : 'gap-1.5 px-2.5 py-1 text-[11px]'
+              }`}
+              style={{ background: 'rgba(0,0,0,0.7)', border: '1px solid rgba(255,255,255,0.2)' }}
+              title="Klik atau ketuk 2x foto untuk ganti Fit Lebar / Fit Tinggi"
+            >
+              <span className="font-mono">{(tf.scale * 100).toFixed(0)}%</span>
+              <span style={{ opacity: 0.35 }}>|</span>
+              <span className="font-semibold tracking-wider">
+                {tf.fit === 'width'
+                  ? `↔ ${t('strip_fit_width') as string}`
+                  : `↕ ${t('strip_fit_height') as string}`}
+              </span>
+              {tf.rotation > 0 && (
+                <>
+                  <span style={{ opacity: 0.35 }}>|</span>
+                  <span>{tf.rotation}°</span>
+                </>
+              )}
+            </button>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  rotateSlot(i)
+                }}
+                className={`pointer-events-auto flex items-center justify-center rounded-full text-white shadow-lg transition-transform active:scale-95 ${
+                  is4R || activeSlots >= 3 ? 'h-6 w-6 text-[10px]' : 'h-7 w-7 text-xs'
+                }`}
+                style={{ background: 'rgba(0,0,0,0.75)', border: '1px solid rgba(255,255,255,0.2)', lineHeight: 1 }}
+                title="Putar 90°"
+              >
+                ⟳
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  clear(i)
+                }}
+                className={`pointer-events-auto flex items-center justify-center rounded-full text-white shadow-lg transition-transform active:scale-95 ${
+                  is4R || activeSlots >= 3 ? 'h-6 w-6 text-xs' : 'h-7 w-7 text-sm'
+                }`}
+                style={{ background: 'rgba(220,38,38,0.85)', lineHeight: 1 }}
+                title="Hapus foto dari slot"
+              >
+                ×
+              </button>
+            </div>
+          </div>
         )}
       </div>
     )
@@ -469,14 +493,8 @@ export function StripComposer({
             >
               {is4R ? (
                 /* ── 4R POSTCARD ── */
-                <>
-                  {overlay4rUrl && (
-                    <img
-                      src={overlay4rUrl}
-                      alt="Overlay 4R"
-                      className="absolute inset-0 z-20 h-full w-full object-cover pointer-events-none"
-                    />
-                  )}
+                <div className="relative h-full w-full">
+                  {/* Layer 1: Slot Foto */}
                   {hasCustom4R ? (
                     <div className="relative h-full w-full">
                       {custom4rSlots!.slots.map((s, i) =>
@@ -504,10 +522,51 @@ export function StripComposer({
                       {Array.from({ length: activeSlots }, (_, i) => renderSlot(i, 'single'))}
                     </div>
                   )}
-                </>
+
+                  {/* Layer 2: Overlay Frame 4R (z-20) */}
+                  {overlay4rUrl && (
+                    <img
+                      src={overlay4rUrl}
+                      alt="Overlay 4R"
+                      className="absolute inset-0 z-20 h-full w-full object-cover pointer-events-none"
+                    />
+                  )}
+
+                  {/* Layer 3: Kontrol Slot (z-30) */}
+                  <div className="absolute inset-0 z-30 pointer-events-none">
+                    {hasCustom4R ? (
+                      <div className="relative h-full w-full pointer-events-none">
+                        {custom4rSlots!.slots.map((s, i) =>
+                          renderControls(i, s, isPortrait4R ? 1200 : 1800, isPortrait4R ? 1800 : 1200)
+                        )}
+                      </div>
+                    ) : (
+                      <div className={`pointer-events-none ${
+                        isPortrait4R
+                          ? ai4rLayout === 'SINGLE_1'
+                            ? 'grid grid-cols-1 grid-rows-1 h-full w-full'
+                            : ai4rLayout === 'GRID_3'
+                            ? 'grid grid-cols-1 grid-rows-3 h-full w-full'
+                            : ai4rLayout === 'SPLIT_2'
+                            ? 'grid grid-cols-1 grid-rows-2 h-full w-full'
+                            : 'grid grid-cols-2 grid-rows-2 h-full w-full'
+                          : ai4rLayout === 'SINGLE_1'
+                          ? 'grid grid-cols-1 grid-rows-1 h-full w-full'
+                          : ai4rLayout === 'GRID_3'
+                          ? 'grid grid-cols-3 grid-rows-1 h-full w-full'
+                          : ai4rLayout === 'SPLIT_2'
+                          ? 'grid grid-cols-2 grid-rows-1 h-full w-full'
+                          : 'grid grid-cols-2 grid-rows-2 h-full w-full'
+                      }`}>
+                        {Array.from({ length: activeSlots }, (_, i) => renderControls(i))}
+                      </div>
+                    )}
+                  </div>
+                </div>
               ) : (
                 /* ── 2-STRIP FULL 4R SHEET (DUA STRIP BERDAMPINGAN) ── */
                 <div className="relative h-full w-full">
+                  {/* Layer 1: Slot Foto */}
                   <div className="grid grid-cols-2 h-full w-full relative z-10">
                     {/* Kolom Strip Kiri */}
                     <div className={`h-full w-full relative border-r border-dashed border-white/20 ${hasCustom2Strip ? '' : 'flex flex-col'}`}>
@@ -538,7 +597,7 @@ export function StripComposer({
                     </div>
                   </div>
 
-                  {/* Full Sheet Overlay */}
+                  {/* Layer 2: Full Sheet Overlay */}
                   {!overlayRightUrl && !isSingleStripOverlay && overlayUrl && (
                     <img
                       src={overlayUrl}
@@ -546,6 +605,16 @@ export function StripComposer({
                       className="absolute inset-0 z-20 h-full w-full object-cover pointer-events-none"
                     />
                   )}
+
+                  {/* Layer 3: Kontrol Slot (z-30) — khusus strip kiri (sisi interaktif) */}
+                  <div className="absolute inset-0 z-30 pointer-events-none grid grid-cols-2 h-full w-full">
+                    <div className={`h-full w-full relative pointer-events-none ${hasCustom2Strip ? '' : 'flex flex-col'}`}>
+                      {hasCustom2Strip
+                        ? customSlots!.slots.map((s, i) => renderControls(i, s, 600, 1800))
+                        : Array.from({ length: activeSlots }, (_, i) => renderControls(i))}
+                    </div>
+                    <div className="h-full w-full pointer-events-none" />
+                  </div>
                 </div>
               )}
             </div>

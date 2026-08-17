@@ -183,8 +183,9 @@ export function PreviewScreen({
   // enable_video_engine:true tapi belum diizinin admin bakal ditolak 403 tanpa motong token.
   // GATE TAMBAHAN: tanpa sewa aktif (licensed) DAN bukan godmode → video DILARANG total,
   // walau admin nyalain enable_video. Freeware murni (tanpa key/rental) = nol UI video.
+  const hasRental = licensed || !!config.bypassed;
   const videoAllowed =
-    (licensed || !!config.bypassed) &&
+    hasRental &&
     isVideoUnlocked(config) &&
     (config.enable_video_engine ?? false) &&
     !isPrintSession;
@@ -744,7 +745,7 @@ export function PreviewScreen({
         // Cloud copy: Video .mp4 udah di-render ffmpeg dan ada di C:/semeta/ (localPath).
         // Kita BACA LANGSUNG dari disk lokal untuk upload ke R2, bypass blob browser sepenuhnya.
         // Gagal = ga ada video di HP, on-screen tetep main (fail-safe).
-        if (licensed && state.base && finalized?.localPath) {
+        if (hasRental && state.base && finalized?.localPath) {
           uploadLocalFile(finalized.localPath, "C", state.base, {
             eventName,
           }).catch((err) =>
@@ -781,7 +782,7 @@ export function PreviewScreen({
   // attempts: auto-retry (effect) 2x; manual (tombol Ulangi QR) 1x. Guard uploadSeq = frame
   // paling baru yang menang, QR ga ketimpa hasil upload lama.
   async function runUpload(attempts: number) {
-    if (!licensed || !state.base) return;
+    if (!hasRental || !state.base) return;
     const base = state.base;
     const seq = ++uploadSeq.current;
     // Sumber _A/_B ikut yang LAGI ditampilkan (activeResult) — multi: hasil kepilih user (resultIndex),
@@ -865,7 +866,7 @@ export function PreviewScreen({
 
 
   useEffect(() => {
-    if (!isFinal || !licensed || !state.base) return; // upload cuma di preview final, frame udah fixed
+    if (!isFinal || !hasRental || !state.base) return; // upload cuma di preview final, frame udah fixed
     if (uploadedBase.current === state.base) return; // udah di-upload buat foto ini — jangan dobel
     // Kunci guard SEBELUM debounce → effect run kedua (render cepat) ke-skip di baris atas,
     // ga bisa spawn debounce ke-2 → NOL dobel upload R2. Cleanup buka lagi HANYA kalau debounce
@@ -887,7 +888,7 @@ export function PreviewScreen({
     // WAJIB string: naro state.allResults mentah bikin panjang dep array berubah pas dia masih
     // undefined di render awal → React ngelempar "final argument changed size between renders".
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFinal, licensed, state.base, resultsKey]);
+  }, [isFinal, hasRental, state.base, resultsKey]);
 
   // Satu QR = satu halaman microsite (ori/ai/video). Video kini di R2 (_C.mp4) → HP tamu buka
   // dari cloud, bukan LAN. Nutup lubang keamanan: kiosk aman di-bind 127.0.0.1.
@@ -899,7 +900,7 @@ export function PreviewScreen({
   useEffect(() => {
     if (!isFinal || !preVideo || !state.base) return;
     if (finalizedBase.current === state.base) return; // udah difinalize buat foto ini
-    if (licensed && !shareUrl) return; // licensed: tunggu QR asli dulu
+    if (hasRental && !shareUrl) return; // licensed: tunggu QR asli dulu
     finalizedBase.current = state.base;
     let live = true;
     (async () => {
@@ -921,7 +922,7 @@ export function PreviewScreen({
           setActiveTab("video");
 
           // Sama kayak manual: baca langsung dari C:/semeta/ via Node backend (bukan browser blob).
-          if (licensed && state.base && finalized.localPath) {
+          if (hasRental && state.base && finalized.localPath) {
             uploadLocalFile(finalized.localPath, "C", state.base, {
               eventName,
             }).catch((err) =>
@@ -940,7 +941,7 @@ export function PreviewScreen({
       live = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFinal, preVideo, state.base, shareUrl, licensed]);
+  }, [isFinal, preVideo, state.base, shareUrl, hasRental]);
 
   // Tombol QR — SATU definisi, dipajang di dua slot: portrait = melayang di pita atas
   // foto, landscape = kolom kiri di bawah subtitle. Gate per-orientasi di globals.css.
@@ -959,7 +960,7 @@ export function PreviewScreen({
         pointerEvents: "auto",
       }}
     >
-      {licensed && qrValue ? (
+      {hasRental && qrValue ? (
         <QRCodeSVG
           value={qrValue}
           size={QR_INLINE_SIZE}
@@ -989,7 +990,7 @@ export function PreviewScreen({
               fontFamily: "var(--font-ui)",
             }}
           >
-            {!licensed
+            {!hasRental
               ? "Belum aktif"
               : qrStatus === "uploading"
                 ? "Upload…"
@@ -1342,7 +1343,7 @@ export function PreviewScreen({
                   setShowBigQr(false);
                 }}
               >
-                {!licensed ? (
+                {!hasRental ? (
                   <div
                     style={{
                       padding: 16,
