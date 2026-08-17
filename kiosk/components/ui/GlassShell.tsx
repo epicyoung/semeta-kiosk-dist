@@ -100,7 +100,12 @@ export function GlassShell({ screenKey, direction, children, config, onLogoClick
   const showSync = (screenKey === 'category' || screenKey === 'template') && localConfig.engine_mode !== 'print_local'
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'g' || e.key === 'G') setGridDebug(v => !v) }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey && (e.key === 'g' || e.key === 'G')) {
+        e.preventDefault()
+        setGridDebug(v => !v)
+      }
+    }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])

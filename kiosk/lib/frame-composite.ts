@@ -47,17 +47,41 @@ export async function compositeFrame(
     loadImg(photoUrl),
     frameUrl ? loadImg(frameUrl) : Promise.resolve(null),
   ])
-  const fit = maxEdge ? fitWithin(photo.naturalWidth, photo.naturalHeight, maxEdge) : null
-  const w = fit?.w ?? photo.naturalWidth
-  const h = fit?.h ?? photo.naturalHeight
+
+  if (!frame) {
+    const fit = maxEdge ? fitWithin(photo.naturalWidth, photo.naturalHeight, maxEdge) : null
+    const w = fit?.w ?? photo.naturalWidth
+    const h = fit?.h ?? photo.naturalHeight
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    const ctx = canvas.getContext('2d')!
+    ctx.drawImage(photo, 0, 0, w, h)
+    return toJpegDataUrl(canvas)
+  }
+
+  // Frame ada: Frame menentukan rasio kanvas & batas cetak template (mis. 1200x1800 4R)!
+  // Frame TIDAK BOLEH terpotong agar logo/teks/stiker di tepi atas & bawah 100% utuh.
+  // Foto tamu yang di-coverFit di belakang jendela frame.
+  const baseW = frame.naturalWidth
+  const baseH = frame.naturalHeight
+  const fit = maxEdge ? fitWithin(baseW, baseH, maxEdge) : null
+  const w = fit?.w ?? baseW
+  const h = fit?.h ?? baseH
+
   const canvas = document.createElement('canvas')
   canvas.width = w
   canvas.height = h
   const ctx = canvas.getContext('2d')!
-  ctx.drawImage(photo, 0, 0, w, h)
-  if (frame) {
-    const { dx, dy, dw, dh } = coverFit(frame.naturalWidth, frame.naturalHeight, w, h)
-    ctx.drawImage(frame, dx, dy, dw, dh)
-  }
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, w, h)
+
+  // Foto cover-fit memenuhi kanvas di belakang frame
+  const { dx, dy, dw, dh } = coverFit(photo.naturalWidth, photo.naturalHeight, w, h)
+  ctx.drawImage(photo, dx, dy, dw, dh)
+
+  // Frame digambar 100% utuh di atas foto (zero-crop)
+  ctx.drawImage(frame, 0, 0, w, h)
+
   return toJpegDataUrl(canvas)
 }

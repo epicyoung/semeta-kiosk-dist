@@ -1,10 +1,10 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import type { KioskConfig, Template, TemplateSource, Locale, ComfyModelFamily, ComfyControlnetMode, VideoProvider, Ai4RLayout } from '@/lib/types'
+import type { KioskConfig, Template, TemplateSource, Locale, ComfyModelFamily, ComfyControlnetMode, VideoProvider, Ai4RLayout, Ai4ROrientation } from '@/lib/types'
 import { MAGIC_DURATIONS } from '@/lib/use-magic-catcher'
 import { fetchPocketBaseTemplates } from '@/lib/pocketbase'
 import { isVideoUnlocked } from '@/lib/video'
-import { enabledModels, costFor, reconcileSelection } from '@/lib/image-engines'
+import { enabledModels, costFor, reconcileSelection, totalCostFor, clampVariants, VARIANT_CHOICES } from '@/lib/image-engines'
 import { useT } from '@/lib/i18n'
 import type { Translations } from '@/lib/locales/types'
 
@@ -13,6 +13,7 @@ type EngineKey = 'faceswap_local' | 'fullbody_local' | 'print_local' | 'faceswap
 
 import { LocalTemplateManager } from './LocalTemplateManager'
 import { VideoPromptManager } from './VideoPromptManager'
+import { LayoutDesigner } from './LayoutDesigner'
 
 const ENGINE_OPTS: { value: EngineKey; label: string; soon?: boolean }[] = [
   { value: 'faceswap_local', label: 'Faceswap (LOCAL)' },
@@ -245,8 +246,13 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   const [originalCaptures, setOriginalCaptures] = useState(config.original_captures ?? 1)
   const [aiStripSlots,    setAiStripSlots]    = useState(config.ai_strip_slots ?? 0)
   const [aiStripOverlay,  setAiStripOverlay]  = useState(config.ai_strip_overlay_url ?? '')
+  const [aiStripCustomSlots, setAiStripCustomSlots] = useState<{ slots: { x: number; y: number; w: number; h: number; r?: number }[] } | null>(config.ai_strip_custom_slots || null)
+  const [ai4rOrientation, setAi4rOrientation] = useState<Ai4ROrientation>(config.ai_4r_orientation ?? 'LANDSCAPE')
   const [ai4rOverlay,     setAi4rOverlay]     = useState(config.ai_4r_overlay_url ?? '')
   const [ai4rLayout,      setAi4rLayout]      = useState<Ai4RLayout>(config.ai_4r_layout ?? 'GRID_4')
+  const [ai4rCustomSlots, setAi4rCustomSlots] = useState<{ slots: { x: number; y: number; w: number; h: number; r?: number }[] } | null>(config.ai_4r_custom_slots || null)
+  const [showStripDesigner, setShowStripDesigner] = useState(false)
+  const [show4rDesigner, setShow4rDesigner] = useState(false)
   const [require4rOverlay, setRequire4rOverlay] = useState(config.require_4r_overlay ?? true)
   const stripOverlayInputRef = useRef<HTMLInputElement>(null)
   const ai4rOverlayInputRef = useRef<HTMLInputElement>(null)
@@ -304,6 +310,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   // (di bawah, sesudah costs ke-fetch) supaya pilihan basi ga pernah kekirim ke Worker.
   const [imageModel,      setImageModel]      = useState(config.image_model ?? '')
   const [imageResolution, setImageResolution] = useState(config.image_resolution ?? '')
+  const [imageVariants,   setImageVariants]   = useState(() => clampVariants(config.image_variants))
   const [videoEngine,     setVideoEngine]     = useState(config.enable_video_engine ?? false)
   // Default LTX — 1080p native, murah & tajam. Provider dipangkas ke 3 tier (LTX/PIXVERSE/SEEDANCE);
   // config lama yg ke-set VEO/WAN/VIDU/KLING udah ga ada di dropdown → jatuhin ke LTX biar select ga
@@ -401,6 +408,19 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
       label: `${r === '-' ? (t('set_image_res_default') as string) : r} — ${costFor(imageCosts, imageSel!.model, r)} ${t('set_token_unit') as string}`,
     }))
   const selectedImageCost = imageSel ? costFor(imageCosts, imageSel.model, imageSel.resolution) : null
+  // Jumlah variasi AI per jepretan. Harga di admin PER FOTO, jadi tiap opsi nunjukin totalnya
+  // sendiri — operator ga usah ngitung di kepala pas lagi diburu antrian. Angka yang tampil
+  // dihitung rumus yang sama persis dengan deduct_image_tokens (unit x n, tanpa diskon volume).
+  const imageVariantOpts = VARIANT_CHOICES.map(n => {
+    const total = imageSel ? totalCostFor(imageCosts, imageSel.model, imageSel.resolution, n) : null
+    return {
+      value: String(n),
+      label: total != null ? `${n} — ${total} ${t('set_token_unit') as string}` : String(n),
+    }
+  })
+  const selectedImageTotal = imageSel
+    ? totalCostFor(imageCosts, imageSel.model, imageSel.resolution, imageVariants)
+    : null
   const [comfyStatus,     setComfyStatus]     = useState<PbStatus>('idle')
   const [comfyCaps,       setComfyCaps]       = useState<StylizeCaps | null>(null)
   const [logoFile,        setLogoFile]        = useState<File | null>(null)
@@ -822,8 +842,11 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         original_captures:  originalCaptures,
         ai_strip_slots:      aiStripSlots,
         ai_strip_overlay_url: aiStripOverlay.trim(),
+        ai_strip_custom_slots: aiStripCustomSlots,
+        ai_4r_orientation:    ai4rOrientation,
         ai_4r_overlay_url:    ai4rOverlay.trim(),
         ai_4r_layout:         ai4rLayout,
+        ai_4r_custom_slots:   ai4rCustomSlots,
         require_4r_overlay:   require4rOverlay,
         enable_magic_catcher: magicCatcher,
         magic_catcher_device_id: magicCatcherCam,
@@ -840,6 +863,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         // Ga ada engine enabled ⇒ '' ⇒ jalur lama per-template.
         image_model:      imageSel?.model ?? '',
         image_resolution: imageSel?.resolution ?? '',
+        image_variants:   imageVariants,
       }
       if (logo_url) patch.logo_url = logo_url
       if (bg_url)   patch.bg_url   = bg_url
@@ -874,8 +898,11 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         original_captures:  originalCaptures,
         ai_strip_slots:      aiStripSlots,
         ai_strip_overlay_url: aiStripOverlay.trim(),
+        ai_strip_custom_slots: aiStripCustomSlots,
+        ai_4r_orientation:    ai4rOrientation,
         ai_4r_overlay_url:    ai4rOverlay.trim(),
         ai_4r_layout:         ai4rLayout,
+        ai_4r_custom_slots:   ai4rCustomSlots,
         require_4r_overlay:   require4rOverlay,
         enable_magic_catcher: magicCatcher,
         magic_catcher_device_id: magicCatcherCam,
@@ -888,6 +915,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         video_duration:      videoDuration,
         image_model:      imageSel?.model ?? '',
         image_resolution: imageSel?.resolution ?? '',
+        image_variants:   imageVariants,
         ...(logo_url ? { logo_url } : {}),
         ...(bg_url   ? { bg_url   } : {}),
       } as Partial<KioskConfig>)
@@ -1129,6 +1157,50 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                   />
                 </RowHint>
               )}
+              {/* Image engine (foto AI) — operator milih model + resolusi, harga per kombinasi
+                  diatur super-admin di /dashboard/settings dan nyampe lewat handshake. Cuma
+                  relevan buat engine API (template engine_type 'api'); engine lokal ga nyentuh
+                  Worker sama sekali. Kalau admin belum nyalain satu pun model, blok ini
+                  disembunyiin dan kiosk jalan di jalur lama (model per-template) — bukan
+                  nampilin dropdown kosong yang bikin operator ngira rusak. */}
+              {(engine === 'fullbody_api' || engine === 'faceswap_api') && imageSel && (<>
+                <RowHint
+                  label={t('set_image_model') as string}
+                  hint={t('set_image_model_hint') as string}
+                >
+                  <Sel value={imageSel.model} options={imageModelOpts} onChange={v => {
+                    setImageModel(v)
+                    // Resolusi di-reset biar reconcile milihin yang tersedia di model baru —
+                    // tanpa ini, pindah ke Nano legacy sambil nyantol '4K' bikin selection hantu.
+                    setImageResolution('')
+                  }} />
+                </RowHint>
+                <RowHint
+                  label={t('set_image_resolution') as string}
+                  hint={selectedImageCost != null
+                    ? (t('set_image_resolution_hint_cost') as string)
+                        .replace('{res}', imageSel.resolution === '-' ? (t('set_image_res_default') as string) : imageSel.resolution)
+                        .replace('{n}', String(selectedImageCost))
+                    : t('set_image_resolution_hint') as string}
+                >
+                  <Sel value={imageSel.resolution} options={imageResOpts} onChange={setImageResolution} />
+                </RowHint>
+                {/* Jumlah variasi AI. Dulu dikunci 4 karena harga flat: milih 4 naikin tagihan
+                    provider ke kita tanpa naikin tagihan ke tenant. Sekarang boleh dipilih
+                    karena harga di admin per-foto dan RPC yang ngaliin — minta 4, bayar 4. */}
+                <RowHint
+                  label="Jumlah Variasi Foto AI"
+                  hint={selectedImageTotal != null && selectedImageCost != null
+                    ? `${imageVariants} foto × ${selectedImageCost} token = total ${selectedImageTotal} token`
+                    : "Pilih 1-4 foto AI yang dihasilkan per sesi"}
+                >
+                  <Sel
+                    value={String(imageVariants)}
+                    options={imageVariantOpts}
+                    onChange={v => setImageVariants(clampVariants(Number(v)))}
+                  />
+                </RowHint>
+              </>)}
               {/* Max Templates (1-4) — engine LOKAL doang (faceswap & fullbody/comfy): nol
                   ongkos per-gambar, GPU sendiri, jadi tetep dial operator. Di mode API jumlah
                   variasi = num_images di payload_json Supabase: dia ngaliin ongkos FAL 1-4×
@@ -1229,209 +1301,347 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
               </div>
               </>)}
 
-              {/* Strip 2R dari hasil AI — tamu nyusun sendiri pas nekan Cetak 2-Strip.
-                  Nol token (nyusun ulang aset jadi). Mati = tombolnya ga muncul di Preview.
-                  Disembunyikan jika mode Photo Print (non-AI) agar UI tidak membingungkan. */}
+              {/* Strip 2R & 4R Postcard dari hasil AI — tamu nyusun sendiri pas Cetak */}
               {engine !== 'print_local' && (
                 <div style={{ padding: '12px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{t('set_ai_strip') as string}</span>
                     <Sel
                       value={String(aiStripSlots)}
-                      options={[{ value: '0', label: t('set_ai_strip_off') as string }, { value: '2', label: '2' }, { value: '3', label: '3' }, { value: '4', label: '4' }]}
+                      options={[
+                        { value: '0', label: t('set_ai_strip_off') as string },
+                        { value: '1', label: '1 (1 Foto Full Strip)' },
+                        { value: '2', label: '2 (2 Foto Atas-Bawah)' },
+                        { value: '3', label: '3 (3 Foto Vertikal)' },
+                        { value: '4', label: '4 (4 Foto Grid)' },
+                      ]}
                       onChange={v => setAiStripSlots(Number(v))}
                     />
                   </div>
                   <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '6px 0 0' }}>
                     {t('set_ai_strip_hint') as string}
                   </p>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, paddingTop: 10, borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
-                    <span style={{ fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.75)', fontWeight: 500 }}>4R Postcard Layout</span>
-                    <Sel
-                      value={ai4rLayout}
-                      options={[
-                        { value: 'GRID_4', label: '4-Grid 2×2 (4 Foto)' },
-                        { value: 'TRIO_3', label: '3-Photo Trio (1 Kiri Berdiri + 2 Kanan Tidur)' },
-                        { value: 'GRID_3', label: '3-Vertical Grid (3 Foto Berdiri)' },
-                        { value: 'SPLIT_2', label: '2-Photo Split (2 Foto Berdiri)' },
-                      ]}
-                      onChange={v => setAi4rLayout(v as Ai4RLayout)}
-                    />
-                  </div>
+
+                  {/* ── BAGIAN 1: OVERLAY 2-STRIP (CUT 2×6) ── */}
                   {aiStripSlots > 0 && (
-                    <div style={{ marginTop: 12, padding: 12, background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.08)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                        <span style={{ fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.75)', fontWeight: 500 }}>Overlay PNG (600×1800)</span>
+                    <div style={{ marginTop: 14, padding: 12, background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.08)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                        <span style={{ fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.85)', fontWeight: 600 }}>Format Frame 2-Strip</span>
+                      </div>
+
+                      {/* 1200x1800 Full Sheet Overlay */}
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                          <span style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.75)' }}>
+                            Overlay PNG 2-Strip Full Sheet (1200×1800 Langsung Canva/Photoshop)
+                          </span>
+                          <input
+                            type="file"
+                            accept="image/png"
+                            style={{ display: 'none' }}
+                            ref={stripOverlayInputRef}
+                            onChange={async (e) => {
+                              const f = e.target.files?.[0]
+                              if (!f) return
+                              setStripOverlayUploading(true)
+                              try {
+                                const fd = new FormData()
+                                fd.append('file', f)
+                                const res = await fetch('/api/upload-local-asset', { method: 'POST', body: fd })
+                                const data = await res.json()
+                                if (data.url) setAiStripOverlay(data.url)
+                              } catch {
+                                alert('Gagal unggah overlay')
+                              } finally {
+                                setStripOverlayUploading(false)
+                                if (stripOverlayInputRef.current) stripOverlayInputRef.current.value = ''
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => stripOverlayInputRef.current?.click()}
+                            disabled={stripOverlayUploading}
+                            style={{
+                              padding: '3px 8px',
+                              borderRadius: 5,
+                              background: 'rgba(255,255,255,0.08)',
+                              border: '1px solid rgba(255,255,255,0.15)',
+                              color: '#fff',
+                              fontSize: 'var(--text-2xs)',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            {stripOverlayUploading ? '⟳ Memuat...' : '📁 Unggah PNG 1200×1800'}
+                          </button>
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <div style={{ flex: 1 }}>
+                            <TextInput value={aiStripOverlay} onChange={setAiStripOverlay} placeholder="/overlays/strip-full-1200x1800.png" mono />
+                          </div>
+                          {aiStripOverlay.trim() && (
+                            <button
+                              type="button"
+                              onClick={() => setAiStripOverlay('')}
+                              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#ff6b6b', fontSize: 'var(--text-xs)', padding: '6px 10px', cursor: 'pointer' }}
+                              title="Hapus"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                        <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.4)', margin: '6px 0 0', lineHeight: 1.4 }}>
+                          Sisi kiri (0..600) & sisi kanan (600..1200) otomatis dibakar berdampingan di kertas 4R portrait.
+                        </p>
+                      </div>
+
+                      {/* Status & Preview Thumbnail 2R */}
+                      {aiStripOverlay.trim() ? (
+                        <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 12, padding: '8px 10px', background: 'rgba(163,190,140,0.1)', border: '1px solid rgba(163,190,140,0.3)', borderRadius: 8 }}>
+                          <div style={{ width: 36, height: 54, background: '#111', borderRadius: 4, overflow: 'hidden', flexShrink: 0, border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <img src={aiStripOverlay.trim()} alt="Overlay 2-Strip" style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={(e) => { (e.target as HTMLElement).style.display = 'none' }} />
+                          </div>
+                          <div>
+                            <p style={{ margin: 0, fontSize: 'var(--text-xs)', fontWeight: 600, color: '#a3be8c' }}>
+                              ✓ Overlay 2-Strip Terpasang (Full Sheet 1200×1800)
+                            </p>
+                            <p style={{ margin: '2px 0 0', fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.5)' }}>
+                              Foto slot 1..{aiStripSlots} akan otomatis dibakar rapi pada cetakan 2-Strip.
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <p style={{ fontSize: 'var(--text-2xs)', color: '#f0c040', margin: '8px 0 0', lineHeight: 1.4 }}>
+                          ⚠ Belum ada overlay strip. Klik tombol Unggah PNG di atas agar hasil cetak 2-Strip punya frame/branding.
+                        </p>
+                      )}
+
+                      {/* Visual Designer Button 2-Strip */}
+                      <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.3)', borderRadius: 8 }}>
+                        <div>
+                          <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: '#d9c9ff' }}>
+                            {aiStripCustomSlots ? `✓ Custom Layout (${aiStripCustomSlots.slots.length} Slot)` : 'Layout Slot Standar'}
+                          </span>
+                          <p style={{ margin: '2px 0 0', fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.5)' }}>
+                            {aiStripCustomSlots ? 'Slot diatur bebas secara visual di atas overlay.' : 'Menggunakan susunan grid matematika default.'}
+                          </p>
+                        </div>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          {aiStripCustomSlots && (
+                            <button
+                              type="button"
+                              onClick={() => setAiStripCustomSlots(null)}
+                              style={{ padding: '5px 10px', borderRadius: 6, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: '#ff8a8a', fontSize: 'var(--text-2xs)', cursor: 'pointer' }}
+                            >
+                              Reset Default
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setShowStripDesigner(true)}
+                            style={{ padding: '5px 12px', borderRadius: 6, background: 'var(--brand)', border: 'none', color: '#fff', fontSize: 'var(--text-2xs)', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
+                          >
+                            <span>🎨</span> Atur Slot Visual
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── BAGIAN 2: 4R POSTCARD (ROTATE / ORIENTASI & LAYOUT) ── */}
+                  <div style={{ marginTop: 16, padding: 12, background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.08)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <span style={{ fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.85)', fontWeight: 600 }}>4R Postcard Full Sheet</span>
+                      {/* Orientasi Switcher */}
+                      <div style={{ display: 'flex', background: 'rgba(0,0,0,0.4)', borderRadius: 6, padding: 2, gap: 2 }}>
+                        <button
+                          type="button"
+                          onClick={() => setAi4rOrientation('LANDSCAPE')}
+                          style={{
+                            padding: '3px 8px',
+                            borderRadius: 4,
+                            border: 'none',
+                            fontSize: 'var(--text-2xs)',
+                            fontFamily: 'var(--font-ui)',
+                            cursor: 'pointer',
+                            background: ai4rOrientation === 'LANDSCAPE' ? 'rgba(255,255,255,0.2)' : 'transparent',
+                            color: ai4rOrientation === 'LANDSCAPE' ? '#fff' : 'rgba(255,255,255,0.5)',
+                          }}
+                        >
+                          ↔ Landscape (1800×1200)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAi4rOrientation('PORTRAIT')}
+                          style={{
+                            padding: '3px 8px',
+                            borderRadius: 4,
+                            border: 'none',
+                            fontSize: 'var(--text-2xs)',
+                            fontFamily: 'var(--font-ui)',
+                            cursor: 'pointer',
+                            background: ai4rOrientation === 'PORTRAIT' ? 'rgba(255,255,255,0.2)' : 'transparent',
+                            color: ai4rOrientation === 'PORTRAIT' ? '#fff' : 'rgba(255,255,255,0.5)',
+                          }}
+                        >
+                          ↕ Portrait (1200×1800)
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Layout Preset Dropdown */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                      <span style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.75)' }}>Layout Grid 4R</span>
+                      <Sel
+                        value={ai4rLayout}
+                        options={
+                          ai4rOrientation === 'PORTRAIT'
+                            ? [
+                                { value: 'GRID_4', label: '4-Grid 2×2 (4 Foto 600×900)' },
+                                { value: 'TRIO_3', label: '1+2 Trio (1 Atas Tidur + 2 Bawah Berdiri)' },
+                                { value: 'GRID_3', label: '3-Horizontal Stack (3 Foto Tidur)' },
+                                { value: 'SPLIT_2', label: '2-Horizontal Split (2 Foto Tidur)' },
+                                { value: 'SINGLE_1', label: '1-Photo Full Bleed (1 Foto Portrait)' },
+                              ]
+                            : [
+                                { value: 'GRID_4', label: '4-Grid 2×2 (4 Foto 900×600)' },
+                                { value: 'TRIO_3', label: '1+2 Trio (1 Kiri Berdiri + 2 Kanan Tidur)' },
+                                { value: 'GRID_3', label: '3-Vertical Columns (3 Foto Berdiri)' },
+                                { value: 'SPLIT_2', label: '2-Vertical Split (2 Foto Berdiri)' },
+                                { value: 'SINGLE_1', label: '1-Photo Full Bleed (1 Foto Landscape)' },
+                              ]
+                        }
+                        onChange={v => setAi4rLayout(v as Ai4RLayout)}
+                      />
+                    </div>
+
+                    {/* Upload PNG 4R */}
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <span style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.65)' }}>
+                          Overlay PNG 4R ({ai4rOrientation === 'PORTRAIT' ? '1200×1800 Portrait' : '1800×1200 Landscape'})
+                        </span>
                         <input
                           type="file"
                           accept="image/png"
                           style={{ display: 'none' }}
-                          ref={stripOverlayInputRef}
+                          ref={ai4rOverlayInputRef}
                           onChange={async (e) => {
                             const f = e.target.files?.[0]
                             if (!f) return
-                            setStripOverlayUploading(true)
+                            setAi4rOverlayUploading(true)
                             try {
                               const fd = new FormData()
                               fd.append('file', f)
                               const res = await fetch('/api/upload-local-asset', { method: 'POST', body: fd })
                               const data = await res.json()
-                              if (data.url) setAiStripOverlay(data.url)
-                            } catch (err) {
-                              alert('Gagal unggah overlay')
+                              if (data.url) setAi4rOverlay(data.url)
+                            } catch {
+                              alert('Gagal unggah overlay 4R')
                             } finally {
-                              setStripOverlayUploading(false)
-                              if (stripOverlayInputRef.current) stripOverlayInputRef.current.value = ''
+                              setAi4rOverlayUploading(false)
+                              if (ai4rOverlayInputRef.current) ai4rOverlayInputRef.current.value = ''
                             }
                           }}
                         />
                         <button
                           type="button"
-                          onClick={() => stripOverlayInputRef.current?.click()}
-                          disabled={stripOverlayUploading}
+                          onClick={() => ai4rOverlayInputRef.current?.click()}
+                          disabled={ai4rOverlayUploading}
                           style={{
-                            padding: '4px 10px',
-                            borderRadius: 6,
+                            padding: '3px 8px',
+                            borderRadius: 5,
                             background: 'rgba(255,255,255,0.08)',
                             border: '1px solid rgba(255,255,255,0.15)',
                             color: '#fff',
-                            fontSize: 'var(--text-xs)',
-                            fontFamily: 'var(--font-ui)',
+                            fontSize: 'var(--text-2xs)',
                             cursor: 'pointer',
                           }}
                         >
-                          {stripOverlayUploading ? '⟳ Memuat...' : '📁 Unggah PNG'}
+                          {ai4rOverlayUploading ? '⟳ Memuat...' : '📁 Unggah PNG 4R'}
                         </button>
                       </div>
 
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                         <div style={{ flex: 1 }}>
-                          <TextInput value={aiStripOverlay} onChange={setAiStripOverlay} placeholder="/overlays/strip-2r.png" mono />
+                          <TextInput value={ai4rOverlay} onChange={setAi4rOverlay} placeholder={ai4rOrientation === 'PORTRAIT' ? '/overlays/4r-portrait.png' : '/overlays/4r-landscape.png'} mono />
                         </div>
-                        {aiStripOverlay.trim() && (
+                        {ai4rOverlay.trim() && (
                           <button
                             type="button"
-                            onClick={() => setAiStripOverlay('')}
+                            onClick={() => setAi4rOverlay('')}
                             style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#ff6b6b', fontSize: 'var(--text-xs)', padding: '6px 10px', cursor: 'pointer' }}
-                            title="Hapus overlay"
+                            title="Hapus"
                           >
                             ✕
                           </button>
                         )}
                       </div>
 
-                      {/* Status & Preview Thumbnail 2R */}
-                      {aiStripOverlay.trim() ? (
+                      {/* Status & Preview 4R */}
+                      {ai4rOverlay.trim() ? (
                         <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 12, padding: '8px 10px', background: 'rgba(163,190,140,0.1)', border: '1px solid rgba(163,190,140,0.3)', borderRadius: 8 }}>
-                          <div style={{ width: 22, height: 66, background: '#111', borderRadius: 4, overflow: 'hidden', flexShrink: 0, border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <img src={aiStripOverlay.trim()} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={(e) => { (e.target as HTMLElement).style.display = 'none' }} />
+                          <div style={{ width: ai4rOrientation === 'PORTRAIT' ? 28 : 44, height: ai4rOrientation === 'PORTRAIT' ? 42 : 30, background: '#111', borderRadius: 4, overflow: 'hidden', flexShrink: 0, border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <img src={ai4rOverlay.trim()} alt="Preview 4R" style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={(e) => { (e.target as HTMLElement).style.display = 'none' }} />
                           </div>
                           <div>
-                            <p style={{ margin: 0, fontSize: 'var(--text-xs)', fontWeight: 600, color: '#a3be8c' }}>✓ Overlay 2R Terpasang</p>
-                            <p style={{ margin: '2px 0 0', fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.5)' }}>Frame 600×1800 akan otomatis dibakar pada hasil cetak 2-Strip.</p>
+                            <p style={{ margin: 0, fontSize: 'var(--text-xs)', fontWeight: 600, color: '#a3be8c' }}>
+                              ✓ Overlay 4R Postcard Terpasang ({ai4rOrientation === 'PORTRAIT' ? 'Portrait 1200×1800' : 'Landscape 1800×1200'})
+                            </p>
+                            <p style={{ margin: '2px 0 0', fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.5)' }}>Frame akan otomatis dibakar pada cetakan 4R Postcard.</p>
                           </div>
                         </div>
                       ) : (
                         <p style={{ fontSize: 'var(--text-2xs)', color: '#f0c040', margin: '8px 0 0', lineHeight: 1.4 }}>
-                          ⚠ Belum ada overlay. Klik tombol <b>📁 Unggah PNG</b> di atas atau ketik path agar hasil cetak 2-Strip punya frame/branding.
+                          ⚠ Belum ada Overlay 4R. Jika Wajib Overlay aktif, Tab 4R Postcard tidak akan bisa dipilih.
                         </p>
                       )}
 
-                      {/* 4R Overlay Section */}
-                      <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                          <span style={{ fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.75)', fontWeight: 500 }}>Overlay PNG 4R Postcard (1800×1200 Landscape)</span>
-                          <input
-                            type="file"
-                            accept="image/png"
-                            style={{ display: 'none' }}
-                            ref={ai4rOverlayInputRef}
-                            onChange={async (e) => {
-                              const f = e.target.files?.[0]
-                              if (!f) return
-                              setAi4rOverlayUploading(true)
-                              try {
-                                const fd = new FormData()
-                                fd.append('file', f)
-                                const res = await fetch('/api/upload-local-asset', { method: 'POST', body: fd })
-                                const data = await res.json()
-                                if (data.url) setAi4rOverlay(data.url)
-                              } catch (err) {
-                                alert('Gagal unggah overlay 4R')
-                              } finally {
-                                setAi4rOverlayUploading(false)
-                                if (ai4rOverlayInputRef.current) ai4rOverlayInputRef.current.value = ''
-                              }
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => ai4rOverlayInputRef.current?.click()}
-                            disabled={ai4rOverlayUploading}
-                            style={{
-                              padding: '4px 10px',
-                              borderRadius: 6,
-                              background: 'rgba(255,255,255,0.08)',
-                              border: '1px solid rgba(255,255,255,0.15)',
-                              color: '#fff',
-                              fontSize: 'var(--text-xs)',
-                              fontFamily: 'var(--font-ui)',
-                              cursor: 'pointer',
-                            }}
-                          >
-                            {ai4rOverlayUploading ? '⟳ Memuat...' : '📁 Unggah PNG 4R'}
-                          </button>
-                        </div>
+                      {/* Bulletproof Toggle */}
+                      <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <input
+                          type="checkbox"
+                          id="require4rOverlayChk"
+                          checked={require4rOverlay}
+                          onChange={(e) => setRequire4rOverlay(e.target.checked)}
+                          style={{ cursor: 'pointer', width: 16, height: 16 }}
+                        />
+                        <label htmlFor="require4rOverlayChk" style={{ fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.8)', cursor: 'pointer' }}>
+                          <b>Bulletproof Mode:</b> Wajibkan Overlay 4R (Tab 4R terkunci jika Overlay 4R belum diisi)
+                        </label>
+                      </div>
 
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                          <div style={{ flex: 1 }}>
-                            <TextInput value={ai4rOverlay} onChange={setAi4rOverlay} placeholder="/overlays/postcard-4r.png" mono />
-                          </div>
-                          {ai4rOverlay.trim() && (
+                      {/* Visual Designer Button 4R */}
+                      <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.3)', borderRadius: 8 }}>
+                        <div>
+                          <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: '#d9c9ff' }}>
+                            {ai4rCustomSlots ? `✓ Custom Layout (${ai4rCustomSlots.slots.length} Slot)` : 'Layout Preset 4R'}
+                          </span>
+                          <p style={{ margin: '2px 0 0', fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.5)' }}>
+                            {ai4rCustomSlots ? 'Slot diatur bebas secara visual di atas overlay 4R.' : 'Menggunakan preset layout grid terpilih.'}
+                          </p>
+                        </div>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          {ai4rCustomSlots && (
                             <button
                               type="button"
-                              onClick={() => setAi4rOverlay('')}
-                              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#ff6b6b', fontSize: 'var(--text-xs)', padding: '6px 10px', cursor: 'pointer' }}
-                              title="Hapus overlay 4R"
+                              onClick={() => setAi4rCustomSlots(null)}
+                              style={{ padding: '5px 10px', borderRadius: 6, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: '#ff8a8a', fontSize: 'var(--text-2xs)', cursor: 'pointer' }}
                             >
-                              ✕
+                              Reset Default
                             </button>
                           )}
-                        </div>
-
-                        {/* Status 4R */}
-                        {ai4rOverlay.trim() ? (
-                          <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 12, padding: '8px 10px', background: 'rgba(163,190,140,0.1)', border: '1px solid rgba(163,190,140,0.3)', borderRadius: 8 }}>
-                            <div style={{ width: 44, height: 30, background: '#111', borderRadius: 4, overflow: 'hidden', flexShrink: 0, border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <img src={ai4rOverlay.trim()} alt="Preview 4R" style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={(e) => { (e.target as HTMLElement).style.display = 'none' }} />
-                            </div>
-                            <div>
-                              <p style={{ margin: 0, fontSize: 'var(--text-xs)', fontWeight: 600, color: '#a3be8c' }}>✓ Overlay 4R Postcard Terpasang</p>
-                              <p style={{ margin: '2px 0 0', fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.5)' }}>Frame 1800×1200 akan otomatis dibakar pada cetakan 4R Postcard.</p>
-                            </div>
-                          </div>
-                        ) : (
-                          <p style={{ fontSize: 'var(--text-2xs)', color: '#f0c040', margin: '8px 0 0', lineHeight: 1.4 }}>
-                            ⚠ Belum ada Overlay 4R. Jika Wajib Overlay aktif, Tab 4R Postcard tidak akan bisa dipilih.
-                          </p>
-                        )}
-
-                        {/* Bulletproof Toggle */}
-                        <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <input
-                            type="checkbox"
-                            id="require4rOverlayChk"
-                            checked={require4rOverlay}
-                            onChange={(e) => setRequire4rOverlay(e.target.checked)}
-                            style={{ cursor: 'pointer', width: 16, height: 16 }}
-                          />
-                          <label htmlFor="require4rOverlayChk" style={{ fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.8)', cursor: 'pointer' }}>
-                            <b>Bulletproof Mode:</b> Wajibkan Overlay 4R (Tab 4R terkunci jika Overlay 4R belum diisi)
-                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setShow4rDesigner(true)}
+                            style={{ padding: '5px 12px', borderRadius: 6, background: 'var(--brand)', border: 'none', color: '#fff', fontSize: 'var(--text-2xs)', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
+                          >
+                            <span>🎨</span> Atur Slot Visual
+                          </button>
                         </div>
                       </div>
                     </div>
-                  )}
+                  </div>
                 </div>
               )}
 
@@ -1458,36 +1668,6 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                   <Toggle on={fullbodyEngine} disabled={fullbodyBusy} onToggle={() => toggleFullbody(!fullbodyEngine)} />
                 </div>
               </div>
-
-              {/* Image engine (foto AI) — operator milih model + resolusi, harga per kombinasi
-                  diatur super-admin di /dashboard/settings dan nyampe lewat handshake. Cuma
-                  relevan buat engine API (template engine_type 'api'); engine lokal ga nyentuh
-                  Worker sama sekali. Kalau admin belum nyalain satu pun model, blok ini
-                  disembunyiin dan kiosk jalan di jalur lama (model per-template) — bukan
-                  nampilin dropdown kosong yang bikin operator ngira rusak. */}
-              {(engine === 'fullbody_api' || engine === 'faceswap_api') && imageSel && (<>
-                <RowHint
-                  label={t('set_image_model') as string}
-                  hint={t('set_image_model_hint') as string}
-                >
-                  <Sel value={imageSel.model} options={imageModelOpts} onChange={v => {
-                    setImageModel(v)
-                    // Resolusi di-reset biar reconcile milihin yang tersedia di model baru —
-                    // tanpa ini, pindah ke Nano legacy sambil nyantol '4K' bikin selection hantu.
-                    setImageResolution('')
-                  }} />
-                </RowHint>
-                <RowHint
-                  label={t('set_image_resolution') as string}
-                  hint={selectedImageCost != null
-                    ? (t('set_image_resolution_hint_cost') as string)
-                        .replace('{res}', imageSel.resolution === '-' ? (t('set_image_res_default') as string) : imageSel.resolution)
-                        .replace('{n}', String(selectedImageCost))
-                    : t('set_image_resolution_hint') as string}
-                >
-                  <Sel value={imageSel.resolution} options={imageResOpts} onChange={setImageResolution} />
-                </RowHint>
-              </>)}
 
               {/* Video engine (img2vid) — img output terakhir jadi seed ke provider video via
                   Worker. API key hidup di Worker (FAL), gak pernah ke browser. Default OFF.
@@ -2095,6 +2275,64 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         </div>
       </div>
       <VideoPromptManager open={showPromptDesigner} onClose={() => setShowPromptDesigner(false)} config={config} onConfigChanged={onConfigSaved ?? (() => {})} />
+      {showStripDesigner && (
+        <LayoutDesigner
+          template={{
+            id: 'ai_strip_master',
+            name: 'Master Layout 2-Strip',
+            category: 'ai',
+            gender_filter: 'ALL',
+            engine_type: 'print',
+            token_cost: 0,
+            thumbnail_url: null,
+            positive_prompt: null,
+            negative_prompt: null,
+            api_endpoint: null,
+            video_endpoint: null,
+            video_positive_prompt: null,
+            video_negative_prompt: null,
+            print_size: '2R_STRIP',
+            overlay_url: aiStripOverlay.trim() || null,
+            overlay_right_url: null,
+            layout_config: aiStripCustomSlots,
+            shot_count: aiStripCustomSlots?.slots?.length || (aiStripSlots > 0 ? aiStripSlots : 2),
+          }}
+          onSave={(cfg) => {
+            setAiStripCustomSlots(cfg)
+            if (cfg?.slots?.length) setAiStripSlots(cfg.slots.length)
+            setShowStripDesigner(false)
+          }}
+          onClose={() => setShowStripDesigner(false)}
+        />
+      )}
+      {show4rDesigner && (
+        <LayoutDesigner
+          template={{
+            id: 'ai_4r_master',
+            name: 'Master Layout 4R Postcard',
+            category: 'ai',
+            gender_filter: 'ALL',
+            engine_type: 'print',
+            token_cost: 0,
+            thumbnail_url: null,
+            positive_prompt: null,
+            negative_prompt: null,
+            api_endpoint: null,
+            video_endpoint: null,
+            video_positive_prompt: null,
+            video_negative_prompt: null,
+            print_size: ai4rOrientation === 'PORTRAIT' ? '4R_PORTRAIT' : '4R_LANDSCAPE',
+            overlay_url: ai4rOverlay.trim() || null,
+            layout_config: ai4rCustomSlots,
+            shot_count: ai4rCustomSlots?.slots?.length || (ai4rLayout === 'SINGLE_1' ? 1 : ai4rLayout === 'TRIO_3' || ai4rLayout === 'GRID_3' ? 3 : ai4rLayout === 'SPLIT_2' ? 2 : 4),
+          }}
+          onSave={(cfg) => {
+            setAi4rCustomSlots(cfg)
+            setShow4rDesigner(false)
+          }}
+          onClose={() => setShow4rDesigner(false)}
+        />
+      )}
     </>
   )
 }

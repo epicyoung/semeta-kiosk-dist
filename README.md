@@ -48,9 +48,9 @@ dan kelihatannya normal — gak ada tanda apa-apa kalau update belum kepasang.
 
 Template + frame yang udah di-upload **aman** — update cuma narik source, gak nyentuh `pb_data`.
 
-## `LAUNCHER.bat` vs `LAUNCHER-BUILD.BAT`
+## `LAUNCHER-DEV.bat` vs `LAUNCHER-BUILD.BAT`
 
 | | Buat |
 |---|------|
 | `LAUNCHER-BUILD.BAT` | **Mesin lapangan.** Mode produksi — pre-compiled, stabil. |
-| `LAUNCHER.bat` | Ngoding/ngetes doang. Mode dev: lambat, gampang mati sendiri. |
+| `LAUNCHER-DEV.bat` | Ngoding/ngetes doang. Mode dev: lambat, gampang mati sendiri. |

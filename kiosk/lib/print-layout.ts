@@ -44,8 +44,58 @@ export function layoutSlots(
     return { canvas: size === '4R_LANDSCAPE' ? CANVAS_4R_LANDSCAPE : size === '2R_STRIP' ? PANEL_2R_STRIP : CANVAS_4R_PORTRAIT, slots: customLayout.slots }
   }
 
+  if (size === '4R_PORTRAIT' && ai4rLayout) {
+    const canvas = CANVAS_4R_PORTRAIT
+    if (ai4rLayout === 'SINGLE_1') {
+      return { canvas, slots: [{ x: 0, y: 0, w: 1200, h: 1800 }] }
+    }
+    if (ai4rLayout === 'TRIO_3') {
+      return {
+        canvas,
+        slots: [
+          { x: 0, y: 0, w: 1200, h: 900 },      // Atas Tidur (Landscape Hero)
+          { x: 0, y: 900, w: 600, h: 900 },     // Bawah Kiri Berdiri (Portrait)
+          { x: 600, y: 900, w: 600, h: 900 },   // Bawah Kanan Berdiri (Portrait)
+        ],
+      }
+    }
+    if (ai4rLayout === 'GRID_3') {
+      return {
+        canvas,
+        slots: [
+          { x: 0, y: 0, w: 1200, h: 600 },
+          { x: 0, y: 600, w: 1200, h: 600 },
+          { x: 0, y: 1200, w: 1200, h: 600 },
+        ],
+      }
+    }
+    if (ai4rLayout === 'SPLIT_2') {
+      return {
+        canvas,
+        slots: [
+          { x: 0, y: 0, w: 1200, h: 900 },
+          { x: 0, y: 900, w: 1200, h: 900 },
+        ],
+      }
+    }
+    if (ai4rLayout === 'GRID_4') {
+      return {
+        canvas,
+        slots: [
+          { x: 0, y: 0, w: 600, h: 900 },
+          { x: 600, y: 0, w: 600, h: 900 },
+          { x: 0, y: 900, w: 600, h: 900 },
+          { x: 600, y: 900, w: 600, h: 900 },
+        ],
+      }
+    }
+  }
+
   if (size === '4R_LANDSCAPE' && ai4rLayout) {
     const canvas = CANVAS_4R_LANDSCAPE
+    if (ai4rLayout === 'SINGLE_1') {
+      return { canvas, slots: [{ x: 0, y: 0, w: 1800, h: 1200 }] }
+    }
     if (ai4rLayout === 'TRIO_3') {
       return {
         canvas,
@@ -126,8 +176,12 @@ function toJpegDataUrl(canvas: HTMLCanvasElement): Promise<string> {
   })
 }
 
-// 2R_STRIP → dua panel strip 2x6 identik di kertas 4R portrait, split tengah + garis potong.
-function stamp2Up(panel: HTMLCanvasElement): HTMLCanvasElement {
+// 2R_STRIP → dua panel strip 2x6 di kertas 4R portrait, split tengah + garis potong.
+// Mendukung:
+// 1. Full 1200x1800 single-file overlay (desain kiri & kanan langsung jadi satu file).
+// 2. Dual panel terpisah (kiri & kanan beda file 600x1800).
+// 3. Single strip panel 600x1800 (kiri & kanan identik).
+function stamp2Up(leftPanel: HTMLCanvasElement, rightPanel?: HTMLCanvasElement, fullOverlay?: HTMLImageElement | null): HTMLCanvasElement {
   const sheet = document.createElement('canvas')
   sheet.width = CANVAS_4R_PORTRAIT.w
   sheet.height = CANVAS_4R_PORTRAIT.h
@@ -135,31 +189,164 @@ function stamp2Up(panel: HTMLCanvasElement): HTMLCanvasElement {
   ctx.fillStyle = '#ffffff'
   ctx.fillRect(0, 0, sheet.width, sheet.height)
   // Gambar panel kiri (x=0) dan kanan (x=600)
-  ctx.drawImage(panel, 0, 0)
-  ctx.drawImage(panel, panel.width, 0)
+  ctx.drawImage(leftPanel, 0, 0)
+  ctx.drawImage(rightPanel || leftPanel, leftPanel.width, 0)
   // Garis potong putus-putus di tengah
   ctx.strokeStyle = '#bbbbbb'
   ctx.setLineDash([12, 12])
   ctx.lineWidth = 2
   ctx.beginPath()
-  ctx.moveTo(panel.width, 0)
-  ctx.lineTo(panel.width, sheet.height)
+  ctx.moveTo(leftPanel.width, 0)
+  ctx.lineTo(leftPanel.width, sheet.height)
   ctx.stroke()
+
+  // Jika ada full 1200x1800 sheet overlay, gambar langsung full bleed di atas kedua strip
+  if (fullOverlay && fullOverlay.naturalWidth > fullOverlay.naturalHeight * 0.45) {
+    const f = coverFit(fullOverlay.naturalWidth, fullOverlay.naturalHeight, sheet.width, sheet.height)
+    ctx.drawImage(fullOverlay, f.dx, f.dy, f.dw, f.dh)
+  }
+
   return sheet
 }
 
 /** 2R only: panel jadi → sheet 4R 2-up buat printer. Digital (QR/email/preview) tetep
  *  pakai panel-nya — tamu jangan dapet file duplikat dua panel + garis potong. */
-export async function to2UpSheet(panelUrl: string): Promise<string> {
-  const img = await loadImg(panelUrl)
-  if (img.naturalWidth === CANVAS_4R_PORTRAIT.w && img.naturalHeight === CANVAS_4R_PORTRAIT.h) {
-    return panelUrl
+export async function to2UpSheet(
+  leftPanelUrl: string,
+  rightPanelUrl?: string | null,
+  fullOverlayUrl?: string | null
+): Promise<string> {
+  const [leftImg, rightImg, fullOverlayImg] = await Promise.all([
+    loadImg(leftPanelUrl),
+    rightPanelUrl ? loadImg(rightPanelUrl) : Promise.resolve(null),
+    fullOverlayUrl ? loadImg(fullOverlayUrl) : Promise.resolve(null),
+  ])
+  if (!rightImg && !fullOverlayImg && leftImg.naturalWidth === CANVAS_4R_PORTRAIT.w && leftImg.naturalHeight === CANVAS_4R_PORTRAIT.h) {
+    return leftPanelUrl
   }
-  const c = document.createElement('canvas')
-  c.width = img.naturalWidth
-  c.height = img.naturalHeight
-  c.getContext('2d')!.drawImage(img, 0, 0)
-  return toJpegDataUrl(stamp2Up(c))
+  const leftCanvas = document.createElement('canvas')
+  leftCanvas.width = leftImg.naturalWidth
+  leftCanvas.height = leftImg.naturalHeight
+  leftCanvas.getContext('2d')!.drawImage(leftImg, 0, 0)
+
+  let rightCanvas: HTMLCanvasElement | undefined
+  if (rightImg) {
+    rightCanvas = document.createElement('canvas')
+    rightCanvas.width = rightImg.naturalWidth
+    rightCanvas.height = rightImg.naturalHeight
+    rightCanvas.getContext('2d')!.drawImage(rightImg, 0, 0)
+  }
+
+  return toJpegDataUrl(stamp2Up(leftCanvas, rightCanvas, fullOverlayImg))
+}
+
+/** 2-Strip 4R Sheet Compositor: Menggabungkan foto slot + overlay 1200x1800 full sheet (atau dual strip 600x1800)
+ *  langsung ke kanvas 4R portrait tanpa duplikasi tumpang-tindih. */
+export async function compose2UpSheet(
+  shots: string[],
+  transforms?: SlotTransform[],
+  overlayUrl?: string | null,
+  overlayRightUrl?: string | null,
+  customLayout?: { slots: Rect[] } | null,
+): Promise<string> {
+  const { slots: baseSlots } = layoutSlots('2R_STRIP', shots.length, customLayout)
+
+  const [imgs, leftOverlay, rightOverlay] = await Promise.all([
+    Promise.all(shots.slice(0, baseSlots.length).map(loadImg)),
+    overlayUrl ? loadImg(overlayUrl) : Promise.resolve(null),
+    overlayRightUrl ? loadImg(overlayRightUrl) : Promise.resolve(null),
+  ])
+
+  const sheet = document.createElement('canvas')
+  sheet.width = CANVAS_4R_PORTRAIT.w // 1200
+  sheet.height = CANVAS_4R_PORTRAIT.h // 1800
+  const ctx = sheet.getContext('2d')!
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, sheet.width, sheet.height)
+
+  // Gambar foto slot di kedua strip: Strip 1 (offsetX = 0) dan Strip 2 (offsetX = 600)
+  const stripOffsets = [0, CANVAS_4R_PORTRAIT.w / 2]
+
+  stripOffsets.forEach(offsetX => {
+    imgs.forEach((img, i) => {
+      const s = baseSlots[i]
+      const tf = transforms?.[i]
+      const fitMode = tf?.fit || 'width'
+      const rotation = (tf?.rotation || 0) % 360
+
+      const isRotated90 = rotation === 90 || rotation === 270
+      const effW = isRotated90 ? img.naturalHeight : img.naturalWidth
+      const effH = isRotated90 ? img.naturalWidth : img.naturalHeight
+
+      const f = fitAxis(effW, effH, s.w, s.h, fitMode)
+
+      const scale = tf?.scale ?? 1
+      const extraDx = (tf?.x ?? 0) * s.w
+      const extraDy = (tf?.y ?? 0) * s.h
+
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(offsetX + s.x, s.y, s.w, s.h)
+      ctx.clip()
+
+      const slotCenterX = offsetX + s.x + s.w / 2
+      const slotCenterY = s.y + s.h / 2
+      ctx.translate(slotCenterX + extraDx, slotCenterY + extraDy)
+
+      const totalRotation = ((s.r || 0) + rotation) % 360
+      if (totalRotation) {
+        ctx.rotate((totalRotation * Math.PI) / 180)
+      }
+
+      const drawW = (isRotated90 ? f.dh : f.dw) * scale
+      const drawH = (isRotated90 ? f.dw : f.dh) * scale
+
+      ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH)
+      ctx.restore()
+    })
+  })
+
+  // Garis potong putus-putus tengah
+  ctx.strokeStyle = '#bbbbbb'
+  ctx.setLineDash([12, 12])
+  ctx.lineWidth = 2
+  ctx.beginPath()
+  ctx.moveTo(CANVAS_4R_PORTRAIT.w / 2, 0)
+  ctx.lineTo(CANVAS_4R_PORTRAIT.w / 2, sheet.height)
+  ctx.stroke()
+  ctx.setLineDash([])
+
+  // Pasang Overlay di atas foto
+  if (leftOverlay) {
+    const isFullSheet = leftOverlay.naturalWidth > leftOverlay.naturalHeight * 0.45 && !rightOverlay
+    if (isFullSheet) {
+      // 1200x1800 Full Sheet Overlay (Canva/Photoshop): cover full-bleed seluruh kanvas 4R
+      const f = coverFit(leftOverlay.naturalWidth, leftOverlay.naturalHeight, sheet.width, sheet.height)
+      ctx.drawImage(leftOverlay, f.dx, f.dy, f.dw, f.dh)
+    } else {
+      // Single/Dual 600x1800 strips:
+      // Strip Kiri (x=0..600)
+      const fL = coverFit(leftOverlay.naturalWidth, leftOverlay.naturalHeight, 600, 1800)
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(0, 0, 600, 1800)
+      ctx.clip()
+      ctx.drawImage(leftOverlay, fL.dx, fL.dy, fL.dw, fL.dh)
+      ctx.restore()
+
+      // Strip Kanan (x=600..1200)
+      const rImg = rightOverlay || leftOverlay
+      const fR = coverFit(rImg.naturalWidth, rImg.naturalHeight, 600, 1800)
+      ctx.save()
+      ctx.beginPath()
+      ctx.rect(600, 0, 600, 1800)
+      ctx.clip()
+      ctx.drawImage(rImg, 600 + fR.dx, fR.dy, fR.dw, fR.dh)
+      ctx.restore()
+    }
+  }
+
+  return toJpegDataUrl(sheet)
 }
 
 export type SlotTransform = {
@@ -244,8 +431,14 @@ export async function composePrintLayout(
     ctx.restore()
   })
   if (overlay) {
-    const f = coverFit(overlay.naturalWidth, overlay.naturalHeight, dims.w, dims.h)
-    ctx.drawImage(overlay, f.dx, f.dy, f.dw, f.dh)
+    if (size === '2R_STRIP' && overlay.naturalWidth > overlay.naturalHeight * 0.45) {
+      // Overlay adalah full 1200x1800 sheet: ambil separuh kiri untuk panel strip digital
+      const halfW = overlay.naturalWidth / 2
+      ctx.drawImage(overlay, 0, 0, halfW, overlay.naturalHeight, 0, 0, dims.w, dims.h)
+    } else {
+      const f = coverFit(overlay.naturalWidth, overlay.naturalHeight, dims.w, dims.h)
+      ctx.drawImage(overlay, f.dx, f.dy, f.dw, f.dh)
+    }
   }
   return toJpegDataUrl(panel)
 }

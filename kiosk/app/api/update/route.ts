@@ -63,6 +63,14 @@ export async function POST() {
     }
 
     const after = await getVersionInfo()
+    if (before.current !== after.current) {
+      try {
+        const fs = await import('fs/promises')
+        await fs.rm(path.join(process.cwd(), '.next', 'BUILD_ID'), { force: true })
+      } catch {
+        // non-fatal
+      }
+    }
     return NextResponse.json({
       ok: true,
       restartRequired: true,

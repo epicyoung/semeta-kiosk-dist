@@ -61,10 +61,36 @@ export function enabledModels(costs: Record<string, number>): ImageModelDef[] {
     .filter(m => m.resolutions.length > 0)
 }
 
-/** Harga token buat (model, resolusi) dari image_costs handshake. null = ga enabled/ga ada. */
+/** Harga token PER FOTO buat (model, resolusi) dari image_costs handshake. null = ga enabled/ga ada.
+ *  Sejak migrasi 20260817000003 angka di app_settings.engines.cost artinya harga satu gambar,
+ *  bukan borongan 4 — total dihitung totalCostFor(). */
 export function costFor(costs: Record<string, number>, model: string, resolution: string): number | null {
   const key = engineKeyFor(model, resolution)
   return key ? costs[key] ?? null : null
+}
+
+/** Pilihan jumlah variasi yang ditawarin ke operator. Batas atas 4 dikunci juga di Worker
+ *  (clampVariants) dan di SQL (deduct_image_tokens) — ini cuma yang paling luar. */
+export const VARIANT_CHOICES = [1, 2, 3, 4] as const
+
+/** Total token buat n variasi = harga per foto x n. Sengaja perkalian polos, TANPA diskon
+ *  volume: rumus di sini cuma buat DISPLAY, yang nagih beneran deduct_image_tokens. Begitu
+ *  dua rumus itu beda, angka di layar bohong. Pure — dites di image-engines.test.mjs. */
+export function totalCostFor(
+  costs: Record<string, number>,
+  model: string,
+  resolution: string,
+  variants: number,
+): number | null {
+  const unit = costFor(costs, model, resolution)
+  return unit == null ? null : unit * clampVariants(variants)
+}
+
+/** Cermin clampVariants di worker/src/image-engines.ts. Ada di sini supaya label harga di
+ *  Settings ga pernah nampilin angka yang bakal ditolak server. Pure — dites. */
+export function clampVariants(n: unknown): number {
+  if (typeof n !== 'number' || !Number.isFinite(n)) return 4
+  return Math.min(4, Math.max(1, Math.floor(n)))
 }
 
 /** Pilihan tersimpan + daftar yang enabled sekarang → pilihan yang SAH sekarang.

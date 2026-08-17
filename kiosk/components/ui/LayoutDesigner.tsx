@@ -81,12 +81,33 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
     })
   }
 
+  const [isFullSheetOverlay, setIsFullSheetOverlay] = useState(false)
+
+  useEffect(() => {
+    if (!template.overlay_url) {
+      setIsFullSheetOverlay(false)
+      return
+    }
+    const im = new Image()
+    im.onload = () => {
+      setIsFullSheetOverlay(im.naturalWidth / im.naturalHeight >= 0.45)
+    }
+    im.src = template.overlay_url
+  }, [template.overlay_url])
+
   useEffect(() => {
     if (slots.length === 0) setSlots(generateDefaultSlots())
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const handleAddSlot = () => setSlots([...slots, { x: 50, y: 50, w: Math.min(editDims.w - 100, 500), h: 350, r: 0 }])
+  const handleAddSlot = () => {
+    if (slots.length >= 6) return
+    const newSlotH = is2Stripe ? 400 : 350
+    const newSlotY = slots.length > 0
+      ? Math.min(editDims.h - newSlotH - 40, Math.max(...slots.map(s => s.y + s.h)) + 20)
+      : 50
+    setSlots([...slots, { x: 40, y: newSlotY, w: editDims.w - 80, h: newSlotH, r: 0 }])
+  }
 
   const handleDeleteSlot = () => {
     if (selectedSlotIndex === null) return
@@ -131,8 +152,8 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
   // Mirror a slot from left panel to right panel (2 Stripe only)
   const mirrorSlot = (slot: Slot): Slot => ({
     ...slot,
-    x: editDims.w + (editDims.w - slot.x - slot.w), // mirror x position
-    r: slot.r ? -slot.r : 0, // mirror rotation
+    x: slot.x,
+    r: slot.r || 0,
   })
 
   const content = (
@@ -182,7 +203,13 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
         padding: '16px 28px',
         display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap',
       }}>
-
+        <button onClick={handleAddSlot} disabled={slots.length >= 6} style={pillBtn(false, false, slots.length >= 6)}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Add Slot
+        </button>
         <button onClick={handleDeleteSlot} disabled={selectedSlotIndex === null} style={pillBtn(false, true, selectedSlotIndex === null)}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
@@ -231,12 +258,26 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
             }}
             onClick={(e) => { if (e.target === e.currentTarget) clearSelection() }}
           >
-            {/* LEFT panel overlay (or full overlay for 4R) */}
-            {template.overlay_url && (
+            {/* 1200x1800 Full Sheet Overlay (2-Strip) */}
+            {is2Stripe && isFullSheetOverlay && template.overlay_url && (
               <div style={{
                 position: 'absolute',
                 left: 0, top: 0,
-                width: panelW, height: displayH,
+                width: displayW, height: displayH,
+                backgroundImage: `url(${template.overlay_url})`,
+                backgroundSize: '100% 100%',
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'center',
+                pointerEvents: 'none', zIndex: 5,
+              }} />
+            )}
+
+            {/* LEFT panel overlay (or full overlay for 4R) */}
+            {(!is2Stripe || !isFullSheetOverlay) && template.overlay_url && (
+              <div style={{
+                position: 'absolute',
+                left: 0, top: 0,
+                width: is2Stripe ? panelW : displayW, height: displayH,
                 backgroundImage: `url(${template.overlay_url})`,
                 backgroundSize: is2Stripe ? `${panelW}px ${displayH}px` : 'contain',
                 backgroundRepeat: 'no-repeat',
@@ -245,18 +286,18 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
               }} />
             )}
 
-            {/* RIGHT panel overlay mirror (2 Stripe only) */}
-            {is2Stripe && template.overlay_url && (
+            {/* RIGHT panel overlay (2 Stripe only, non-full-sheet) */}
+            {is2Stripe && !isFullSheetOverlay && (template.overlay_right_url || template.overlay_url) && (
               <div style={{
                 position: 'absolute',
                 left: panelW, top: 0,
                 width: panelW, height: displayH,
-                backgroundImage: `url(${template.overlay_url})`,
+                backgroundImage: `url(${template.overlay_right_url || template.overlay_url})`,
                 backgroundSize: `${panelW}px ${displayH}px`,
                 backgroundRepeat: 'no-repeat',
                 backgroundPosition: 'center',
                 pointerEvents: 'none', zIndex: 5,
-                opacity: 0.45,
+                opacity: template.overlay_right_url ? 1 : 0.45,
               }} />
             )}
 

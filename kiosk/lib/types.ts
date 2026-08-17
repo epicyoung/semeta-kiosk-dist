@@ -41,6 +41,7 @@ export type Template = {
   shot_count?: number | null   // jumlah jepretan per sesi; null ⇒ 4
   print_size?: PrintSize | null // null ⇒ '4R_PORTRAIT'
   overlay_url?: string | null  // PNG transparan (alpha utuh) dibakar di atas slot foto
+  overlay_right_url?: string | null // PNG transparan untuk sisi kanan 2R_STRIP
   layout_config?: { slots: { x: number; y: number; w: number; h: number; r?: number }[] } | null
   // Engine 'api' only (Nano Banana Pro) — semua null/undefined buat engine lain
   // CATATAN: sejak model jadi milik server, field ini TIDAK ikut ke /api/generate. Yang
@@ -100,7 +101,8 @@ export type VideoDefaults = {
 
 export type TemplateSource = 'pocketbase' | 'json'
 
-export type Ai4RLayout = 'GRID_4' | 'TRIO_3' | 'GRID_3' | 'SPLIT_2'
+export type Ai4ROrientation = 'LANDSCAPE' | 'PORTRAIT'
+export type Ai4RLayout = 'GRID_4' | 'TRIO_3' | 'GRID_3' | 'SPLIT_2' | 'SINGLE_1'
 
 export type KioskConfig = {
   brand_color: string
@@ -124,9 +126,13 @@ export type KioskConfig = {
   // Strip 2R dari hasil AI: tamu nyusun sendiri hasil AI + Ori jadi strip pas tombol Cetak 2-Strip.
   // Nol token — cuma nyusun ulang aset yang udah jadi. 0/undefined ⇒ tombolnya ga muncul sama sekali.
   ai_strip_slots?: number         // batas atas slot (2–4). Slot nyata = min(ini, isi kolam).
-  ai_strip_overlay_url?: string   // overlay PNG 2R (600×1800) — dibakar SEKALI di sheet, bukan per-slot.
-  ai_4r_overlay_url?: string      // overlay PNG 4R Landscape (1800×1200) — dibakar SEKALI di sheet 4R.
-  ai_4r_layout?: Ai4RLayout       // Layout preset 4R (GRID_4 = 2x2, TRIO_3 = 1 portrait + 2 landscape, GRID_3, SPLIT_2).
+  ai_strip_overlay_url?: string   // overlay PNG 2R strip kiri / default (600×1800) — dibakar di sheet.
+  ai_strip_overlay_right_url?: string // overlay PNG 2R strip kanan (600×1800) jika desain kanan beda dari kiri.
+  ai_strip_custom_slots?: { slots: { x: number; y: number; w: number; h: number; r?: number }[] } | null // Custom slots dari LayoutDesigner
+  ai_4r_orientation?: Ai4ROrientation // orientasi 4R ('LANDSCAPE' = 1800×1200, 'PORTRAIT' = 1200×1800). Default 'LANDSCAPE'.
+  ai_4r_overlay_url?: string      // overlay PNG 4R (1800×1200 Landscape atau 1200×1800 Portrait) — dibakar SEKALI di sheet 4R.
+  ai_4r_layout?: Ai4RLayout       // Layout preset 4R (GRID_4, TRIO_3, GRID_3, SPLIT_2, SINGLE_1).
+  ai_4r_custom_slots?: { slots: { x: number; y: number; w: number; h: number; r?: number }[] } | null // Custom slots 4R dari LayoutDesigner
   require_4r_overlay?: boolean    // Jika true, mode 4R wajib memiliki overlay 4R terpasang.
   enable_magic_catcher?: boolean  // reaction cam toggle. undefined ⇒ false.
   magic_catcher_device_id?: string // kamera reaction cam (deviceId getUserMedia). ''/undefined ⇒ default.
@@ -157,6 +163,10 @@ export type KioskConfig = {
   // enable/disable dari admin lewat handshake (image_costs). Worker fail-closed kalau ngawur.
   image_model?: string       // 'nano-banana-2-google' | 'nano-banana-pro-google' | 'nano-banana-google'
   image_resolution?: string  // '1K' | '2K' | '4K' — cuma yang enabled di admin yang muncul
+  // Jumlah variasi AI per jepretan (1-4). Harga di admin = PER FOTO, jadi 4 varian = 4x token.
+  // Kiosk cuma nyebut angkanya; yang ngali harga & clamp tetep Worker + RPC deduct_image_tokens.
+  // undefined ⇒ 4 (kelakuan lama sebelum dropdown ini ada).
+  image_variants?: number
   template_local?: string
   template_source?: TemplateSource
   pocketbase_url?: string

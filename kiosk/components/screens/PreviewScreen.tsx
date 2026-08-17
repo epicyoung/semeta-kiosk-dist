@@ -13,7 +13,7 @@ import {
 import { printPhoto, printNative } from "@/lib/print";
 import { compositeFrame } from "@/lib/frame-composite";
 import { burnWatermark } from "@/lib/watermark-canvas";
-import { to2UpSheet, composePrintLayout, type SlotTransform } from "@/lib/print-layout";
+import { to2UpSheet, composePrintLayout, compose2UpSheet, type SlotTransform } from "@/lib/print-layout";
 import { buildStripPool, stripSlotCount } from "@/lib/strip-pool";
 import { StripComposer } from "@/components/ui/StripComposer";
 import type { StripSource } from "@/lib/strip-pool";
@@ -53,8 +53,12 @@ type Props = {
     | "magic_catcher_audio"
     | "ai_strip_slots"
     | "ai_strip_overlay_url"
+    | "ai_strip_overlay_right_url"
+    | "ai_strip_custom_slots"
+    | "ai_4r_orientation"
     | "ai_4r_overlay_url"
     | "ai_4r_layout"
+    | "ai_4r_custom_slots"
     | "require_4r_overlay"
   >;
   licensed: boolean;
@@ -434,10 +438,13 @@ export function PreviewScreen({
     setStripError(false);
     try {
       const is4R = mode === "4R_LANDSCAPE";
+      const isPortrait4R = is4R && config.ai_4r_orientation === "PORTRAIT";
+      const printSize = is4R ? (isPortrait4R ? "4R_PORTRAIT" : "4R_LANDSCAPE") : "2R_STRIP";
+
       const sheet = await composePrintLayout(
         picked.map((p) => p.source.cleanUrl),
         {
-          print_size: is4R ? "4R_LANDSCAPE" : "2R_STRIP",
+          print_size: printSize,
           overlay_url: is4R
             ? (config.ai_4r_overlay_url || null)
             : (config.ai_strip_overlay_url || null),
@@ -449,18 +456,50 @@ export function PreviewScreen({
       const display = licensed || config.bypassed ? sheet : await burnWatermark(sheet);
 
       if (is4R) {
+        const sheet = await composePrintLayout(
+          picked.map((p) => p.source.cleanUrl),
+          {
+            print_size: printSize,
+            overlay_url: config.ai_4r_overlay_url || null,
+            layout_config: config.ai_4r_custom_slots || null,
+          },
+          picked.map((p) => p.transform),
+          config.ai_4r_layout,
+        );
+        const display = licensed || config.bypassed ? sheet : await burnWatermark(sheet);
         if (await printNative(display, qty ?? 1, "print4r")) {
           setStripOpen(false);
           return;
         }
         await printPhoto(display, qty ?? 1);
       } else {
-        if (await printNative(display, qty ?? 1, "strip2")) {
+        // Cek antrian hardware potong fisik 2x6 (RX1-STRIP)
+        const singleStrip = await composePrintLayout(
+          picked.map((p) => p.source.cleanUrl),
+          {
+            print_size: "2R_STRIP",
+            overlay_url: config.ai_strip_overlay_url || null,
+            layout_config: config.ai_strip_custom_slots || null,
+          },
+          picked.map((p) => p.transform),
+        );
+        const singleDisplay = licensed || config.bypassed ? singleStrip : await burnWatermark(singleStrip);
+        if (await printNative(singleDisplay, qty ?? 1, "strip2")) {
           setStripOpen(false);
           return;
         }
-        // Queue RX1-STRIP belum ke-install → 4R 2-up + garis potong, gunting manual.
-        await printPhoto(await to2UpSheet(display), qty ?? 1);
+
+        // Cetak 4R 2-Up Sheet (1200x1800) untuk RX1-4R / DS-RX1 / Standard Windows Print
+        // Menggabungkan foto slot + overlay 1200x1800 full-bleed (atau dual strip) tanpa duplikasi ganda
+        const sheet2Up = await compose2UpSheet(
+          picked.map((p) => p.source.cleanUrl),
+          picked.map((p) => p.transform),
+          config.ai_strip_overlay_url || null,
+          config.ai_strip_overlay_right_url || null,
+          config.ai_strip_custom_slots || null,
+        );
+        const display = licensed || config.bypassed ? sheet2Up : await burnWatermark(sheet2Up);
+        await printPhoto(display, qty ?? 1);
       }
       setStripOpen(false);
     } catch (err) {
@@ -2196,8 +2235,12 @@ export function PreviewScreen({
           printing={stripPrinting}
           error={stripError}
           overlayUrl={config.ai_strip_overlay_url}
+          overlayRightUrl={config.ai_strip_overlay_right_url}
           overlay4rUrl={config.ai_4r_overlay_url}
+          customSlots={config.ai_strip_custom_slots}
+          custom4rSlots={config.ai_4r_custom_slots}
           ai4rLayout={config.ai_4r_layout}
+          ai4rOrientation={config.ai_4r_orientation}
           require4rOverlay={config.require_4r_overlay ?? true}
           onCancel={() => setStripOpen(false)}
           onConfirm={doStripPrint}

@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useT } from '@/lib/i18n'
 import { TouchButton } from './TouchButton'
-import type { Ai4RLayout } from '@/lib/types'
+import type { Ai4RLayout, Ai4ROrientation } from '@/lib/types'
 import type { StripSource } from '@/lib/strip-pool'
 import type { SlotTransform } from '@/lib/print-layout'
 
@@ -16,8 +16,12 @@ type Props = {
   printing: boolean
   error: boolean
   overlayUrl?: string | null
+  overlayRightUrl?: string | null
   overlay4rUrl?: string | null
+  customSlots?: { slots: { x: number; y: number; w: number; h: number; r?: number }[] } | null
+  custom4rSlots?: { slots: { x: number; y: number; w: number; h: number; r?: number }[] } | null
   ai4rLayout?: Ai4RLayout
+  ai4rOrientation?: Ai4ROrientation
   require4rOverlay?: boolean
   onCancel: () => void
   onConfirm: (
@@ -32,8 +36,12 @@ export function StripComposer({
   printing,
   error,
   overlayUrl,
+  overlayRightUrl,
   overlay4rUrl,
+  customSlots,
+  custom4rSlots,
   ai4rLayout = 'GRID_4',
+  ai4rOrientation = 'LANDSCAPE',
   require4rOverlay = false,
   onCancel,
   onConfirm,
@@ -48,18 +56,7 @@ export function StripComposer({
   const [transforms, setTransforms] = useState<Record<number, { scale: number; x: number; y: number; fit: FitAxis; rotation: number }>>({})
   const [activeSlot, setActiveSlot] = useState<number | null>(null)
 
-  const dragStartRef = useRef<{ pointerX: number; pointerY: number; startX: number; startY: number } | null>(null)
-  const isDraggingRef = useRef(false)
-  // Double-tap: slot mana & kapan tap terakhir. Dipisah dari drag lewat ambang geser —
-  // di layar sentuh jari SELALU gerak beberapa piksel, jadi "ga gerak sama sekali" bukan
-  // syarat yang bisa dipenuhi tamu.
-  const lastTapRef = useRef<{ slot: number; at: number } | null>(null)
-  const DOUBLE_TAP_MS = 320
   const TAP_SLOP_PX = 8
-  // Seret-buat-geser di kolam foto — MOUSE DOANG. Layar sentuh udah bisa di-swipe sendiri
-  // lewat overflow-x native; kalau shim ini ikut jalan di jari, scroll-nya kehitung dua kali
-  // dan kerasa ngebut. Mouse yang ga punya padanan: scrollbar-nya disembunyiin, dan drag di
-  // kontainer overflow emang ga ada bawaannya di browser.
   const poolRef = useRef<HTMLDivElement | null>(null)
   const poolDragRef = useRef<{ startX: number; startScroll: number; moved: number } | null>(null)
 
@@ -76,8 +73,6 @@ export function StripComposer({
     poolRef.current.scrollLeft = d.startScroll - dx
   }
 
-  // Seret yang lewat ambang JANGAN ikut jadi klik — kalau enggak, tiap selesai nggeser
-  // kolam, kartu yang kebetulan ada di bawah kursor ikut masuk slot.
   const handlePoolUpCapture = (e: React.PointerEvent<HTMLDivElement>) => {
     const d = poolDragRef.current
     poolDragRef.current = null
@@ -87,61 +82,64 @@ export function StripComposer({
     }
   }
 
-  // Cubit: semua pointer yang lagi nempel + jarak awal antar dua jari sebagai acuan zoom.
-  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map())
-  const pinchRef = useRef<{ startDist: number; startScale: number } | null>(null)
-  const MIN_SCALE = 0.5
-  const MAX_SCALE = 3.5
-  const clampScale = (s: number) => Math.max(MIN_SCALE, Math.min(MAX_SCALE, Number(s.toFixed(2))))
-
-  // Portal ke #glass-panel, BUKAN ke body. Screen biasa dirender di dalam kotak
-  // `inset: var(--pad-screen)` + `overflow:hidden` — itu sumber celah 20px di empat sisi,
-  // dan ga bisa ditembus dari dalam karena keburu keklip. Naik satu tingkat ke panel kaca =
-  // mepet tepi, tapi wordmark & footer di luar panel tetep kelihatan.
   const [panel, setPanel] = useState<HTMLElement | null>(null)
   useEffect(() => setPanel(document.getElementById('glass-panel')), [])
 
   const is4R = mode === '4R_LANDSCAPE'
+  const isPortrait4R = is4R && ai4rOrientation === 'PORTRAIT'
+  const hasCustom2Strip = !is4R && !!customSlots?.slots && customSlots.slots.length > 0
+  const hasCustom4R = is4R && !!custom4rSlots?.slots && custom4rSlots.slots.length > 0
+
   const activeSlots = is4R
-    ? (ai4rLayout === 'TRIO_3' || ai4rLayout === 'GRID_3' ? 3 : ai4rLayout === 'SPLIT_2' ? 2 : 4)
-    : slots
+    ? (custom4rSlots?.slots?.length || (ai4rLayout === 'SINGLE_1' ? 1 : ai4rLayout === 'TRIO_3' || ai4rLayout === 'GRID_3' ? 3 : ai4rLayout === 'SPLIT_2' ? 2 : 4))
+    : (customSlots?.slots?.length || slots)
   const activeOverlay = is4R ? overlay4rUrl : overlayUrl
 
-  // Nama layout DILEPAS dari label tab — tab-nya cuma dua kata biar kebaca sekali lihat.
-  // Detailnya turun ke subtitle, tempat yang emang buat penjelasan.
-  const layoutName =
-    ai4rLayout === 'TRIO_3' ? '1+2 Trio'
-    : ai4rLayout === 'GRID_3' ? '1×3 Grid'
-    : ai4rLayout === 'SPLIT_2' ? '1×2 Split'
-    : '2×2 Grid'
+  const [isSingleStripOverlay, setIsSingleStripOverlay] = useState(false)
+
+  useEffect(() => {
+    if (!overlayUrl) {
+      setIsSingleStripOverlay(false)
+      return
+    }
+    const img = new Image()
+    img.onload = () => {
+      setIsSingleStripOverlay(img.naturalWidth / img.naturalHeight < 0.45)
+    }
+    img.src = overlayUrl
+  }, [overlayUrl])
+
+  const layoutName = is4R
+    ? hasCustom4R
+      ? `Custom (${custom4rSlots!.slots.length} Slot)`
+      : ai4rLayout === 'SINGLE_1' ? '1 Full Bleed'
+      : ai4rLayout === 'TRIO_3' ? '1+2 Trio'
+      : ai4rLayout === 'GRID_3' ? (isPortrait4R ? '3 Stack' : '3 Grid')
+      : ai4rLayout === 'SPLIT_2' ? '2 Split'
+      : '2×2 Grid'
+    : hasCustom2Strip
+    ? `Custom (${customSlots!.slots.length} Slot)`
+    : `${slots} Slot Strip`
 
   const fourRLocked = require4rOverlay && !overlay4rUrl
-
   const slotOf = (id: string) => picked.indexOf(id)
   const filled = picked.slice(0, activeSlots).filter(Boolean).length
-  // "Penuh" = SEMUA slot keisi, bukan sekadar ada isinya. Slot bolong = bidang putih di
-  // kertas yang udah kepotong dan ga bisa dibatalin.
   const isFull = filled >= activeSlots
 
-  // Default 'width': lebar foto = lebar slot, apa pun orientasinya. Bisa ketebak — beda
-  // sama cover/contain yang milih sumbunya sendiri tergantung rasio tiap foto.
   const getTransform = (i: number) => transforms[i] || { scale: 1, x: 0, y: 0, fit: 'width' as FitAxis, rotation: 0 }
 
   const handleModeSwitch = (nextMode: PrintLayoutMode) => {
     if (printing || nextMode === mode) return
-    // Tab-nya udah kelihatan terkunci + alasannya ada di bawah subtitle. alert() di layar
-    // sentuh lapangan = dialog OS yang nutupin kiosk dan cuma bisa ditutup pakai mouse.
     if (nextMode === '4R_LANDSCAPE' && fourRLocked) return
     setMode(nextMode)
-    // Panjang array ngikut jumlah slot mode baru; isi per-index dipertahanin.
-    const targetSlots = nextMode === '4R_LANDSCAPE' ? 4 : slots
+    const targetSlots = nextMode === '4R_LANDSCAPE'
+      ? (custom4rSlots?.slots?.length || 4)
+      : (customSlots?.slots?.length || slots)
     setPicked(Array.from({ length: targetSlots }, (_, i) => picked[i] ?? null))
   }
 
   const fill = (id: string) => {
     if (printing || picked.includes(id)) return
-    // Masuk ke slot KOSONG PERTAMA — jadi sesudah tamu ngosongin slot 1, pilihan berikutnya
-    // balik ke slot 1 itu, bukan nempel di ekor.
     const at = picked.slice(0, activeSlots).findIndex(p => p === null)
     if (at < 0) return
     const next = [...picked]
@@ -155,8 +153,6 @@ export function StripComposer({
     const next = [...picked]
     next[i] = null
     setPicked(next)
-    // Transform ikut slot, bukan ikut foto — slot yang dikosongin di-reset, tetangganya
-    // JANGAN disentuh (dulu key transform ikut kegeser pas array di-splice).
     setTransforms(prev => {
       const n = { ...prev }
       delete n[i]
@@ -165,129 +161,16 @@ export function StripComposer({
     if (activeSlot === i) setActiveSlot(null)
   }
 
-  const handlePointerDown = (i: number, e: React.PointerEvent<HTMLDivElement>) => {
-    e.stopPropagation()
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId)
-    } catch {
-      // safe fallback
-    }
-    setActiveSlot(i)
-    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map())
+  const pinchRef = useRef<{ startDist: number; startScale: number } | null>(null)
+  const dragStartRef = useRef<{ x: number; y: number; initialTfX: number; initialTfY: number } | null>(null)
+  const isDraggingRef = useRef(false)
+  const lastTapRef = useRef<{ slot: number; at: number; x: number; y: number } | null>(null)
+  const DOUBLE_TAP_MS = 350
+  const MIN_SCALE = 0.5
+  const MAX_SCALE = 3.5
+  const clampScale = (s: number) => Math.max(MIN_SCALE, Math.min(MAX_SCALE, Number(s.toFixed(2))))
 
-    // Jari kedua turun = cubit dimulai. Seretan yang lagi jalan dibatalin (bukan diterusin
-    // barengan) — nahan satu jari sambil cubit bikin foto ngacir ke sudut.
-    if (pointersRef.current.size === 2) {
-      const [a, b] = [...pointersRef.current.values()]
-      pinchRef.current = { startDist: Math.hypot(a.x - b.x, a.y - b.y), startScale: getTransform(i).scale }
-      isDraggingRef.current = false
-      dragStartRef.current = null
-      return
-    }
-
-    isDraggingRef.current = true
-    const current = getTransform(i)
-    dragStartRef.current = {
-      pointerX: e.clientX,
-      pointerY: e.clientY,
-      startX: current.x,
-      startY: current.y,
-    }
-  }
-
-  const handlePointerMove = (i: number, e: React.PointerEvent<HTMLDivElement>) => {
-    if (pointersRef.current.has(e.pointerId)) {
-      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
-    }
-
-    // ── Cubit: jarak antar dua jari : jarak awal = pengali zoom ──────────────────
-    const pinch = pinchRef.current
-    if (pinch && pointersRef.current.size >= 2) {
-      const [a, b] = [...pointersRef.current.values()]
-      const dist = Math.hypot(a.x - b.x, a.y - b.y)
-      if (pinch.startDist > 0) {
-        const next = clampScale(pinch.startScale * (dist / pinch.startDist))
-        setTransforms(prev => {
-          const current = prev[i] || { scale: 1, x: 0, y: 0, fit: 'width' as FitAxis, rotation: 0 }
-          return { ...prev, [i]: { ...current, scale: next } }
-        })
-      }
-      return
-    }
-
-    const start = dragStartRef.current
-    if (!isDraggingRef.current || !start) return
-    const rect = e.currentTarget.getBoundingClientRect()
-    if (!rect.width || !rect.height) return
-
-    const deltaX = (e.clientX - start.pointerX) / rect.width
-    const deltaY = (e.clientY - start.pointerY) / rect.height
-    // Batas geser IKUT zoom. Dulu dipatok ±1.0 (satu lebar slot) di semua level zoom —
-    // pas foto di-zoom 3,5× tepinya ada di 1,25 lebar slot, jadi sisi jauhnya mentok ga
-    // keburu ke-frame: kerasa kayak seretannya nyangkut padahal fotonya masih ada.
-    const lim = Math.max(1, getTransform(i).scale)
-    const targetX = Math.max(-lim, Math.min(lim, start.startX + deltaX))
-    const targetY = Math.max(-lim, Math.min(lim, start.startY + deltaY))
-
-    setTransforms(prev => {
-      const current = prev[i] || { scale: 1, x: 0, y: 0, fit: 'width' as FitAxis, rotation: 0 }
-      return {
-        ...prev,
-        [i]: {
-          ...current,
-          x: targetX,
-          y: targetY,
-        },
-      }
-    })
-  }
-
-  const handlePointerUp = (i: number, e?: React.PointerEvent<HTMLDivElement>) => {
-    if (e?.currentTarget && typeof e.currentTarget.releasePointerCapture === 'function') {
-      try {
-        e.currentTarget.releasePointerCapture(e.pointerId)
-      } catch {
-        // safe fallback
-      }
-    }
-    if (e) pointersRef.current.delete(e.pointerId)
-
-    // Angkat jari sesudah cubit JANGAN dihitung tap — kalau enggak, tiap selesai zoom
-    // sumbu fit-nya ikut kebalik sendiri.
-    const wasPinching = pinchRef.current !== null
-    if (pointersRef.current.size < 2) pinchRef.current = null
-
-    // Tap = pointer turun-naik tanpa geser jauh. Kalau tamu beneran nyeret, JANGAN dihitung
-    // tap — kalau enggak, tiap selesai geser bisa kepicu ganti sumbu fit.
-    const start = dragStartRef.current
-    const moved = start && e
-      ? Math.hypot(e.clientX - start.pointerX, e.clientY - start.pointerY)
-      : Infinity
-    if (!wasPinching && moved <= TAP_SLOP_PX) {
-      const now = Date.now()
-      const last = lastTapRef.current
-      if (last && last.slot === i && now - last.at <= DOUBLE_TAP_MS) {
-        flipFit(i)
-        lastTapRef.current = null   // tap ke-3 mulai hitungan baru, bukan nerusin
-      } else {
-        lastTapRef.current = { slot: i, at: now }
-      }
-    }
-
-    isDraggingRef.current = false
-    dragStartRef.current = null
-  }
-
-  // Mouse ga bisa nyubit. Roda = padanannya di mesin yang pakai mouse (dev & operator).
-  const handleWheel = (i: number, e: React.WheelEvent<HTMLDivElement>) => {
-    setTransforms(prev => {
-      const current = prev[i] || { scale: 1, x: 0, y: 0, fit: 'width' as FitAxis, rotation: 0 }
-      return { ...prev, [i]: { ...current, scale: clampScale(current.scale * (e.deltaY < 0 ? 1.1 : 1 / 1.1)) } }
-    })
-  }
-
-  // Double-tap gonta-ganti sumbu: lebar → tinggi → lebar. Zoom & geser di-reset karena
-  // titik acuannya berubah — nilai lama bikin foto loncat ke posisi yang ga masuk akal.
   const flipFit = (i: number) => {
     setTransforms(prev => {
       const current = prev[i] || { scale: 1, x: 0, y: 0, fit: 'width' as FitAxis, rotation: 0 }
@@ -296,22 +179,206 @@ export function StripComposer({
     })
   }
 
-  // rotate90() & resetTransform() dicabut bareng baris tombolnya. Field `rotation` SENGAJA
-  // ditinggal di transform (selalu 0): composePrintLayout masih ngitung dia buat nuker w/h
-  // di fitAxis dan digabung sama rotasi slot custom Layout Studio (s.r). Nyabut field-nya
-  // = nyabut jalur itu juga, padahal ga ada hubungannya sama tombol yang dibuang.
+  const handlePointerDown = (i: number, e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    setActiveSlot(i)
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+    if (pointersRef.current.size === 2) {
+      const [a, b] = [...pointersRef.current.values()]
+      pinchRef.current = { startDist: Math.hypot(a.x - b.x, a.y - b.y), startScale: getTransform(i).scale }
+    } else {
+      isDraggingRef.current = true
+      const current = getTransform(i)
+      dragStartRef.current = { x: e.clientX, y: e.clientY, initialTfX: current.x, initialTfY: current.y }
+    }
+  }
+
+  const handlePointerMove = (i: number, e: React.PointerEvent<HTMLDivElement>) => {
+    if (!pointersRef.current.has(e.pointerId)) return
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+    if (pointersRef.current.size === 2 && pinchRef.current) {
+      const [a, b] = [...pointersRef.current.values()]
+      const dist = Math.hypot(a.x - b.x, a.y - b.y)
+      if (pinchRef.current.startDist > 0) {
+        const factor = dist / pinchRef.current.startDist
+        const nextScale = clampScale(pinchRef.current.startScale * factor)
+        setTransforms(prev => ({ ...prev, [i]: { ...(prev[i] || { x: 0, y: 0, fit: 'width', rotation: 0 }), scale: nextScale } }))
+      }
+      return
+    }
+
+    if (isDraggingRef.current && dragStartRef.current) {
+      const dx = e.clientX - dragStartRef.current.x
+      const dy = e.clientY - dragStartRef.current.y
+      const rect = e.currentTarget.getBoundingClientRect()
+      if (rect.width > 0 && rect.height > 0) {
+        const lim = Math.max(1, getTransform(i).scale)
+        const nextX = Math.max(-lim, Math.min(lim, dragStartRef.current.initialTfX + (dx / rect.width)))
+        const nextY = Math.max(-lim, Math.min(lim, dragStartRef.current.initialTfY + (dy / rect.height)))
+        setTransforms(prev => ({ ...prev, [i]: { ...(prev[i] || { scale: 1, fit: 'width', rotation: 0 }), x: nextX, y: nextY } }))
+      }
+    }
+  }
+
+  const handlePointerUp = (i: number, e: React.PointerEvent<HTMLDivElement>) => {
+    const wasPinching = pinchRef.current !== null
+    pointersRef.current.delete(e.pointerId)
+    if (pointersRef.current.size < 2) pinchRef.current = null
+
+    const start = dragStartRef.current
+    const moved = start ? Math.hypot(e.clientX - start.x, e.clientY - start.y) : Infinity
+
+    if (pointersRef.current.size === 0) {
+      isDraggingRef.current = false
+      dragStartRef.current = null
+    }
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    } catch {}
+
+    if (!wasPinching && moved <= TAP_SLOP_PX) {
+      const now = Date.now()
+      const last = lastTapRef.current
+      if (last && last.slot === i && now - last.at <= DOUBLE_TAP_MS && Math.hypot(e.clientX - last.x, e.clientY - last.y) <= TAP_SLOP_PX * 3) {
+        flipFit(i)
+        lastTapRef.current = null
+      } else {
+        lastTapRef.current = { slot: i, at: now, x: e.clientX, y: e.clientY }
+      }
+    }
+  }
+
+  const handleWheel = (i: number, e: React.WheelEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    const current = getTransform(i)
+    setTransforms(prev => ({ ...prev, [i]: { ...current, scale: clampScale(current.scale * (e.deltaY < 0 ? 1.1 : 1 / 1.1)) } }))
+  }
+
+  const rotateSlot = (i: number) => {
+    setTransforms(prev => {
+      const current = prev[i] || { scale: 1, x: 0, y: 0, fit: 'width', rotation: 0 }
+      return { ...prev, [i]: { ...current, rotation: (current.rotation + 90) % 360 } }
+    })
+  }
+
+  const renderSlot = (i: number, side: 'left' | 'right' | 'single' = 'single', rect?: { x: number; y: number; w: number; h: number; r?: number }, containerW?: number, containerH?: number) => {
+    const src = picked[i] ? pool.find(p => p.id === picked[i]) : undefined
+    const tf = getTransform(i)
+    const isTrioHero = is4R && ai4rLayout === 'TRIO_3' && i === 0
+    const isMirrorRight = side === 'right'
+
+    const customStyle: React.CSSProperties = rect && containerW && containerH
+      ? { position: 'absolute', left: `${(rect.x / containerW) * 100}%`, top: `${(rect.y / containerH) * 100}%`, width: `${(rect.w / containerW) * 100}%`, height: `${(rect.h / containerH) * 100}%`, transform: rect.r ? `rotate(${rect.r}deg)` : undefined, ['--checker-size' as string]: '10px' }
+      : { ['--checker-size' as string]: is4R || activeSlots >= 3 ? '10px' : '14px' }
+
+    return (
+      <div
+        key={`${side}-${i}`}
+        className={`block overflow-hidden border border-white/5 checker ${src ? '' : 'checker--void'} ${rect ? 'absolute' : (is4R ? 'h-full relative w-full' : 'flex-1 min-h-0 relative w-full')} ${isTrioHero ? 'col-span-2 row-span-1' : ''}`}
+        style={customStyle}
+        onDoubleClick={(e) => {
+          e.stopPropagation()
+          flipFit(i)
+        }}
+      >
+        {src ? (
+          <div className="relative h-full w-full overflow-hidden">
+            <div
+              onPointerDown={(e) => handlePointerDown(i, e)}
+              onPointerMove={(e) => handlePointerMove(i, e)}
+              onPointerUp={(e) => handlePointerUp(i, e)}
+              onPointerCancel={(e) => handlePointerUp(i, e)}
+              onWheel={(e) => handleWheel(i, e)}
+              className="h-full w-full touch-none cursor-grab active:cursor-grabbing flex items-center justify-center"
+            >
+              <img
+                src={src.thumbUrl}
+                alt=""
+                draggable={false}
+                className="max-w-none select-none pointer-events-none transition-transform duration-75"
+                style={{
+                  width: tf.fit === 'width' ? '100%' : 'auto',
+                  height: tf.fit === 'width' ? 'auto' : '100%',
+                  transform: `translate(${tf.x * 100}%, ${tf.y * 100}%) scale(${tf.scale}) rotate(${tf.rotation}deg)`,
+                }}
+              />
+            </div>
+            {!isMirrorRight && (
+              <div className="absolute inset-x-1.5 top-1.5 z-30 flex items-center justify-between pointer-events-none">
+                {/* Fit / Scale Badge — bisa diklik langsung atau double-tap foto */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    flipFit(i)
+                  }}
+                  className={`pointer-events-auto flex items-center rounded-full text-white backdrop-blur-md transition-all active:scale-95 shadow-md ${
+                    is4R || activeSlots >= 3 ? 'gap-1 px-2 py-0.5 text-[9px]' : 'gap-1.5 px-2.5 py-1 text-[11px]'
+                  }`}
+                  style={{ background: 'rgba(0,0,0,0.7)', border: '1px solid rgba(255,255,255,0.2)' }}
+                  title="Klik atau ketuk 2x foto untuk ganti Fit Lebar / Fit Tinggi"
+                >
+                  <span className="font-mono">{(tf.scale * 100).toFixed(0)}%</span>
+                  <span style={{ opacity: 0.35 }}>|</span>
+                  <span className="font-semibold tracking-wider">
+                    {tf.fit === 'width'
+                      ? `↔ ${t('strip_fit_width') as string}`
+                      : `↕ ${t('strip_fit_height') as string}`}
+                  </span>
+                  {tf.rotation > 0 && (
+                    <>
+                      <span style={{ opacity: 0.35 }}>|</span>
+                      <span>{tf.rotation}°</span>
+                    </>
+                  )}
+                </button>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      rotateSlot(i)
+                    }}
+                    className={`pointer-events-auto flex items-center justify-center rounded-full text-white shadow-lg transition-transform active:scale-95 ${
+                      is4R || activeSlots >= 3 ? 'h-6 w-6 text-[10px]' : 'h-7 w-7 text-xs'
+                    }`}
+                    style={{ background: 'rgba(0,0,0,0.75)', border: '1px solid rgba(255,255,255,0.2)', lineHeight: 1 }}
+                    title="Putar 90°"
+                  >
+                    ⟳
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      clear(i)
+                    }}
+                    className={`pointer-events-auto flex items-center justify-center rounded-full text-white shadow-lg transition-transform active:scale-95 ${
+                      is4R || activeSlots >= 3 ? 'h-6 w-6 text-xs' : 'h-7 w-7 text-sm'
+                    }`}
+                    style={{ background: 'rgba(220,38,38,0.85)', lineHeight: 1 }}
+                    title="Hapus foto dari slot"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <span className="absolute inset-0 flex items-center justify-center font-bold text-white/20">{i + 1}</span>
+        )}
+      </div>
+    )
+  }
 
   const confirm = () => {
-    // Wajib penuh: composePrintLayout mapping shot→slot by INDEX, jadi satu slot bolong
-    // bukan cuma "kurang satu foto" — dia nggeser semua foto sesudahnya ke slot yang salah.
     if (printing || !isFull) return
-    onConfirm(
-      picked.slice(0, activeSlots).map((id, i) => ({
-        source: pool.find(p => p.id === id)!,
-        transform: getTransform(i),
-      })),
-      mode
-    )
+    onConfirm(picked.slice(0, activeSlots).map((id, i) => ({ source: pool.find(p => p.id === id)!, transform: getTransform(i) })), mode)
   }
 
   if (!panel) return null
@@ -321,10 +388,6 @@ export function StripComposer({
       className="absolute inset-0 z-[60] animate-fade-in"
       style={{ background: 'rgba(9,1,53,0.95)', backdropFilter: 'blur(20px)', borderRadius: 'inherit', overflow: 'clip' }}
     >
-      {/* Kerangka SAMA PERSIS kayak screen lain (lihat PreviewScreen): judul+aksi kiri,
-          konten kanan pas landscape — otomatis lewat .screen-split, nol JS. Sebelumnya
-          komponen ini punya grid sendiri (md:flex-row) yang arahnya kebalik dari screen
-          lain, makanya kelihatan lompat-lompat tiap ganti layar. */}
       <div className="screen-split screen-split--center flex flex-col w-full h-full">
         <div className="screen-title text-center px-5 pt-5 pb-4">
           <h1
@@ -333,18 +396,12 @@ export function StripComposer({
           >
             {t(is4R ? 'strip_title_4r' : 'strip_title') as string}
           </h1>
-          {/* Penghitung slot: satu-satunya penjelasan kenapa tombol Print masih mati.
-              Tanpa ini tamu nekan tombol abu-abu berkali-kali tanpa tau kurang apa. */}
           <p style={{ fontSize: 'var(--text-base)', fontWeight: 300, color: 'var(--fg-muted)', lineHeight: 1.618 }}>
             {isFull ? (t('strip_hint_full') as string) : (t('strip_hint') as string)}
             {` · ${filled}/${activeSlots}`}
-            {is4R && ` · ${layoutName}`}
+            {` · ${layoutName}`}
           </p>
 
-          {/* Tab di BAWAH judul. Style disalin dari TabSwitcher PHOTO|VIDEO di PreviewScreen
-              (radius 10/7, padding 3 & 6x20, text-xs, aktif = rgba(255,255,255,0.2)) — sengaja
-              bukan ungu brand: dua switcher yang beda rupa di layar yang sama bikin tamu
-              ngira fungsinya beda. Isinya dua kata; nama layout ada di subtitle. */}
           <div className="mt-4 flex items-center justify-center">
             <div style={{ display: 'flex', background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(12px)', borderRadius: 10, padding: 3, gap: 3 }}>
               {([
@@ -364,15 +421,11 @@ export function StripComposer({
                     cursor: tab.locked ? 'default' : 'pointer',
                     fontFamily: 'var(--font-ui)',
                     fontSize: 'var(--text-xs)',
-                    fontWeight: 500,
-                    letterSpacing: '0.08em',
-                    textTransform: 'uppercase',
-                    whiteSpace: 'nowrap',
-                    transition: 'all 0.2s',
+                    fontWeight: mode === tab.key ? 600 : 400,
                     background: mode === tab.key ? 'rgba(255,255,255,0.2)' : 'transparent',
-                    color: mode === tab.key
-                      ? '#fff'
-                      : tab.locked ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.5)',
+                    color: mode === tab.key ? '#fff' : tab.locked ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.6)',
+                    boxShadow: mode === tab.key ? '0 2px 8px rgba(0,0,0,0.25)' : 'none',
+                    transition: 'all 0.15s ease',
                   }}
                 >
                   {tab.locked ? '🔒 ' : ''}{tab.label}
@@ -388,130 +441,97 @@ export function StripComposer({
         </div>
 
         <div className="screen-content">
-          {/* Panggung kanvas. .composer-stage = container query; .composer-paper ngunci
-              rasio kertas asli (2R 1:3, 4R 3:2) tanpa bisa jebol — lihat globals.css. */}
           <div className="composer-stage flex-1 min-h-0 w-full flex items-center justify-center" style={{ padding: 4 }}>
             <div
               className="composer-paper relative overflow-hidden rounded-[12px]"
               style={{
-                ['--paper-w' as string]: is4R ? 3 : 1,
-                ['--paper-h' as string]: is4R ? 2 : 3,
+                ['--paper-w' as string]: is4R ? (isPortrait4R ? 2 : 3) : 2,
+                ['--paper-h' as string]: is4R ? (isPortrait4R ? 3 : 2) : 3,
                 background: '#0a0a0a',
                 boxShadow: '0 24px 60px rgba(0,0,0,0.65)',
               }}
             >
-              {/* Frame Overlay (Live preview overlay) */}
-              {activeOverlay && (
-                <img
-                  src={activeOverlay}
-                  alt="Overlay"
-                  className="absolute inset-0 z-20 h-full w-full object-cover pointer-events-none"
-                />
-              )}
-  
-              {/* Grid Container for Slots */}
-              <div className={
-                is4R
-                  ? ai4rLayout === 'GRID_3'
-                    ? 'grid grid-cols-3 grid-rows-1 h-full w-full'
-                    : ai4rLayout === 'SPLIT_2'
-                    ? 'grid grid-cols-2 grid-rows-1 h-full w-full'
-                    : 'grid grid-cols-2 grid-rows-2 h-full w-full'
-                  : 'flex flex-col h-full w-full'
-              }>
-                {Array.from({ length: activeSlots }, (_, i) => {
-                  const src = picked[i] ? pool.find(p => p.id === picked[i]) : undefined
-                  const tf = getTransform(i)
-                  const isTrioHero = is4R && ai4rLayout === 'TRIO_3' && i === 0
-  
-                  return (
-                    <div
-                      key={i}
-                      // Strip: flex-1 bagi rata, JANGAN height:100/N% — kalau slotnya diubah
-                      // di Settings, persentase manual gampang ga sinkron sama jumlah slot.
-                      // Slot terisi → papan catur PUTIH: sisa letterbox mode ↕ tinggi bakal
-                      // kecetak putih (composePrintLayout ngecat kanvasnya '#ffffff'), jadi
-                      // nadanya wajib nada kertas. Slot kosong → papan catur GELAP, nyatu
-                      // sama panel: belum ada keputusan di situ, bukan area cetak.
-                      className={`relative block w-full overflow-hidden border border-white/5 checker ${src ? '' : 'checker--void'} ${is4R ? 'h-full' : 'flex-1 min-h-0'} ${isTrioHero ? 'col-span-1 row-span-2' : ''}`}
-                      style={{ ['--checker-size' as string]: is4R || activeSlots >= 3 ? '10px' : '14px' }}
-                    >
-                      {src ? (
-                        <div className="relative h-full w-full overflow-hidden">
-                          {/* Semua kontrol = gestur, nol tombol: seret geser, cubit zoom,
-                              ketuk 2x ganti sumbu fit. `touch-none` wajib — tanpa itu
-                              browser ngambil alih cubitnya buat zoom halaman. */}
-                          <div
-                            onPointerDown={(e) => handlePointerDown(i, e)}
-                            onPointerMove={(e) => handlePointerMove(i, e)}
-                            onPointerUp={(e) => handlePointerUp(i, e)}
-                            onPointerCancel={(e) => handlePointerUp(i, e)}
-                            onWheel={(e) => handleWheel(i, e)}
-                            className="h-full w-full touch-none cursor-grab active:cursor-grabbing flex items-center justify-center"
-                          >
-                            {/* Sumbu fit diatur lewat UKURAN, bukan object-fit. object-fit
-                                cuma punya cover (sumbu terbesar) & contain (terkecil) — dua
-                                -duanya milih sumbunya sendiri tergantung rasio foto, jadi
-                                hasilnya beda-beda antar foto. w-full/h-auto = lebar SELALU
-                                pas slot, apa pun orientasinya; kelebihan tingginya kena clip
-                                slot. Persis rumus fitAxis() di print-layout.ts. */}
-                            <img
-                              src={src.thumbUrl}
-                              alt=""
-                              draggable={false}
-                              className="max-w-none select-none pointer-events-none transition-transform duration-75"
-                              style={{
-                                width: tf.fit === 'width' ? '100%' : 'auto',
-                                height: tf.fit === 'width' ? 'auto' : '100%',
-                                transform: `translate(${tf.x * 100}%, ${tf.y * 100}%) scale(${tf.scale}) rotate(${tf.rotation}deg)`,
-                                transformOrigin: 'center center',
-                              }}
-                            />
-                          </div>
-  
-                          {/* Header Controls (indikator + Delete)
-                              pointer-events-none di BARISnya, auto di tiap tombol — dulu
-                              seluruh pita atas & bawah nelen sentuhan selebar slot, jadi di
-                              kotak 4R yang mungil sisa area buat nyeret tinggal secuil di
-                              tengah. Sekarang yang nangkep cuma tombolnya sendiri. */}
-                          <div className="absolute inset-x-1 top-1 z-30 flex items-center justify-between pointer-events-none">
-                            {/* Satu badge STATUS doang — tombol fit-nya dicabut, ganti double-tap.
-                                Sumbu aktif ikut nempel di sini: begitu kontrolnya jadi gestur,
-                                ga ada lagi yang nunjukin mode sekarang kalau badge ini bisu. */}
-                            <span
-                              className={`flex items-center rounded-full text-white backdrop-blur-md ${is4R || activeSlots >= 3 ? 'gap-1 px-1.5 py-0.5 text-[8px]' : 'gap-1.5 px-2 py-0.5 text-[10px]'}`}
-                              style={{ background: 'rgba(0,0,0,0.65)' }}
-                            >
-                              <span>🔍 {(tf.scale * 100).toFixed(0)}%</span>
-                              <span style={{ opacity: 0.45 }}>|</span>
-                              <span style={{ letterSpacing: '0.06em' }}>
-                                {tf.fit === 'width'
-                                  ? `↔ ${t('strip_fit_width') as string}`
-                                  : `↕ ${t('strip_fit_height') as string}`}
-                              </span>
-                            </span>
-                            <button
-                              onClick={() => clear(i)}
-                              className={`pointer-events-auto flex items-center justify-center rounded-full text-white shadow-lg transition-transform active:scale-95 ${is4R || activeSlots >= 3 ? 'h-5 w-5 text-xs' : 'h-7 w-7 text-sm'}`}
-                              style={{ background: 'rgba(220,38,38,0.85)', lineHeight: 1 }}
-                            >
-                              ×
-                            </button>
-                          </div>
-  
-                        </div>
-                      ) : (
-                        <span
-                          className="absolute inset-2 z-10 flex items-center justify-center rounded-[4px]"
-                          style={{ border: '2px dashed rgba(255,255,255,0.25)', color: 'rgba(255,255,255,0.4)', fontSize: 'var(--text-xl)', fontWeight: 600 }}
-                        >
-                          {i + 1}
-                        </span>
+              {is4R ? (
+                /* ── 4R POSTCARD ── */
+                <>
+                  {overlay4rUrl && (
+                    <img
+                      src={overlay4rUrl}
+                      alt="Overlay 4R"
+                      className="absolute inset-0 z-20 h-full w-full object-cover pointer-events-none"
+                    />
+                  )}
+                  {hasCustom4R ? (
+                    <div className="relative h-full w-full">
+                      {custom4rSlots!.slots.map((s, i) =>
+                        renderSlot(i, 'single', s, isPortrait4R ? 1200 : 1800, isPortrait4R ? 1800 : 1200)
                       )}
                     </div>
-                  )
-                })}
-              </div>
+                  ) : (
+                    <div className={
+                      isPortrait4R
+                        ? ai4rLayout === 'SINGLE_1'
+                          ? 'grid grid-cols-1 grid-rows-1 h-full w-full'
+                          : ai4rLayout === 'GRID_3'
+                          ? 'grid grid-cols-1 grid-rows-3 h-full w-full'
+                          : ai4rLayout === 'SPLIT_2'
+                          ? 'grid grid-cols-1 grid-rows-2 h-full w-full'
+                          : 'grid grid-cols-2 grid-rows-2 h-full w-full'
+                        : ai4rLayout === 'SINGLE_1'
+                        ? 'grid grid-cols-1 grid-rows-1 h-full w-full'
+                        : ai4rLayout === 'GRID_3'
+                        ? 'grid grid-cols-3 grid-rows-1 h-full w-full'
+                        : ai4rLayout === 'SPLIT_2'
+                        ? 'grid grid-cols-2 grid-rows-1 h-full w-full'
+                        : 'grid grid-cols-2 grid-rows-2 h-full w-full'
+                    }>
+                      {Array.from({ length: activeSlots }, (_, i) => renderSlot(i, 'single'))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                /* ── 2-STRIP FULL 4R SHEET (DUA STRIP BERDAMPINGAN) ── */
+                <div className="relative h-full w-full">
+                  <div className="grid grid-cols-2 h-full w-full relative z-10">
+                    {/* Kolom Strip Kiri */}
+                    <div className={`h-full w-full relative border-r border-dashed border-white/20 ${hasCustom2Strip ? '' : 'flex flex-col'}`}>
+                      {hasCustom2Strip
+                        ? customSlots!.slots.map((s, i) => renderSlot(i, 'left', s, 600, 1800))
+                        : Array.from({ length: activeSlots }, (_, i) => renderSlot(i, 'left'))}
+                      {(overlayRightUrl || isSingleStripOverlay) && overlayUrl && (
+                        <img
+                          src={overlayUrl}
+                          alt="Strip Kiri"
+                          className="absolute inset-0 z-20 h-full w-full object-cover pointer-events-none"
+                        />
+                      )}
+                    </div>
+
+                    {/* Kolom Strip Kanan */}
+                    <div className={`h-full w-full relative ${hasCustom2Strip ? '' : 'flex flex-col'}`}>
+                      {hasCustom2Strip
+                        ? customSlots!.slots.map((s, i) => renderSlot(i, 'right', s, 600, 1800))
+                        : Array.from({ length: activeSlots }, (_, i) => renderSlot(i, 'right'))}
+                      {(overlayRightUrl || isSingleStripOverlay) && (
+                        <img
+                          src={(overlayRightUrl || overlayUrl) ?? undefined}
+                          alt="Strip Kanan"
+                          className="absolute inset-0 z-20 h-full w-full object-cover pointer-events-none"
+                        />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Full Sheet Overlay */}
+                  {!overlayRightUrl && !isSingleStripOverlay && overlayUrl && (
+                    <img
+                      src={overlayUrl}
+                      alt="Overlay Full Sheet"
+                      className="absolute inset-0 z-20 h-full w-full object-cover pointer-events-none"
+                    />
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

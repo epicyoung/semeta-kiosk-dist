@@ -345,8 +345,11 @@ export interface Translations {
   set_image_model: string              // "AI Photo Model" — engine API only
   set_image_model_hint: string
   set_image_resolution: string         // "Photo Resolution"
-  set_image_resolution_hint_cost: string // "Each photo ({res}, 4 variants) burns {n} token…" — {res}/{n} via replace
+  set_image_resolution_hint_cost: string // "{res} runs {n} token per photo" — {res}/{n} via replace
   set_image_resolution_hint: string
+  set_image_variants: string           // "AI Results per Shot" — jumlah variasi 1-4
+  set_image_variants_hint: string
+  set_image_variants_hint_cost: string // "{n} versions — {total} token, {unit} each" — 3 placeholder
   set_image_res_default: string        // label resolusi buat model Fal (ga punya param resolusi)
   set_video_provider: string           // "Select Video Provider"
   set_video_provider_hint_cost: string // "Each video (8s, {res}) burns {n} token…" — {res}/{n} via replace

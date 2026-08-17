@@ -75,7 +75,7 @@ if not "%BUILD_ERR%"=="0" (
   echo ============================================================
   echo  [GAGAL] npm run build ERROR ^(exit %BUILD_ERR%^).
   echo  JANGAN buka booth. Cek pesan error di atas dulu.
-  echo  Kalau mepet event: pakai build lama lewat LAUNCHER.bat ^(dev^) sementara.
+  echo  Kalau mepet event: pakai build lama lewat LAUNCHER-DEV.bat ^(dev^) sementara.
   echo ============================================================
   echo.
   pause

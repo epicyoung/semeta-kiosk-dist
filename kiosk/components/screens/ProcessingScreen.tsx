@@ -212,10 +212,14 @@ type Props = {
   // Key image engine hasil pilihan operator di Settings ('' = belum milih / ga ada yang
   // enabled ⇒ Worker pakai jalur lama per-template). Dirakit di KioskApp dari config.
   imageEngine: string
+  // Jumlah variasi AI per jepretan (1-4, dipilih operator di Settings). Cuma kepake bareng
+  // imageEngine — jalur lama per-template jumlahnya dari payload_json Supabase. Worker
+  // clamp lagi & ngali harga sendiri; angka ini bukan sumber kebenaran tagihan.
+  imageVariants: number
   onUploadFailed?: (metadata: Record<string, unknown>) => void
 }
 
-export function ProcessingScreen({ state, dispatch, generationSource, eventName, licensed, videoUnlocked, comfy, enableVideoEngine, videoProvider, videoResolution, imageEngine, onUploadFailed }: Props) {
+export function ProcessingScreen({ state, dispatch, generationSource, eventName, licensed, videoUnlocked, comfy, enableVideoEngine, videoProvider, videoResolution, imageEngine, imageVariants, onUploadFailed }: Props) {
   const t = useT()
   const copy = t('processing_copy') as string[]
   const [copyIndex, setCopyIndex] = useState(0)
@@ -474,7 +478,9 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
           // Cuma dikirim kalau operator beneran milih. Kosong ⇒ field-nya ga ada sama sekali
           // ⇒ Worker jatuh ke deduct_token per-template (kelakuan lama). Kiosk NYEBUT key doang;
           // model, resolusi, jumlah variasi & harga tetap diputus server dari registry-nya.
-          ...(imageEngine ? { image_engine: imageEngine } : {}),
+          // num_images cuma nyusul kalau image_engine kekirim — di jalur lama jumlahnya
+          // milik payload_json Supabase, dan ngirimnya malah bikin Worker bingung sumbernya.
+          ...(imageEngine ? { image_engine: imageEngine, num_images: imageVariants } : {}),
           ...(edit ?? {}),
         }),
         signal: controller.signal,
@@ -606,7 +612,19 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
           </div>
           <div className="flex justify-between">
             <span style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.1em' }}>{pct}%</span>
-            <span style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.2)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>{generationSource}</span>
+            <span style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+              {state.templates[0]?.engine_type === 'print'
+                ? 'PRINT'
+                : generationSource === 'LOCAL'
+                ? 'LOCAL AI'
+                : imageEngine?.includes('google')
+                ? 'GOOGLE AI'
+                : imageEngine?.includes('fal')
+                ? 'FAL AI'
+                : generationSource === 'fal'
+                ? 'AI ENGINE'
+                : generationSource}
+            </span>
           </div>
         </div>
 
