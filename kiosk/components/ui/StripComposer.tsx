@@ -270,15 +270,27 @@ export function StripComposer({
     const isTrioHero = is4R && ai4rLayout === 'TRIO_3' && i === 0
     const isMirrorRight = side === 'right'
 
+    // Slot yang lagi disentuh naik DI ATAS overlay PNG (z-20) supaya badge fit/scale &
+    // tombol rotate di dalemnya bisa diklik. Nge-z-index badge doang percuma — badge kekunci
+    // di stacking context slot, jadi slot-nya yang harus naik.
+    //
+    // Cuma slot AKTIF yang naik, bukan semuanya: kalau semua slot di atas overlay, frame-nya
+    // ketutup foto terus dan tamu ga bisa liat hasil akhirnya. Begitu jari diangkat &
+    // pindah slot lain, yang lama balik ke bawah overlay — frame kelihatan lagi.
+    const liftForControls = activeSlot === i ? { zIndex: 30 } : null
     const customStyle: React.CSSProperties = rect && containerW && containerH
-      ? { position: 'absolute', left: `${(rect.x / containerW) * 100}%`, top: `${(rect.y / containerH) * 100}%`, width: `${(rect.w / containerW) * 100}%`, height: `${(rect.h / containerH) * 100}%`, transform: rect.r ? `rotate(${rect.r}deg)` : undefined, ['--checker-size' as string]: '10px' }
-      : { ['--checker-size' as string]: is4R || activeSlots >= 3 ? '10px' : '14px' }
+      ? { position: 'absolute', left: `${(rect.x / containerW) * 100}%`, top: `${(rect.y / containerH) * 100}%`, width: `${(rect.w / containerW) * 100}%`, height: `${(rect.h / containerH) * 100}%`, transform: rect.r ? `rotate(${rect.r}deg)` : undefined, ...liftForControls, ['--checker-size' as string]: '10px' }
+      : { ...liftForControls, ['--checker-size' as string]: is4R || activeSlots >= 3 ? '10px' : '14px' }
 
     return (
       <div
         key={`${side}-${i}`}
         className={`block overflow-hidden border border-white/5 checker ${src ? '' : 'checker--void'} ${rect ? 'absolute' : (is4R ? 'h-full relative w-full' : 'flex-1 min-h-0 relative w-full')} ${isTrioHero ? 'col-span-2 row-span-1' : ''}`}
         style={customStyle}
+        // Sentuh di mana pun dalam slot = slot ini aktif → naik di atas overlay, badge-nya
+        // kebuka. Tanpa ini slot cuma aktif pas foto-nya digeser, jadi badge yang ketutup
+        // PNG ga akan pernah bisa diklik — tamu kejebak.
+        onPointerDown={() => setActiveSlot(i)}
         onDoubleClick={(e) => {
           e.stopPropagation()
           flipFit(i)
@@ -306,6 +318,10 @@ export function StripComposer({
                 }}
               />
             </div>
+            {/* z-30 ini cuma ngalahin isi slot lain (foto). Yang bikin badge menang lawan
+                overlay PNG itu zIndex di slot induknya pas aktif — lihat liftForControls
+                di renderSlot. Beda stacking context, angka di sini ga ada urusan sama z-20
+                punya overlay. */}
             {!isMirrorRight && (
               <div className="absolute inset-x-1.5 top-1.5 z-30 flex items-center justify-between pointer-events-none">
                 {/* Fit / Scale Badge — bisa diklik langsung atau double-tap foto */}

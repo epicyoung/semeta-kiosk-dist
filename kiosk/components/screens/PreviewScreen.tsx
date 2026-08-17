@@ -413,6 +413,11 @@ export function PreviewScreen({
     uploadedBase.current = null; // buka guard → effect upload jalan lagi buat base yang sama
   };
 
+  // Penanda isi daftar hasil — string, panjangnya konstan dari render pertama (undefined ⇒ '').
+  // Dipakai sebagai dep effect upload: berubah HANYA kalau ada foto yang beneran ganti
+  // (Edit Wajah), jadi upload ulang jalan tanpa bikin dep array berubah ukuran.
+  const resultsKey = (state.allResults ?? []).map((r) => r.aiUrl).join("|");
+
   const runRefine = async (mapping: (number | null)[]) => {
     if (zoomIndex === null || !multiResults) return;
     const target = multiResults[zoomIndex];
@@ -876,11 +881,13 @@ export function PreviewScreen({
       clearTimeout(debounce);
       if (!fired) uploadedBase.current = null;
     };
-    // state.allResults ikut dep: Edit Wajah ngeganti daftarnya sementara `base` TETAP (itu key
-    // R2, sengaja stabil biar QR ga kedip). Tanpa dep ini effect-nya ga pernah jalan lagi dan
-    // QR nunjuk foto sebelum diedit. Guard uploadedBase yang nahan dobel upload, bukan dep list.
+    // resultsKey (STRING, bukan array) ikut dep: Edit Wajah ngeganti daftarnya sementara `base`
+    // TETAP (itu key R2, sengaja stabil biar QR ga kedip). Tanpa dep ini effect-nya ga pernah
+    // jalan lagi dan QR nunjuk foto sebelum diedit. Guard uploadedBase yang nahan dobel upload.
+    // WAJIB string: naro state.allResults mentah bikin panjang dep array berubah pas dia masih
+    // undefined di render awal → React ngelempar "final argument changed size between renders".
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFinal, licensed, state.base, state.allResults]);
+  }, [isFinal, licensed, state.base, resultsKey]);
 
   // Satu QR = satu halaman microsite (ori/ai/video). Video kini di R2 (_C.mp4) → HP tamu buka
   // dari cloud, bukan LAN. Nutup lubang keamanan: kiosk aman di-bind 127.0.0.1.
