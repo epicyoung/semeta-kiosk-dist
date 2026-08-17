@@ -151,6 +151,12 @@ export type KioskConfig = {
   video_provider?: VideoProvider  // dipakai kalau enable_video_engine true. undefined ⇒ PIXVERSE (HPP termurah).
   video_resolution?: '720p' | '1080p'  // undefined ⇒ 720p (hemat). 1080p = tarif cost_1080 (kalau provider punya).
   video_duration?: number  // 5 | 8 detik (operator pilih). undefined ⇒ pin default provider (8). Charge flat.
+  // Image engine (engine_type 'api') — operator milih model + resolusi global, kayak video.
+  // Dua-duanya undefined ⇒ jalur LAMA per-template (deduct_token + payload_json), persis
+  // kelakuan sebelum fitur ini. Key registry-nya dirakit di lib/image-engines.ts, harga +
+  // enable/disable dari admin lewat handshake (image_costs). Worker fail-closed kalau ngawur.
+  image_model?: string       // 'nano-banana-2-google' | 'nano-banana-pro-google' | 'nano-banana-google'
+  image_resolution?: string  // '1K' | '2K' | '4K' — cuma yang enabled di admin yang muncul
   template_local?: string
   template_source?: TemplateSource
   pocketbase_url?: string

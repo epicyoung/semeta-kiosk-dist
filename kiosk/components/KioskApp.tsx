@@ -18,6 +18,7 @@ import { ExpiredScreen } from '@/components/screens/ExpiredScreen'
 import { ConsentScreen } from '@/components/screens/ConsentScreen'
 import { NameInputScreen } from '@/components/screens/NameInputScreen'
 import type { ComfyCfg } from '@/lib/comfy'
+import { engineKeyFor } from '@/lib/image-engines'
 import type { KioskConfig, KioskState } from '@/lib/types'
 import { SPINDONESIA_CATEGORY } from '@/lib/spindonesia-category'
 import { useOrientedFrames } from '@/lib/frames'
@@ -264,7 +265,7 @@ export function KioskApp({ config: initialConfig }: { config: KioskConfig }) {
       case 'multicapture': return <MultiCaptureScreen state={state} dispatch={wrappedDispatch} cameraSource={config.camera_source} />
       // Engine 'api' + input_label — teks tamu masuk prompt berbayar, jadi harus fix sebelum processing.
       case 'nameinput':   return <NameInputScreen template={state.templates[0]} dispatch={wrappedDispatch} />
-      case 'processing':  return <ProcessingScreen state={state} dispatch={wrappedDispatch} generationSource={config.generation_source} eventName={config.event_name} licensed={config.licensed ?? false} videoUnlocked={isVideoUnlocked(config)} comfy={comfyCfg} enableVideoEngine={config.enable_video_engine ?? false} videoProvider={config.video_provider ?? 'PIXVERSE'} videoResolution={config.video_resolution ?? '720p'} onUploadFailed={(meta) => log('UPLOAD_FAILED', meta)} />
+      case 'processing':  return <ProcessingScreen state={state} dispatch={wrappedDispatch} generationSource={config.generation_source} eventName={config.event_name} licensed={config.licensed ?? false} videoUnlocked={isVideoUnlocked(config)} comfy={comfyCfg} enableVideoEngine={config.enable_video_engine ?? false} videoProvider={config.video_provider ?? 'PIXVERSE'} videoResolution={config.video_resolution ?? '720p'} imageEngine={engineKeyFor(config.image_model ?? '', config.image_resolution ?? '') ?? ''} onUploadFailed={(meta) => log('UPLOAD_FAILED', meta)} />
       case 'framechooser': return <PreviewScreen mode="choose" state={state} dispatch={wrappedDispatch} frames={orientedFrames} config={config} licensed={config.licensed ?? false} eventName={config.event_name} onAction={(a) => log('VISITOR_ACTION', { action: a })} />
       case 'preview':     return <PreviewScreen mode="final" state={state} dispatch={wrappedDispatch} frames={orientedFrames} config={config} licensed={config.licensed ?? false} eventName={config.event_name} onAction={(a) => log('VISITOR_ACTION', { action: a })} />
     }

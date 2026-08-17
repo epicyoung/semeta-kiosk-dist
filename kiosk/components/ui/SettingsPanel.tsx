@@ -4,6 +4,7 @@ import type { KioskConfig, Template, TemplateSource, Locale, ComfyModelFamily, C
 import { MAGIC_DURATIONS } from '@/lib/use-magic-catcher'
 import { fetchPocketBaseTemplates } from '@/lib/pocketbase'
 import { isVideoUnlocked } from '@/lib/video'
+import { enabledModels, costFor, reconcileSelection } from '@/lib/image-engines'
 import { useT } from '@/lib/i18n'
 import type { Translations } from '@/lib/locales/types'
 
@@ -298,6 +299,11 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
       setFullbodyBusy(false)
     }
   }
+  // Image engine (foto) — operator milih model + resolusi, harga per kombinasi dari admin.
+  // Disimpen mentah dulu; yang dipake buat UI & save = hasil reconcile lawan image_costs
+  // (di bawah, sesudah costs ke-fetch) supaya pilihan basi ga pernah kekirim ke Worker.
+  const [imageModel,      setImageModel]      = useState(config.image_model ?? '')
+  const [imageResolution, setImageResolution] = useState(config.image_resolution ?? '')
   const [videoEngine,     setVideoEngine]     = useState(config.enable_video_engine ?? false)
   // Default LTX — 1080p native, murah & tajam. Provider dipangkas ke 3 tier (LTX/PIXVERSE/SEEDANCE);
   // config lama yg ke-set VEO/WAN/VIDU/KLING udah ga ada di dropdown → jatuhin ke LTX biar select ga
@@ -318,6 +324,13 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   const [videoCosts, setVideoCosts] = useState<Record<string, number>>(() => {
     try { return JSON.parse(localStorage.getItem('lastVideoCosts') || '{}') } catch { return {} }
   })
+  // Harga image engine — pola sama persis: cache terakhir dari handshake, offline pake ini.
+  // Sengaja TANPA fallback hardcoded ala DEFAULT_VIDEO_COSTS: model foto baru dirilis, jadi
+  // kiosk yang belum pernah handshake lebih baik nampilin "belum ada model" (jatuh ke jalur
+  // lama per-template) daripada nawarin model yang mungkin belum di-enable admin.
+  const [imageCosts, setImageCosts] = useState<Record<string, number>>(() => {
+    try { return JSON.parse(localStorage.getItem('lastImageCosts') || '{}') } catch { return {} }
+  })
   useEffect(() => {
     if (!open) return
     let live = true
@@ -330,6 +343,10 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         if (d.video_costs && Object.keys(d.video_costs).length > 0) {
           setVideoCosts(d.video_costs)
           try { localStorage.setItem('lastVideoCosts', JSON.stringify(d.video_costs)) } catch {}
+        }
+        if (d.image_costs && Object.keys(d.image_costs).length > 0) {
+          setImageCosts(d.image_costs)
+          try { localStorage.setItem('lastImageCosts', JSON.stringify(d.image_costs)) } catch {}
         }
       })
       .catch(() => {/* offline → pake cache terakhir */})
@@ -368,6 +385,22 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
     else priceStr = `HD ${cost720} Tok`
     return { ...o, label: `${o.label} (${priceStr})` }
   })
+  // Pilihan image engine yang SAH sekarang (pilihan tersimpan direkonsiliasi lawan daftar
+  // enabled dari admin). null = ga ada engine enabled ⇒ dropdown disembunyiin & save ngirim
+  // kosong ⇒ Worker pakai jalur lama per-template. Lihat lib/image-engines.ts.
+  const imageSel = reconcileSelection(imageCosts, imageModel, imageResolution)
+  const imageModelOpts = enabledModels(imageCosts).map(m => ({ value: m.id, label: m.label }))
+  // Resolusi yang muncul cuma punya model kepilih — Nano legacy cuma 1K, dan admin bisa
+  // matiin resolusi tertentu (mis. 4K doang yang OFF). Harga nempel di label biar operator
+  // liat konsekuensi ongkosnya sebelum milih, sama kayak dropdown video.
+  // '-' = model Fal yang emang ga punya param resolusi. Ditampilin "Default" biar operator
+  // ga ngira dropdown-nya rusak; harganya tetep nempel karena itu yang bikin dia mikir.
+  const imageResOpts = (enabledModels(imageCosts).find(m => m.id === imageSel?.model)?.resolutions ?? [])
+    .map(r => ({
+      value: r,
+      label: `${r === '-' ? (t('set_image_res_default') as string) : r} — ${costFor(imageCosts, imageSel!.model, r)} ${t('set_token_unit') as string}`,
+    }))
+  const selectedImageCost = imageSel ? costFor(imageCosts, imageSel.model, imageSel.resolution) : null
   const [comfyStatus,     setComfyStatus]     = useState<PbStatus>('idle')
   const [comfyCaps,       setComfyCaps]       = useState<StylizeCaps | null>(null)
   const [logoFile,        setLogoFile]        = useState<File | null>(null)
@@ -802,6 +835,11 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         video_provider:      videoProvider,
         video_resolution:    videoResolution,
         video_duration:      videoDuration,
+        // Yang disimpen = hasil reconcile, bukan state mentah — kalau admin matiin engine yang
+        // lagi kepilih, yang ke-save pilihan pengganti yang sah, bukan yang bakal ditolak 403.
+        // Ga ada engine enabled ⇒ '' ⇒ jalur lama per-template.
+        image_model:      imageSel?.model ?? '',
+        image_resolution: imageSel?.resolution ?? '',
       }
       if (logo_url) patch.logo_url = logo_url
       if (bg_url)   patch.bg_url   = bg_url
@@ -848,6 +886,8 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         video_provider:      videoProvider,
         video_resolution:    videoResolution,
         video_duration:      videoDuration,
+        image_model:      imageSel?.model ?? '',
+        image_resolution: imageSel?.resolution ?? '',
         ...(logo_url ? { logo_url } : {}),
         ...(bg_url   ? { bg_url   } : {}),
       } as Partial<KioskConfig>)
@@ -1418,6 +1458,36 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                   <Toggle on={fullbodyEngine} disabled={fullbodyBusy} onToggle={() => toggleFullbody(!fullbodyEngine)} />
                 </div>
               </div>
+
+              {/* Image engine (foto AI) — operator milih model + resolusi, harga per kombinasi
+                  diatur super-admin di /dashboard/settings dan nyampe lewat handshake. Cuma
+                  relevan buat engine API (template engine_type 'api'); engine lokal ga nyentuh
+                  Worker sama sekali. Kalau admin belum nyalain satu pun model, blok ini
+                  disembunyiin dan kiosk jalan di jalur lama (model per-template) — bukan
+                  nampilin dropdown kosong yang bikin operator ngira rusak. */}
+              {(engine === 'fullbody_api' || engine === 'faceswap_api') && imageSel && (<>
+                <RowHint
+                  label={t('set_image_model') as string}
+                  hint={t('set_image_model_hint') as string}
+                >
+                  <Sel value={imageSel.model} options={imageModelOpts} onChange={v => {
+                    setImageModel(v)
+                    // Resolusi di-reset biar reconcile milihin yang tersedia di model baru —
+                    // tanpa ini, pindah ke Nano legacy sambil nyantol '4K' bikin selection hantu.
+                    setImageResolution('')
+                  }} />
+                </RowHint>
+                <RowHint
+                  label={t('set_image_resolution') as string}
+                  hint={selectedImageCost != null
+                    ? (t('set_image_resolution_hint_cost') as string)
+                        .replace('{res}', imageSel.resolution === '-' ? (t('set_image_res_default') as string) : imageSel.resolution)
+                        .replace('{n}', String(selectedImageCost))
+                    : t('set_image_resolution_hint') as string}
+                >
+                  <Sel value={imageSel.resolution} options={imageResOpts} onChange={setImageResolution} />
+                </RowHint>
+              </>)}
 
               {/* Video engine (img2vid) — img output terakhir jadi seed ke provider video via
                   Worker. API key hidup di Worker (FAL), gak pernah ke browser. Default OFF.

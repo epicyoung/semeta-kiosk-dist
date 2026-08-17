@@ -342,6 +342,12 @@ export interface Translations {
   set_video_need_rental: string        // needs active rental note
   set_video_locked_note: string        // feature locked note
   set_video_enabled_note: string       // last photo animated note
+  set_image_model: string              // "AI Photo Model" — engine API only
+  set_image_model_hint: string
+  set_image_resolution: string         // "Photo Resolution"
+  set_image_resolution_hint_cost: string // "Each photo ({res}, 4 variants) burns {n} token…" — {res}/{n} via replace
+  set_image_resolution_hint: string
+  set_image_res_default: string        // label resolusi buat model Fal (ga punya param resolusi)
   set_video_provider: string           // "Select Video Provider"
   set_video_provider_hint_cost: string // "Each video (8s, {res}) burns {n} token…" — {res}/{n} via replace
   set_video_provider_hint_disabled: string

@@ -28,6 +28,8 @@ export async function POST(req: NextRequest) {
         // Freeware: teruskan force_lock supaya admin bisa takeover kiosk tanpa sewa aktif.
         // video_costs + video_unlocked ikut diteruskan — video jalan walau freeware, jadi
         // harga & izinnya harus sampe ke FE (kalau nggak dropdown jatuh ke fallback & mismatch).
+        // image_costs sama: foto motong token tanpa syarat sewa, jadi daftar model + harganya
+        // harus nyampe juga — kalau nggak, dropdown Settings kosong pas freeware.
         const fw = await res.json().catch(() => ({} as Record<string, unknown>))
         return NextResponse.json({
           remaining_sec: 0, licensed: false, freeware: true,
@@ -35,6 +37,7 @@ export async function POST(req: NextRequest) {
           lock_message: fw.lock_message ?? null,
           video_costs: fw.video_costs ?? {},
           video_unlocked: fw.video_unlocked === true,
+          image_costs: fw.image_costs ?? {},
         })
       }
       return NextResponse.json({ reason: reasonForStatus(res.status) }, { status: res.status })

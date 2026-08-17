@@ -209,10 +209,13 @@ type Props = {
   enableVideoEngine: boolean
   videoProvider: VideoProvider
   videoResolution: '720p' | '1080p'
+  // Key image engine hasil pilihan operator di Settings ('' = belum milih / ga ada yang
+  // enabled ⇒ Worker pakai jalur lama per-template). Dirakit di KioskApp dari config.
+  imageEngine: string
   onUploadFailed?: (metadata: Record<string, unknown>) => void
 }
 
-export function ProcessingScreen({ state, dispatch, generationSource, eventName, licensed, videoUnlocked, comfy, enableVideoEngine, videoProvider, videoResolution, onUploadFailed }: Props) {
+export function ProcessingScreen({ state, dispatch, generationSource, eventName, licensed, videoUnlocked, comfy, enableVideoEngine, videoProvider, videoResolution, imageEngine, onUploadFailed }: Props) {
   const t = useT()
   const copy = t('processing_copy') as string[]
   const [copyIndex, setCopyIndex] = useState(0)
@@ -468,6 +471,10 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
           template_id: state.templates[0].billing_id || state.templates[0].id,
           image_base64: selfieBase64,
           assignments: state.assignments,
+          // Cuma dikirim kalau operator beneran milih. Kosong ⇒ field-nya ga ada sama sekali
+          // ⇒ Worker jatuh ke deduct_token per-template (kelakuan lama). Kiosk NYEBUT key doang;
+          // model, resolusi, jumlah variasi & harga tetap diputus server dari registry-nya.
+          ...(imageEngine ? { image_engine: imageEngine } : {}),
           ...(edit ?? {}),
         }),
         signal: controller.signal,
