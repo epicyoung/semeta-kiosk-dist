@@ -146,6 +146,24 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
       if (state.screen !== 'preview') return state
       return { ...state, selectedFrame: action.frame }
 
+    // Edit Wajah: ganti isi allResults DI TEMPAT, tanpa pindah layar.
+    // SENGAJA bukan SHOW_PREVIEW — action itu ngerakit ulang state dari nol, jadi
+    // selectedFrame ke-reset null (frame ilang dari QR) dan allResults ga kebawa di
+    // jalur `direct` (variasi AI lain ilang). Dua-duanya kejadian beneran.
+    case 'REPLACE_RESULTS': {
+      if (state.screen !== 'preview') return state
+      const chosen = action.results[action.index] ?? action.results[0]
+      if (!chosen) return state
+      return {
+        ...state,
+        allResults: action.results,
+        aiUrl: chosen.aiUrl,
+        originalUrl: chosen.originalUrl,
+        sourceUrl: chosen.sourceUrl,
+        rawAiUrl: chosen.rawAiUrl,
+      }
+    }
+
     case 'BACK':
       if (state.screen === 'consent') return { screen: 'idle' }
       if (state.screen === 'liveview') return { screen: 'idle' }

@@ -237,6 +237,7 @@ export type KioskAction =
   | { type: 'SHOW_PREVIEW'; aiUrl: string; originalUrl: string; sourceUrl?: string; rawAiUrl?: string; base?: string; processingSec?: number; videoUrl?: string; direct?: boolean; printSize?: PrintSize; templateId?: string; allResults?: SwapResult[] }
   | { type: 'GO_DELIVERY'; aiUrl: string; originalUrl: string; uploadAiUrl: string; uploadOriginalUrl: string }
   | { type: 'SELECT_FRAME'; frame: Frame | null }
+  | { type: 'REPLACE_RESULTS'; results: SwapResult[]; index: number } // Edit Wajah — ganti isi allResults di tempat
   | { type: 'CONFIRM_FRAME'; frame: Frame | null } // framechooser NEXT → preview bawa frame kepilih
   | { type: 'BACK' }
   | { type: 'RESET' }

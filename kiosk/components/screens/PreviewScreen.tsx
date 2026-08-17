@@ -199,9 +199,13 @@ export function PreviewScreen({
   const [chooserAction, setChooserAction] = useState<"print" | "video" | null>(
     null,
   );
+  // resultIndex itu state LOKAL sementara allResults bisa ke-ganti dari luar (Edit Wajah
+  // nge-dispatch SHOW_PREVIEW dengan daftar baru). Kalau index-nya kadaluwarsa,
+  // allResults[resultIndex] = undefined dan `.aiUrl` di bawah langsung ngelempar —
+  // layar putih di depan tamu. Clamp, jangan percaya index-nya masih sah.
   const activeResult =
     state.allResults && state.allResults.length > 0
-      ? state.allResults[resultIndex]
+      ? (state.allResults[resultIndex] ?? state.allResults[0])
       : {
           aiUrl: state.aiUrl,
           rawAiUrl: state.rawAiUrl,
@@ -371,8 +375,11 @@ export function PreviewScreen({
   // Foto yang lagi DIPAJANG. Beda dari activeResult (yang dipakai print/QR/upload) — zoom
   // cuma ngubah tampilan. shownDims/visibleFrame sengaja tetep ikut activeResult karena
   // visibleFrame ikut ke-burn pas print (dipakai di doPrint), bukan cuma buat layar.
+  // Sama kayak activeResult: zoomIndex bisa nunjuk slot yang udah ga ada kalau daftarnya
+  // berubah pas lagi kebuka. Fallback ke activeResult, jangan sampai undefined.
   const displayResult =
-    multiResults && zoomIndex !== null ? multiResults[zoomIndex] : activeResult;
+    (multiResults && zoomIndex !== null ? multiResults[zoomIndex] : undefined) ??
+    activeResult;
 
   // --- Edit Wajah ---
   // Ping face_server sekali pas mount. Kalau mati, tombolnya ga usah tampil sama sekali —
@@ -393,23 +400,17 @@ export function PreviewScreen({
     !!displayResult.rawAiUrl &&
     !refining;
 
-  // Tulis balik daftar hasil ke state global. Foto utama ikut yang lagi dizoom supaya
-  // print/QR/upload langsung nunjuk versi baru — planMultiUpload jalan apa adanya.
+  // Tulis balik daftar hasil ke state global, LALU upload ulang biar QR ikut versi baru.
+  //
+  // Dua hal yang bikin ini ga sesederhana kelihatannya, dua-duanya pernah bocor ke tamu:
+  //  1. Pakai SHOW_PREVIEW = frame ilang (selectedFrame ke-reset null) DAN variasi AI lain
+  //     ilang (allResults ga kebawa di jalur `direct`). Makanya REPLACE_RESULTS.
+  //  2. Upload di-guard `uploadedBase.current === state.base`. base SENGAJA ga berubah
+  //     (itu key R2, biar QR-nya stabil), jadi tanpa reset guard upload-nya ke-skip diem-diem
+  //     dan QR tetep nunjuk foto SEBELUM diedit — persis keluhan "di QR ga ke-replace".
   const applyResults = (results: SwapResult[], index: number) => {
-    const r = results[index];
-    dispatch({
-      type: "SHOW_PREVIEW",
-      aiUrl: r.aiUrl,
-      originalUrl: r.originalUrl,
-      sourceUrl: r.sourceUrl,
-      rawAiUrl: r.rawAiUrl,
-      base: r.base,
-      processingSec: r.processingSec,
-      templateId: r.templateId,
-      allResults: results,
-      videoUrl: state.videoUrl,
-      direct: true,
-    });
+    dispatch({ type: "REPLACE_RESULTS", results, index });
+    uploadedBase.current = null; // buka guard → effect upload jalan lagi buat base yang sama
   };
 
   const runRefine = async (mapping: (number | null)[]) => {
@@ -459,12 +460,21 @@ export function PreviewScreen({
     whiteSpace: "nowrap",
   };
 
+  // SATU pintu keluar dari zoom. Dulu tiap tempat manggil setZoomIndex(null) sendiri-sendiri
+  // dan yang lewat klik-di-foto lupa ngebersihin undoState — chip OK/Undo nyangkut sementara
+  // tamu udah balik ke grid, state-nya jadi ga nyambung sama yang kelihatan.
+  const exitZoom = () => {
+    setZoomIndex(null);
+    setUndoState(null);
+    setRefineError(false);
+    setRemapOpen(false);
+  };
+
   const undoRefine = () => {
     if (!undoState || !multiResults) return;
     const restored = multiResults.map((r, i) => (i === undoState.index ? undoState.prev : r));
-    applyResults(restored, undoState.index);
-    setUndoState(null);
-    setZoomIndex(null); // balik ke grid — sama kayak OK, edit-nya udah kelar
+    applyResults(restored, undoState.index); // pulihin DULU, baru keluar
+    exitZoom();
   };
 
   // Slot melayang di pita kosong atas/bawah foto. Ditulis INLINE, bukan di globals.css,
@@ -866,8 +876,11 @@ export function PreviewScreen({
       clearTimeout(debounce);
       if (!fired) uploadedBase.current = null;
     };
+    // state.allResults ikut dep: Edit Wajah ngeganti daftarnya sementara `base` TETAP (itu key
+    // R2, sengaja stabil biar QR ga kedip). Tanpa dep ini effect-nya ga pernah jalan lagi dan
+    // QR nunjuk foto sebelum diedit. Guard uploadedBase yang nahan dobel upload, bukan dep list.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFinal, licensed, state.base]);
+  }, [isFinal, licensed, state.base, state.allResults]);
 
   // Satu QR = satu halaman microsite (ori/ai/video). Video kini di R2 (_C.mp4) → HP tamu buka
   // dari cloud, bukan LAN. Nutup lubang keamanan: kiosk aman di-bind 127.0.0.1.
@@ -1144,9 +1157,7 @@ export function PreviewScreen({
                     ? "print-eject 1200ms ease-in-out"
                     : undefined,
                 }}
-                onClick={
-                  zoomIndex !== null ? () => setZoomIndex(null) : undefined
-                }
+                onClick={zoomIndex !== null ? exitZoom : undefined}
                 onAnimationEnd={onPrintAnimEnd}
               >
                 {isGridView ? (
@@ -1223,7 +1234,7 @@ export function PreviewScreen({
                         onClick={(e) => e.stopPropagation()}
                       >
                         <button
-                          onClick={() => { setZoomIndex(null); setUndoState(null); }}
+                          onClick={exitZoom}
                           style={{ ...refineChip, color: "var(--fg-muted)" }}
                         >
                           {t("remap_back_grid") as string}
@@ -1249,7 +1260,7 @@ export function PreviewScreen({
                               // OK = "kelar sama foto ini" → balikin ke grid biar tamu bisa
                               // liat variasi AI yang lain. Nyangkut di foto yang barusan diedit
                               // bikin variasi lain kayak ilang.
-                              onClick={() => { setUndoState(null); setZoomIndex(null); }}
+                              onClick={exitZoom}
                               style={{ ...refineChip, color: "#fff", borderColor: "var(--brand)" }}
                             >
                               {t("remap_keep") as string}
@@ -1555,7 +1566,9 @@ export function PreviewScreen({
                   onClick={(e) => {
                     e.stopPropagation();
                     // Balik ke grid pas keluar dari Asli — biar tamu ga nyangkut di satu foto.
-                    setZoomIndex(null);
+                    // Lewat exitZoom biar chip Edit/OK/Undo ikut dibersihin, bukan nyangkut
+                    // di layar Asli yang ga ada hubungannya sama edit.
+                    exitZoom();
                     setShowOriginal((v) => !v);
                   }}
                   style={{
