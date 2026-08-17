@@ -459,12 +459,24 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
     // Engine 'api' (Nano Banana Pro): prompt + referensi BG nyusul di body. Referensi
     // di-load duluan jadi data URI — kalau ada yang gagal, buildApiEditRequest ngelempar
     // dan generate batal SEBELUM token kepotong (bukan bikin hasil tanpa BG).
+    // Timing per tahap — nyari di mana detiknya kebakar: resize Canon 6000px di canvas,
+    // nunggu Google, atau burn watermark lokal. Semua relatif ke genStart (performance.now,
+    // immune dari jam OS). Angka dalam detik biar kebaca pas berdiri di depan booth.
+    const lap = (label: string, extra?: Record<string, unknown>) =>
+      console.log(`[gen] ${label} @${((performance.now() - genStart) / 1000).toFixed(1)}s`, extra ?? '')
+
     const prepareApiPayload = async () => {
       if (state.templates[0].engine_type !== 'api') return { edit: null, selfieBase64: state.imageUrl }
       const [edit, selfieBase64] = await Promise.all([
         buildApiEditRequest(state.templates[0], state.userInput),
         resizeDataUrl(state.imageUrl, 1200).catch(() => state.imageUrl),
       ])
+      // Panjang data URI ≈ 1.37× ukuran byte asli — cukup buat mastiin resize beneran kena
+      // (~200KB) dan bukan diam-diam ngirim full-res gara-gara .catch() di atas.
+      lap('payload siap', {
+        selfieKB: Math.round(selfieBase64.length / 1024),
+        refs: edit?.reference_images?.length ?? 0,
+      })
       return { edit, selfieBase64 }
     }
     prepareApiPayload()
@@ -487,22 +499,30 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
       }))
       .then(async (res) => {
         dispatch({ type: 'SET_PROGRESS', progress: 90 })
+        // Ini lap paling penting: selisih dari 'payload siap' = murni waktu Worker + Google.
+        // Kalau angka ini yang gede, nambah RAM/CPU booth ga nolong — itu antrian di Google.
+        lap('worker balas', { status: res.status })
         if (!res.ok) { setTimedOut(true); return }
         // urls = semua variasi (num_images dari payload_json Supabase). Worker lama yang
         // cuma balikin `url` tetep kelayan lewat fallback ini.
         const { url, urls } = await res.json()
         const list: string[] = Array.isArray(urls) && urls.length > 0 ? urls : [url]
+        lap('hasil diterima', { variasi: list.length })
 
         // Sequential, HARAM Promise.all: tiap localCopies bikin canvas full-res buat burn
         // watermark — empat sekaligus bikin mesin lapangan mepet memori.
         const locals: { raw: string; original: string; ai: string }[] = []
         for (const u of list) locals.push({ raw: u, ...(await localCopies(state.imageUrl, u, licensed)) })
         dispatch({ type: 'SET_PROGRESS', progress: 100 })
+        // Sengaja sesudah loop, bukan per-item: yang dicari total ongkos burn watermark buat
+        // N variasi — itu yang naik linear dan bikin 4 variasi kerasa lebih berat dari 2.
+        lap('watermark selesai')
 
         const [bases] = await Promise.all([
           finalizeAllOnce(locals.map(l => ({ original: l.original, ai: l.ai }))),
           new Promise(r => setTimeout(r, REVEAL_DWELL_MS)),
         ])
+        lap('frame selesai')
         const results: SwapResult[] = locals.map((l, i) => ({
           templateId: state.templates[0].id,
           aiUrl: l.ai, originalUrl: l.original,
@@ -515,6 +535,9 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
         const r0 = results[0]
         const base = r0.base ?? null
         const videoUrl = await maybeAnimate(r0.rawAiUrl ?? r0.aiUrl, base ?? undefined)
+        // Total sampai preview kebuka. Kalau lompatnya jauh dari 'frame selesai', berarti
+        // yang makan waktu video provider — bukan jalur foto sama sekali.
+        lap('SELESAI', { video: videoUrl ? 'ya' : 'ga' })
         dispatch({
           type: 'SHOW_PREVIEW', aiUrl: r0.aiUrl, originalUrl: r0.originalUrl,
           allResults: results.length > 1 ? results : undefined,
