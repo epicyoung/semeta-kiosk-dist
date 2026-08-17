@@ -129,6 +129,17 @@ export interface Translations {
   preview_btn_make_video: string
   preview_btn_video_ready: string
   preview_btn_rechoose: string
+  remap_edit_face: string              // tombol "Edit Wajah" di foto AI yang dibesarkan
+  remap_title: string
+  remap_person: string                 // "{n}" = nomor orang
+  remap_detecting: string
+  remap_no_face: string
+  remap_cancel: string
+  remap_confirm: string
+  remap_working: string
+  remap_failed: string
+  remap_undo: string
+  remap_keep: string
   preview_btn_restart: string
 
   // ── DeliveryScreen ───────────────────────────────────────────────────────────

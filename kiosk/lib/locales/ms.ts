@@ -111,6 +111,17 @@ const ms: Translations = {
   preview_btn_make_video: 'Buat Video',
   preview_btn_video_ready: 'Video Sedia',
   preview_btn_rechoose: 'Pilih semula',
+  remap_edit_face: 'Edit Wajah',
+  remap_title: 'Padankan wajah untuk ditukar',
+  remap_person: 'Orang {n}',
+  remap_detecting: 'Mencari wajah…',
+  remap_no_face: 'Wajah tidak dikesan dalam foto ini.',
+  remap_cancel: 'Batal',
+  remap_confirm: 'Seterusnya',
+  remap_working: 'Menukar wajah…',
+  remap_failed: 'Tukar wajah gagal. Foto tidak berubah.',
+  remap_undo: 'Kembalikan',
+  remap_keep: 'OK',
   preview_btn_restart: 'Mula semula',
 
   // ── DeliveryScreen ──

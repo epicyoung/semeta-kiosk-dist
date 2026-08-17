@@ -111,6 +111,17 @@ const th: Translations = {
   preview_btn_make_video: 'สร้างวิดีโอ',
   preview_btn_video_ready: 'วิดีโอพร้อมแล้ว',
   preview_btn_rechoose: 'เลือกใหม่',
+  remap_edit_face: 'แก้ไขใบหน้า',
+  remap_title: 'จับคู่ใบหน้าที่จะสลับ',
+  remap_person: 'คนที่ {n}',
+  remap_detecting: 'กำลังค้นหาใบหน้า…',
+  remap_no_face: 'ไม่พบใบหน้าในภาพนี้',
+  remap_cancel: 'ยกเลิก',
+  remap_confirm: 'ถัดไป',
+  remap_working: 'กำลังสลับใบหน้า…',
+  remap_failed: 'สลับใบหน้าไม่สำเร็จ ภาพไม่เปลี่ยนแปลง',
+  remap_undo: 'ย้อนกลับ',
+  remap_keep: 'ตกลง',
   preview_btn_restart: 'เริ่มใหม่',
 
   // ── DeliveryScreen ──

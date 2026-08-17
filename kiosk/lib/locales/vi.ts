@@ -111,6 +111,17 @@ const vi: Translations = {
   preview_btn_make_video: 'Tạo Video',
   preview_btn_video_ready: 'Video Đã Sẵn Sàng',
   preview_btn_rechoose: 'Chọn lại',
+  remap_edit_face: 'Sửa khuôn mặt',
+  remap_title: 'Ghép khuôn mặt để hoán đổi',
+  remap_person: 'Người {n}',
+  remap_detecting: 'Đang tìm khuôn mặt…',
+  remap_no_face: 'Không phát hiện khuôn mặt trong ảnh này.',
+  remap_cancel: 'Hủy',
+  remap_confirm: 'Tiếp tục',
+  remap_working: 'Đang hoán đổi khuôn mặt…',
+  remap_failed: 'Hoán đổi thất bại. Ảnh không thay đổi.',
+  remap_undo: 'Hoàn tác',
+  remap_keep: 'OK',
   preview_btn_restart: 'Bắt đầu lại',
 
   // ── DeliveryScreen ──

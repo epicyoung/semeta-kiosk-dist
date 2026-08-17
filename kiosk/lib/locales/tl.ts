@@ -111,6 +111,17 @@ const tl: Translations = {
   preview_btn_make_video: 'Gumawa ng Video',
   preview_btn_video_ready: 'Handa na ang Video',
   preview_btn_rechoose: 'Piliin muli',
+  remap_edit_face: 'I-edit ang Mukha',
+  remap_title: 'Itugma ang mukhang papalitan',
+  remap_person: 'Tao {n}',
+  remap_detecting: 'Naghahanap ng mukha…',
+  remap_no_face: 'Walang mukhang natukoy sa larawang ito.',
+  remap_cancel: 'Kanselahin',
+  remap_confirm: 'Susunod',
+  remap_working: 'Pinapalitan ang mukha…',
+  remap_failed: 'Nabigo ang pagpapalit. Hindi nagbago ang larawan.',
+  remap_undo: 'Ibalik',
+  remap_keep: 'OK',
   preview_btn_restart: 'Magsimula ulit',
 
   // ── DeliveryScreen ──

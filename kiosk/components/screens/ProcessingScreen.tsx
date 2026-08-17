@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type Dispatch } from 'react'
 import { TouchButton } from '@/components/ui/TouchButton'
 import { comfyGenerate, type ComfyCfg } from '@/lib/comfy'
 import { proxied } from '@/lib/facedetect'
+import { swapFace } from '@/lib/faceswap'
 import type { GenerationSource, KioskAction, KioskState, SwapResult, VideoProvider } from '@/lib/types'
 import { animateImage } from '@/lib/video'
 import { uploadAsset, resizeDataUrl } from '@/lib/upload'
@@ -11,47 +12,6 @@ import { composePrintLayout, to2UpSheet } from '@/lib/print-layout'
 import { useT } from '@/lib/i18n'
 import { finalizeLocal, localCopies } from '@/lib/local-finalize'
 import { buildApiEditRequest } from '@/lib/api-engine'
-
-// dataUrl or regular URL → Blob
-async function toBlob(url: string): Promise<Blob> {
-  if (url.startsWith('data:')) {
-    const [header, b64] = url.split(',')
-    const mime = header.match(/:(.*?);/)?.[1] ?? 'image/jpeg'
-    const bin = atob(b64)
-    const arr = new Uint8Array(bin.length)
-    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i)
-    return new Blob([arr], { type: mime })
-  }
-  const res = await fetch(proxied(url)) // cross-origin (R2 template) → proxy same-origin, bypass CORS
-  return res.blob()
-}
-
-async function localSwap(
-  templateUrl: string,
-  selfieUrl: string,
-  onProgress: (pct: number) => void,
-  faceMapping?: (number | null)[],
-): Promise<string> {
-  onProgress(10)
-  const [templateBlob, selfieBlob] = await Promise.all([toBlob(templateUrl), toBlob(selfieUrl)])
-  onProgress(30)
-  const fd = new FormData()
-  fd.append('template', templateBlob, 'template.jpg')
-  fd.append('selfie', selfieBlob, 'selfie.jpg')
-  // Assignment dari FaceAssign — face_server swap tiap muka sesuai ini. Absen → server default swap semua L-R.
-  if (faceMapping && faceMapping.length > 0) fd.append('mapping', JSON.stringify(faceMapping))
-  onProgress(50)
-  const res = await fetch('http://localhost:8000/swap', { method: 'POST', body: fd })
-  if (!res.ok) throw new Error(`face_server /swap: ${res.status}`)
-  onProgress(85)
-  const blob = await res.blob()
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result as string)
-    reader.onerror = () => reject(new Error('FileReader failed'))
-    reader.readAsDataURL(blob)
-  })
-}
 
 // ponytail: dev mock — set false kalau backend nyata siap
 const MOCK = false
@@ -423,7 +383,7 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
           const templateUrl = tmpl.thumbnail_url ?? ''
           // Scale per-template pct ke rentang penuh 0-100 → bar ga reset tiap template (multi).
           // Single (total=1) → identik pct lama.
-          const aiUrl = await localSwap(templateUrl, state.imageUrl, (pct) => dispatch({ type: 'SET_PROGRESS', progress: Math.round((i * 100 + pct) / total) }), state.faceMappings?.[i])
+          const aiUrl = await swapFace(templateUrl, state.imageUrl, (pct) => dispatch({ type: 'SET_PROGRESS', progress: Math.round((i * 100 + pct) / total) }), state.faceMappings?.[i])
           const local = await localCopies(state.imageUrl, aiUrl, licensed)
           const base = await finalizeLocal(eventName, local.original, local.ai,
             (err) => onUploadFailed?.({ stage: 'finalize', error: String(err).slice(0, 300) }))

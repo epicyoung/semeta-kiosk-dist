@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo, useRef, type Dispatch } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { TouchButton } from "@/components/ui/TouchButton";
-import type { KioskAction, KioskState, KioskConfig } from "@/lib/types";
+import type { KioskAction, KioskState, KioskConfig, SwapResult } from "@/lib/types";
 import {
   findOverlayForOrientation,
   loadImageDims,
@@ -19,6 +19,9 @@ import { StripComposer } from "@/components/ui/StripComposer";
 import type { StripSource } from "@/lib/strip-pool";
 import { uploadAsset, blobUrlToDataUrl, uploadLocalFile } from "@/lib/upload";
 import { planMultiUpload } from "@/lib/multi-upload";
+import { swapFace, isFaceServerAlive } from "@/lib/faceswap";
+import { refineResult } from "@/lib/refine-result";
+import { FaceRemapPanel } from "@/components/ui/FaceRemapPanel";
 import { animateImage, finalizeVideo, isVideoUnlocked } from "@/lib/video";
 import { buildVideoOverlay } from "@/lib/video-overlay";
 import { useMagicCatcher } from "@/lib/use-magic-catcher";
@@ -212,6 +215,14 @@ export function PreviewScreen({
   // (tombol Re-choose). Tap foto ≠ milih foto.
   const [zoomIndex, setZoomIndex] = useState<number | null>(null);
   const [showBigQr, setShowBigQr] = useState(false);
+  // --- Edit Wajah: swap ulang hasil AI pakai muka asli tamu (engine 'api' doang) ---
+  // face_server hidup? Dicek sekali pas mount. null = belum kejawab ⇒ tombol belum tampil.
+  const [swapReady, setSwapReady] = useState<boolean | null>(null);
+  const [remapOpen, setRemapOpen] = useState(false);
+  const [refining, setRefining] = useState(false);
+  const [refineError, setRefineError] = useState(false);
+  // Entri sebelum di-swap + index-nya. Ada isinya = tombol OK/Undo lagi kepampang.
+  const [undoState, setUndoState] = useState<{ index: number; prev: SwapResult } | null>(null);
   // Tinggi pita kosong di ATAS foto, diukur dari DOM. CSS ga bisa ngitung ini: tingginya =
   // (tinggi baris − tinggi foto) / 2, sementara tinggi foto itu aspect-ratio-locked dan
   // di-center flex. Persen tebakan bikin QR ga pernah pas tengah — ini diukur beneran.
@@ -362,6 +373,81 @@ export function PreviewScreen({
   // visibleFrame ikut ke-burn pas print (dipakai di doPrint), bukan cuma buat layar.
   const displayResult =
     multiResults && zoomIndex !== null ? multiResults[zoomIndex] : activeResult;
+
+  // --- Edit Wajah ---
+  // Ping face_server sekali pas mount. Kalau mati, tombolnya ga usah tampil sama sekali —
+  // lebih baik fiturnya ga keliatan daripada tamu nekan terus dapet error di depan booth.
+  useEffect(() => {
+    let alive = true;
+    isFaceServerAlive().then((ok) => { if (alive) setSwapReady(ok); });
+    return () => { alive = false; };
+  }, []);
+
+  // Syarat tombol muncul: lagi zoom satu foto, face_server hidup, DAN foto ini punya sourceUrl
+  // (foto asli tamu). Jalur engine 'api' selalu nyimpen sourceUrl; jalur print_local enggak,
+  // dan di situ swap ulang emang ga masuk akal.
+  const canRefine =
+    zoomIndex !== null &&
+    swapReady === true &&
+    !!displayResult.sourceUrl &&
+    !!displayResult.rawAiUrl &&
+    !refining;
+
+  // Tulis balik daftar hasil ke state global. Foto utama ikut yang lagi dizoom supaya
+  // print/QR/upload langsung nunjuk versi baru — planMultiUpload jalan apa adanya.
+  const applyResults = (results: SwapResult[], index: number) => {
+    const r = results[index];
+    dispatch({
+      type: "SHOW_PREVIEW",
+      aiUrl: r.aiUrl,
+      originalUrl: r.originalUrl,
+      sourceUrl: r.sourceUrl,
+      rawAiUrl: r.rawAiUrl,
+      base: r.base,
+      processingSec: r.processingSec,
+      templateId: r.templateId,
+      allResults: results,
+      videoUrl: state.videoUrl,
+      direct: true,
+    });
+  };
+
+  const runRefine = async (mapping: (number | null)[]) => {
+    if (zoomIndex === null || !multiResults) return;
+    const target = multiResults[zoomIndex];
+    if (!target.sourceUrl || !target.rawAiUrl) return;
+    setRemapOpen(false);
+    setRefining(true);
+    setRefineError(false);
+    try {
+      // Sumbernya rawAiUrl (BERSIH, belum ber-watermark) — bukan aiUrl. Kalau dari aiUrl,
+      // watermark lama ikut ke-swap terus di-burn lagi ⇒ numpuk tiap kali tamu edit.
+      const swapped = await swapFace(target.rawAiUrl, target.sourceUrl, () => {}, mapping);
+      // Watermark ikut aturan yang sama kayak seluruh layar ini (licensed/bypassed = bersih).
+      const ai = licensed || config.bypassed ? swapped : await burnWatermark(swapped);
+      const { results, previous } = refineResult(multiResults, zoomIndex, {
+        aiUrl: ai,
+        // originalUrl (foto asli tamu) ga ikut berubah — yang di-swap cuma sisi AI-nya.
+        originalUrl: target.originalUrl,
+        rawAiUrl: swapped,
+      });
+      if (!previous) return;
+      setUndoState({ index: zoomIndex, prev: previous });
+      applyResults(results, zoomIndex);
+    } catch {
+      // Gagal = foto lama UTUH. Tamu tetep bisa lanjut print/QR pakai hasil AI aslinya.
+      setRefineError(true);
+    } finally {
+      setRefining(false);
+    }
+  };
+
+  const undoRefine = () => {
+    if (!undoState || !multiResults) return;
+    const restored = multiResults.map((r, i) => (i === undoState.index ? undoState.prev : r));
+    applyResults(restored, undoState.index);
+    setUndoState(null);
+  };
 
   // Slot melayang di pita kosong atas/bawah foto. Ditulis INLINE, bukan di globals.css,
   // karena tingginya hasil ukur runtime — jadi mau ga mau lewat style prop. Konsekuensinya
@@ -1104,6 +1190,76 @@ export function PreviewScreen({
                         className="absolute inset-0 w-full h-full object-cover pointer-events-none z-20"
                       />
                     )}
+                    {/* Edit Wajah — cuma pas satu foto lagi dizoom dari grid multi-AI.
+                        stopPropagation wajib: klik di area foto = keluar zoom. */}
+                    {zoomIndex !== null && !showOriginal && (canRefine || refining || undoState) && (
+                      <div
+                        className="absolute z-30 flex gap-2"
+                        style={{ left: 12, right: 12, bottom: 12, justifyContent: "center" }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {refining ? (
+                          <div
+                            style={{
+                              padding: "10px 18px", borderRadius: 999,
+                              background: "rgba(9,1,53,0.85)", backdropFilter: "blur(8px)",
+                              color: "#fff", fontSize: "var(--text-sm)",
+                            }}
+                          >
+                            {t("remap_working") as string}
+                          </div>
+                        ) : undoState && undoState.index === zoomIndex ? (
+                          <>
+                            <button
+                              onClick={undoRefine}
+                              style={{
+                                padding: "10px 20px", borderRadius: 999,
+                                background: "rgba(9,1,53,0.85)", backdropFilter: "blur(8px)",
+                                border: "1px solid rgba(255,255,255,0.25)", color: "#fff",
+                                fontSize: "var(--text-sm)",
+                              }}
+                            >
+                              {t("remap_undo") as string}
+                            </button>
+                            <button
+                              onClick={() => setUndoState(null)}
+                              style={{
+                                padding: "10px 24px", borderRadius: 999,
+                                background: "var(--brand)", color: "#fff",
+                                fontSize: "var(--text-sm)", fontWeight: 600,
+                              }}
+                            >
+                              {t("remap_keep") as string}
+                            </button>
+                          </>
+                        ) : canRefine ? (
+                          <button
+                            onClick={() => { setRefineError(false); setRemapOpen(true); }}
+                            style={{
+                              padding: "10px 24px", borderRadius: 999,
+                              background: "rgba(9,1,53,0.85)", backdropFilter: "blur(8px)",
+                              border: "1px solid rgba(255,255,255,0.25)", color: "#fff",
+                              fontSize: "var(--text-sm)", fontWeight: 600,
+                            }}
+                          >
+                            {t("remap_edit_face") as string}
+                          </button>
+                        ) : null}
+                      </div>
+                    )}
+                    {refineError && zoomIndex !== null && (
+                      <div
+                        className="absolute z-30"
+                        style={{
+                          left: 12, right: 12, bottom: 64, textAlign: "center",
+                          color: "#fff", fontSize: "var(--text-xs)",
+                          background: "rgba(9,1,53,0.85)", backdropFilter: "blur(8px)",
+                          borderRadius: 12, padding: "8px 12px",
+                        }}
+                      >
+                        {t("remap_failed") as string}
+                      </div>
+                    )}
                   </>
                 )}{" "}
               </div>
@@ -1467,6 +1623,15 @@ export function PreviewScreen({
         )}
 
         {/* Expanded chooser panel (for multi-result print/video selection) */}
+        {remapOpen && zoomIndex !== null && displayResult.rawAiUrl && displayResult.sourceUrl && (
+          <FaceRemapPanel
+            aiUrl={displayResult.rawAiUrl}
+            selfieUrl={displayResult.sourceUrl}
+            onCancel={() => setRemapOpen(false)}
+            onConfirm={runRefine}
+          />
+        )}
+
         {chooserAction && state.allResults && (
           <div
             className="animate-fade-in"
