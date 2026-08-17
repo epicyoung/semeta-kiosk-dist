@@ -122,6 +122,7 @@ const tl: Translations = {
   remap_failed: 'Nabigo ang pagpapalit. Hindi nagbago ang larawan.',
   remap_undo: 'Ibalik',
   remap_keep: 'OK',
+  remap_back_grid: '← Lahat ng larawan',
   preview_btn_restart: 'Magsimula ulit',
 
   // ── DeliveryScreen ──

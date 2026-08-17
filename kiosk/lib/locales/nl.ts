@@ -132,6 +132,7 @@ const nl: Translations = {
   remap_failed: 'Wisselen mislukt. Foto ongewijzigd.',
   remap_undo: 'Ongedaan maken',
   remap_keep: 'OK',
+  remap_back_grid: '← Alle foto\'s',
   preview_btn_restart: 'Opnieuw starten',
   delivery_title: 'Dit is het resultaat! ✨',
   delivery_subtitle: "Scan de QR om hem op te slaan — of print 'm meteen uit.",

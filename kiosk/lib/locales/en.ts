@@ -132,6 +132,7 @@ const en: Translations = {
   remap_failed: 'Face swap failed. Photo unchanged.',
   remap_undo: 'Undo',
   remap_keep: 'OK',
+  remap_back_grid: '← All photos',
   preview_btn_restart: 'Restart',
   delivery_title: "Here's the Result! ✨",
   delivery_subtitle: 'Scan the QR to save it — or hit print right now.',

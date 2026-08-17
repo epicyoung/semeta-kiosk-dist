@@ -122,6 +122,7 @@ const th: Translations = {
   remap_failed: 'สลับใบหน้าไม่สำเร็จ ภาพไม่เปลี่ยนแปลง',
   remap_undo: 'ย้อนกลับ',
   remap_keep: 'ตกลง',
+  remap_back_grid: '← รูปทั้งหมด',
   preview_btn_restart: 'เริ่มใหม่',
 
   // ── DeliveryScreen ──

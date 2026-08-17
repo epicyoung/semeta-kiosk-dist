@@ -132,6 +132,7 @@ const ja: Translations = {
   remap_failed: '顔の入れ替えに失敗しました。写真は変更されていません。',
   remap_undo: '元に戻す',
   remap_keep: 'OK',
+  remap_back_grid: '← すべての写真',
   preview_btn_restart: '最初から',
   delivery_title: '完成しました！ ✨',
   delivery_subtitle: 'QRコードでスマホに保存、または今すぐプリントアウト。',

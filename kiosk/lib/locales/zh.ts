@@ -132,6 +132,7 @@ const zh: Translations = {
   remap_failed: '面部替换失败，照片未更改。',
   remap_undo: '撤销',
   remap_keep: '确定',
+  remap_back_grid: '← 所有照片',
   preview_btn_restart: '重新开始',
   delivery_title: '惊艳登场！✨',
   delivery_subtitle: '扫码保存到手机，或者直接打印。',

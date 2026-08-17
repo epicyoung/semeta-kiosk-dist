@@ -132,6 +132,7 @@ const ko: Translations = {
   remap_failed: '얼굴 교체 실패. 사진은 그대로입니다.',
   remap_undo: '되돌리기',
   remap_keep: '확인',
+  remap_back_grid: '← 전체 사진',
   preview_btn_restart: '다시 시작',
   delivery_title: '짠! 완성 ✨',
   delivery_subtitle: 'QR 스캔해서 폰에 저장하거나 지금 바로 인쇄해봐.',

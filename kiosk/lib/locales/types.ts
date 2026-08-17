@@ -140,6 +140,7 @@ export interface Translations {
   remap_failed: string
   remap_undo: string
   remap_keep: string
+  remap_back_grid: string              // balik dari zoom ke grid multi-AI
   preview_btn_restart: string
 
   // ── DeliveryScreen ───────────────────────────────────────────────────────────

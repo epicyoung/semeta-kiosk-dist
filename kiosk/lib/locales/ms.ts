@@ -122,6 +122,7 @@ const ms: Translations = {
   remap_failed: 'Tukar wajah gagal. Foto tidak berubah.',
   remap_undo: 'Kembalikan',
   remap_keep: 'OK',
+  remap_back_grid: '← Semua foto',
   preview_btn_restart: 'Mula semula',
 
   // ── DeliveryScreen ──

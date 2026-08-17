@@ -133,6 +133,7 @@ const id: Translations = {
   remap_failed: 'Tukar wajah gagal. Foto tidak berubah.',
   remap_undo: 'Kembalikan',
   remap_keep: 'OK',
+  remap_back_grid: '← Semua foto',
   preview_btn_restart: 'Restart',
   delivery_title: 'Ini Hasilnya! ✨',
   delivery_subtitle: 'Scan QR buat simpen ke HP — atau langsung cetak sekarang.',

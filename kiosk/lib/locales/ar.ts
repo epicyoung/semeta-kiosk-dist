@@ -132,6 +132,7 @@ const ar: Translations = {
   remap_failed: 'فشل تبديل الوجه. الصورة لم تتغير.',
   remap_undo: 'تراجع',
   remap_keep: 'موافق',
+  remap_back_grid: '← كل الصور',
   preview_btn_restart: 'إعادة التشغيل',
   delivery_title: 'هذي النتيجة! ✨',
   delivery_subtitle: 'امسح الكود عشان تحفظها بجوالك — أو اطبعها الحين.',

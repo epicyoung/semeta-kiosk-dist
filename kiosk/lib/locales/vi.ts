@@ -122,6 +122,7 @@ const vi: Translations = {
   remap_failed: 'Hoán đổi thất bại. Ảnh không thay đổi.',
   remap_undo: 'Hoàn tác',
   remap_keep: 'OK',
+  remap_back_grid: '← Tất cả ảnh',
   preview_btn_restart: 'Bắt đầu lại',
 
   // ── DeliveryScreen ──

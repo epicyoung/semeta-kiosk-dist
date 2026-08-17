@@ -1,9 +1,8 @@
 {
   "engine_type": "api",
-  "api_model": "nano-banana-pro",
   "billing_id": "4a3b3ccc-bbb3-4c98-8b8a-e449e8ab244c",
   "aspect_ratio": "2:3",
-  "reference_images": ["Tosari-ref.jpeg"],
+  "reference_images": ["tos-ref.jpeg"],
   "input_field": { "label": "Nama kamu" },
   "positive_prompt": "Use the faces, identities, and appearance of ALL subjects present in the provided photo (whether 1 person, 2 people, or up to 5 people in a group). Keep EVERY person exactly as they appear — preserve their exact facial features, face shape, skin tone, hairstyle, body size, outfit, and left-to-right order precisely without removing, blending, or swapping anyone. Lock each character identically. Only restyle them into this new scene. All subjects look toward the camera with genuine confident expressions.\n\nStanding casually in front of the modern Jakarta TransJakarta BRT elevated bus station shown in the other provided reference image — match its architecture exactly: the distinctive curved silver architectural canopy, the perforated diamond-pattern underside, the glass-and-steel roof. The station signage prominently displays the text \"TOSARI {input}\" in white letters, clearly legible. City traffic and skyscrapers softly blurred behind. A blue-and-white TransJakarta articulated bus is stopped at the station in the dedicated center busway lane behind a low divider, ordinary cars and motorbikes in the outer lanes, skyscrapers behind under a bright hazy sky. Group shot framed from mid-thigh up, candid high-end commercial ad film still — subjects together, cropped at mid-thigh, filling about 45-55% of the frame height. ARRI Alexa 35, 35mm lens, f/2.8, moderate depth of field, the Tosari station architecture sharp and recognizable behind. Genuine confident natural expressions, realistic skin texture. Warm cinematic golden hour light, soft side sunlight flaring in, backlit rim glow around the silhouettes, soft warm light overlays and subtle lens flare. Photorealistic, cinematic color grading, editorial commercial advertisement quality, 8k, hyper-realistic."
 }

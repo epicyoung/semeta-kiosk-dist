@@ -442,11 +442,29 @@ export function PreviewScreen({
     }
   };
 
+  // Chip kaca — angka-angkanya SENGAJA sama persis sama tombol "Tap to compare" di bawah foto
+  // (lihat render di bawah). Dua-duanya overlay di atas foto yang sama, jadi kalau beda
+  // padding/radius/blur langsung kelihatan sumbang.
+  const refineChip: React.CSSProperties = {
+    fontSize: "var(--text-2xs)",
+    letterSpacing: "0.2em",
+    textTransform: "uppercase",
+    background: "rgba(0,0,0,0.55)",
+    padding: "8px 16px",
+    borderRadius: "var(--radius-chip)",
+    border: "1px solid rgba(255,255,255,0.18)",
+    backdropFilter: "blur(8px)",
+    cursor: "pointer",
+    fontFamily: "var(--font-ui)",
+    whiteSpace: "nowrap",
+  };
+
   const undoRefine = () => {
     if (!undoState || !multiResults) return;
     const restored = multiResults.map((r, i) => (i === undoState.index ? undoState.prev : r));
     applyResults(restored, undoState.index);
     setUndoState(null);
+    setZoomIndex(null); // balik ke grid — sama kayak OK, edit-nya udah kelar
   };
 
   // Slot melayang di pita kosong atas/bawah foto. Ditulis INLINE, bukan di globals.css,
@@ -1191,43 +1209,48 @@ export function PreviewScreen({
                       />
                     )}
                     {/* Edit Wajah — cuma pas satu foto lagi dizoom dari grid multi-AI.
+                        Ditaro di ATAS foto: bawah udah dipake chip "Tap to compare" (bottom-3),
+                        dua-duanya di tengah-bawah = ketiban. Gaya nyontek chip itu persis
+                        (chip kaca, uppercase, tracking lebar) biar satu bahasa visual.
                         stopPropagation wajib: klik di area foto = keluar zoom. */}
+                    {/* Balik ke grid — tombol EKSPLISIT. Tap-di-foto juga masih jalan, tapi itu
+                        ga keliatan, apalagi sesudah edit pas chip OK/Undo nutupin sebagian foto:
+                        tamu ngira variasi AI yang lain ilang. */}
+                    {zoomIndex !== null && !showOriginal && multiResults && (
+                      <div
+                        className="absolute top-3 left-3"
+                        style={{ zIndex: 41 }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          onClick={() => { setZoomIndex(null); setUndoState(null); }}
+                          style={{ ...refineChip, color: "var(--fg-muted)" }}
+                        >
+                          {t("remap_back_grid") as string}
+                        </button>
+                      </div>
+                    )}
                     {zoomIndex !== null && !showOriginal && (canRefine || refining || undoState) && (
                       <div
-                        className="absolute z-30 flex gap-2"
-                        style={{ left: 12, right: 12, bottom: 12, justifyContent: "center" }}
+                        className="absolute top-3 inset-x-0 flex justify-center gap-2"
+                        style={{ zIndex: 40 }}
                         onClick={(e) => e.stopPropagation()}
                       >
                         {refining ? (
-                          <div
-                            style={{
-                              padding: "10px 18px", borderRadius: 999,
-                              background: "rgba(9,1,53,0.85)", backdropFilter: "blur(8px)",
-                              color: "#fff", fontSize: "var(--text-sm)",
-                            }}
-                          >
+                          <div style={{ ...refineChip, color: "#fff" }}>
                             {t("remap_working") as string}
                           </div>
                         ) : undoState && undoState.index === zoomIndex ? (
                           <>
-                            <button
-                              onClick={undoRefine}
-                              style={{
-                                padding: "10px 20px", borderRadius: 999,
-                                background: "rgba(9,1,53,0.85)", backdropFilter: "blur(8px)",
-                                border: "1px solid rgba(255,255,255,0.25)", color: "#fff",
-                                fontSize: "var(--text-sm)",
-                              }}
-                            >
+                            <button onClick={undoRefine} style={{ ...refineChip, color: "var(--fg-muted)" }}>
                               {t("remap_undo") as string}
                             </button>
                             <button
-                              onClick={() => setUndoState(null)}
-                              style={{
-                                padding: "10px 24px", borderRadius: 999,
-                                background: "var(--brand)", color: "#fff",
-                                fontSize: "var(--text-sm)", fontWeight: 600,
-                              }}
+                              // OK = "kelar sama foto ini" → balikin ke grid biar tamu bisa
+                              // liat variasi AI yang lain. Nyangkut di foto yang barusan diedit
+                              // bikin variasi lain kayak ilang.
+                              onClick={() => { setUndoState(null); setZoomIndex(null); }}
+                              style={{ ...refineChip, color: "#fff", borderColor: "var(--brand)" }}
                             >
                               {t("remap_keep") as string}
                             </button>
@@ -1235,12 +1258,7 @@ export function PreviewScreen({
                         ) : canRefine ? (
                           <button
                             onClick={() => { setRefineError(false); setRemapOpen(true); }}
-                            style={{
-                              padding: "10px 24px", borderRadius: 999,
-                              background: "rgba(9,1,53,0.85)", backdropFilter: "blur(8px)",
-                              border: "1px solid rgba(255,255,255,0.25)", color: "#fff",
-                              fontSize: "var(--text-sm)", fontWeight: 600,
-                            }}
+                            style={{ ...refineChip, color: "#fff" }}
                           >
                             {t("remap_edit_face") as string}
                           </button>
@@ -1249,15 +1267,12 @@ export function PreviewScreen({
                     )}
                     {refineError && zoomIndex !== null && (
                       <div
-                        className="absolute z-30"
-                        style={{
-                          left: 12, right: 12, bottom: 64, textAlign: "center",
-                          color: "#fff", fontSize: "var(--text-xs)",
-                          background: "rgba(9,1,53,0.85)", backdropFilter: "blur(8px)",
-                          borderRadius: 12, padding: "8px 12px",
-                        }}
+                        className="absolute top-14 inset-x-0 flex justify-center"
+                        style={{ zIndex: 40 }}
                       >
-                        {t("remap_failed") as string}
+                        <span style={{ ...refineChip, color: "#fff" }}>
+                          {t("remap_failed") as string}
+                        </span>
                       </div>
                     )}
                   </>
