@@ -47,7 +47,7 @@ export async function resizeDataUrl(dataUrlOrUrl: string, maxPx: number = 1200):
  * (server skip S). Dipakai supaya FAL bisa akses seed walau hasil AI-nya blob/localhost. */
 export async function uploadAsset(
   dataUrlOrUrl: string,
-  type: "A" | "B" | "C" | "S" | `M${number}`,
+  type: "A" | "B" | "C" | "S" | `M${number}` | `A${number}`,
   sessionId: string,
   meta?: { eventName?: string; durationSec?: number; mCount?: number },
 ): Promise<{ url: string; key: string }> {

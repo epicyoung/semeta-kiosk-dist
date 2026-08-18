@@ -794,9 +794,10 @@ export function PreviewScreen({
     for (let attempt = 0; attempt < attempts; attempt++) {
       try {
         let resB;
-        // Per-attempt, JANGAN di luar loop — retry ga boleh numpuk _M dari percobaan lama.
+        // Per-attempt, JANGAN di luar loop — retry ga boleh numpuk _M / extra _A dari percobaan lama.
         let mCount = 0;
         const framedMulti: string[] = [];
+        const framedExtraShots: string[] = [];
         if (isPrintSession) {
           // Classic Print: Hanya upload _B (strip foto yang sudah di-frame).
           // Skip _A (foto mentah) supaya microsite tidak menampilkan tab ASLI.
@@ -825,30 +826,56 @@ export function PreviewScreen({
             }
           }
 
+          // Multi-shots original: jepretan ke-2, ke-3, ke-4 (jika ada) ikut di-frame dan di-upload ke R2 sbg _A2, _A3, dst
+          if (state.shots && state.shots.length > 1) {
+            for (let i = 1; i < state.shots.length; i++) {
+              if (state.shots[i]) {
+                framedExtraShots.push(
+                  await compositeFrame(
+                    state.shots[i],
+                    frameForOriginal?.url ?? null,
+                    1200,
+                  ),
+                );
+              }
+            }
+          }
+
           const results = await Promise.all([
             uploadAsset(framedA, "A", base, meta),
             uploadAsset(framedB, "B", base, { ...meta, mCount }),
           ]);
           resB = results[1];
         }
-        // QR muncul duluan — tamu scan sambil _M masih naik.
+        // QR muncul duluan — tamu scan sambil _M dan _A2+ masih naik.
         if (uploadSeq.current === seq) {
           setShareUrl(
             `https://semeta-microsite.pages.dev/s?b=${encodeURIComponent(resB.key)}${mCount > 0 ? `&m=${mCount}` : ""}`,
           );
           setQrStatus("idle");
         }
-        // _M uploads paralel — AWAIT beneran, bukan forEach fire-and-forget.
+        // _M dan _A2+ uploads paralel — AWAIT beneran, bukan forEach fire-and-forget.
         // Promise.allSettled: 1 gagal ga crash sisanya. Fail-safe: microsite <img onerror> retry.
+        const extraUploads: Promise<any>[] = [];
         if (framedMulti.length > 0) {
-          const mResults = await Promise.allSettled(
-            framedMulti.map((data, i) =>
+          extraUploads.push(
+            ...framedMulti.map((data, i) =>
               uploadAsset(data, `M${i + 1}`, base, meta),
             ),
           );
-          mResults.forEach((r, i) => {
+        }
+        if (framedExtraShots.length > 0) {
+          extraUploads.push(
+            ...framedExtraShots.map((data, i) =>
+              uploadAsset(data, `A${i + 2}`, base, meta),
+            ),
+          );
+        }
+        if (extraUploads.length > 0) {
+          const extraResults = await Promise.allSettled(extraUploads);
+          extraResults.forEach((r, i) => {
             if (r.status === "rejected")
-              console.warn(`[preview] upload _M${i + 1} gagal:`, r.reason);
+              console.warn(`[preview] upload extra asset #${i + 1} gagal:`, r.reason);
           });
         }
         return;

@@ -27,16 +27,26 @@ Write-Host ""
 Write-Host "[2/3] Sync & Membuat Printer Queue RX1-STRIP & RX1-4R..." -ForegroundColor Yellow
 
 try {
-    Add-Printer -Name "RX1-STRIP" -DriverName $p.DriverName -PortName $p.PortName -ErrorAction SilentlyContinue
-    Add-Printer -Name "RX1-4R" -DriverName $p.DriverName -PortName $p.PortName -ErrorAction SilentlyContinue
-    
-    # Auto-sync port if USB port changed on re-plug
-    Set-Printer -Name "RX1-STRIP" -PortName $p.PortName -ErrorAction SilentlyContinue
-    Set-Printer -Name "RX1-4R" -PortName $p.PortName -ErrorAction SilentlyContinue
+    $existingStrip = Get-Printer -Name "RX1-STRIP" -ErrorAction SilentlyContinue
+    if (-not $existingStrip) {
+        Add-Printer -Name "RX1-STRIP" -DriverName $p.DriverName -PortName $p.PortName -ErrorAction Stop
+        Write-Host "[OK] Printer Queue 'RX1-STRIP' berhasil dibuat." -ForegroundColor Green
+    } else {
+        Set-Printer -Name "RX1-STRIP" -PortName $p.PortName -ErrorAction SilentlyContinue
+        Write-Host "[OK] Printer Queue 'RX1-STRIP' sudah ada (port di-sync ke $($p.PortName))." -ForegroundColor Green
+    }
 
-    Write-Host "[OK] Queue RX1-STRIP & RX1-4R Berhasil Dibuat / Di-sync ke Port " $p.PortName -ForegroundColor Green
+    $existing4R = Get-Printer -Name "RX1-4R" -ErrorAction SilentlyContinue
+    if (-not $existing4R) {
+        Add-Printer -Name "RX1-4R" -DriverName $p.DriverName -PortName $p.PortName -ErrorAction Stop
+        Write-Host "[OK] Printer Queue 'RX1-4R' berhasil dibuat." -ForegroundColor Green
+    } else {
+        Set-Printer -Name "RX1-4R" -PortName $p.PortName -ErrorAction SilentlyContinue
+        Write-Host "[OK] Printer Queue 'RX1-4R' sudah ada (port di-sync ke $($p.PortName))." -ForegroundColor Green
+    }
 } catch {
-    Write-Host ("[WARNING] Update queue: " + $_.Exception.Message) -ForegroundColor Yellow
+    Write-Host ("[ERROR] Gagal membuat printer: " + $_.Exception.Message) -ForegroundColor Red
+    Write-Host "Pastikan file ini dijalankan dengan Klik Kanan -> 'Run as administrator'!" -ForegroundColor Yellow
 }
 
 Write-Host ""
