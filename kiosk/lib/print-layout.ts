@@ -18,6 +18,32 @@ export const CANVAS_4R_PORTRAIT = { w: 1200, h: 1800 } // 4×6in portrait
 export const CANVAS_4R_LANDSCAPE = { w: 1800, h: 1200 } // 6×4in landscape
 export const PANEL_2R_STRIP = { w: 600, h: 1800 }   // 2×6in portrait (satu panel)
 
+/** Jumlah slot yang dirender StripComposer buat satu mode. SATU sumber kebenaran: dipakai
+ *  buat render, hitung slot kepakai, DAN pas pindah tab. Dulu dua tempat ngitung sendiri-sendiri
+ *  dan beda pas ai4rLayout bukan 4-slot (SINGLE_1/SPLIT_2/TRIO_3) — foto ke-2 nyangkut di
+ *  index yang ga pernah kebaca: ga kerender, ga keprint, tapi kartunya kelihatan kepakai. */
+export function composerSlotCount(
+  mode: '2R_STRIP' | '4R_LANDSCAPE',
+  opts: {
+    slots: number
+    ai4rLayout?: Ai4RLayout
+    customSlotCount?: number
+    custom4rSlotCount?: number
+  },
+): number {
+  if (mode === '4R_LANDSCAPE') {
+    if (opts.custom4rSlotCount) return opts.custom4rSlotCount
+    switch (opts.ai4rLayout) {
+      case 'SINGLE_1': return 1
+      case 'SPLIT_2': return 2
+      case 'TRIO_3':
+      case 'GRID_3': return 3
+      default: return 4
+    }
+  }
+  return opts.customSlotCount || opts.slots
+}
+
 // Grid rapet kolom×baris. Pure — dites di print-layout.test.mjs.
 function grid(cols: number, rows: number, W: number, H: number): Rect[] {
   const w = Math.floor(W / cols)

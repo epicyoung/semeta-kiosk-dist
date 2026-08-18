@@ -1,3 +1,5 @@
+import { proxied } from "./facedetect";
+
 const MAX_PX = 1200; // longest edge for R2 uploads — fits IG/WA story portrait, phones top out ~1440px
 
 /**
@@ -118,7 +120,13 @@ async function toBlob(dataUrlOrUrl: string): Promise<Blob> {
     for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
     return new Blob([arr], { type: mime });
   }
-  const res = await fetch(dataUrlOrUrl);
+  // Lewat /api/img-proxy buat URL cross-origin. R2 publik (epic.spindonesia.com) GA ngirim
+  // Access-Control-Allow-Origin, jadi fetch langsung dari browser diblokir CORS. Kena pas
+  // seed _S video: hasil AI yang udah di R2 ditarik lagi buat dikirim ke FAL — uploadAsset
+  // ngelempar, handleVideoConfirmOk berhenti, finalizeVideo ga jalan, _C.mp4 ga pernah naik.
+  // Gejalanya nyamar: video kelihatan jadi di layar (blob lokal) tapi ga ada di QR.
+  // proxied() = helper yang sama yang dipakai facedetect + video-overlay buat masalah ini.
+  const res = await fetch(proxied(dataUrlOrUrl));
   if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
   return res.blob();
 }

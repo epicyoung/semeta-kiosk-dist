@@ -23,12 +23,16 @@ import { swapFace, isFaceServerAlive } from "@/lib/faceswap";
 import { refineResult } from "@/lib/refine-result";
 import { FaceRemapPanel } from "@/components/ui/FaceRemapPanel";
 import { animateImage, finalizeVideo, isVideoUnlocked } from "@/lib/video";
-import { buildVideoOverlay } from "@/lib/video-overlay";
+import { buildVideoOverlay, qrSvgString } from "@/lib/video-overlay";
 import { useMagicCatcher } from "@/lib/use-magic-catcher";
 import { useT } from "@/lib/i18n";
 
 // QR yang kepampang terus di atas foto. Kecil aja — ini pintu masuk, ketuk buat gedein.
 const QR_INLINE_SIZE = 85;
+
+// Original tambahan (_A2.._A4) di luar jepretan pertama. Ceiling-nya ikut microsite, yang
+// cuma nge-render sampai _A4 — naikin ini WAJIB barengan sama loop di microsite/functions/s.
+const MAX_EXTRA_ORIGINALS = 3;
 
 type Props = {
   // choose = frame chooser (cycling + Back/Next, no upload/print). final = preview (fixed frame, upload+print).
@@ -725,13 +729,14 @@ export function PreviewScreen({
         },
       );
       if (video) {
-        // Baru DI SINI: overlay = frame KEPILIH (+ QR) di-burn ke video (letterbox 2:3, ffmpeg server).
+        // Baru DI SINI: overlay = frame KEPILIH + QR di-burn ke video (letterbox 2:3, ffmpeg server).
         // Gagal finalize → fallback video mentah (tamu ga kehilangan video).
-        // QR JANGAN di-burn ke MP4 — file digital biar bersih. QR cukup di LAYAR (JSX overlay) +
-        // kertas print. Tamu tetep dapet video via QR microsite (satu QR = ori/ai/video). Overlay = frame doang.
+        // QR sama persis dgn yang di foto/print — satu QR buat semua (ori/ai/video), microsite
+        // yang misahin lewat tab. shareUrl kosong (upload belum kelar / unlicensed) → QR di-skip,
+        // frame tetep ke-burn (buildVideoOverlay fail-safe per-bagian).
         const overlay = await buildVideoOverlay(
           currentFrame?.url ?? null,
-          null,
+          qrSvgString(shareUrl),
         );
         const finalized = state.base
           ? await finalizeVideo(video, overlay, eventName, state.base)
@@ -826,19 +831,17 @@ export function PreviewScreen({
             }
           }
 
-          // Multi-shots original: jepretan ke-2, ke-3, ke-4 (jika ada) ikut di-frame dan di-upload ke R2 sbg _A2, _A3, dst
-          if (state.shots && state.shots.length > 1) {
-            for (let i = 1; i < state.shots.length; i++) {
-              if (state.shots[i]) {
-                framedExtraShots.push(
-                  await compositeFrame(
-                    state.shots[i],
-                    frameForOriginal?.url ?? null,
-                    1200,
-                  ),
-                );
-              }
-            }
+          // Multi-shots original: jepretan ke-2 dst ikut di-frame dan di-upload sbg _A2, _A3, …
+          // Di-clamp MAX_EXTRA_ORIGINALS: microsite cuma render sampai _A4, jadi upload di atas
+          // itu = bayar bandwidth + storage R2 buat file yang ga akan pernah dilihat tamu.
+          // SEQUENTIAL composite, sama alasannya kayak _M di atas (spike RAM OffscreenCanvas).
+          const extraShots = (state.shots ?? [])
+            .slice(1, 1 + MAX_EXTRA_ORIGINALS)
+            .filter(Boolean);
+          for (const shot of extraShots) {
+            framedExtraShots.push(
+              await compositeFrame(shot, frameForOriginal?.url ?? null, 1200),
+            );
           }
 
           const results = await Promise.all([
@@ -849,33 +852,38 @@ export function PreviewScreen({
         }
         // QR muncul duluan — tamu scan sambil _M dan _A2+ masih naik.
         if (uploadSeq.current === seq) {
+          // &a = jumlah original TAMBAHAN (_A2.._AN). Tanpa ini microsite kudu nebak-nebak
+          // dan nembak 404 ke R2 buat tiap slot yang ga ada di sesi single-shot.
+          const aCount = framedExtraShots.length;
           setShareUrl(
-            `https://semeta-microsite.pages.dev/s?b=${encodeURIComponent(resB.key)}${mCount > 0 ? `&m=${mCount}` : ""}`,
+            `https://semeta-microsite.pages.dev/s?b=${encodeURIComponent(resB.key)}${mCount > 0 ? `&m=${mCount}` : ""}${aCount > 0 ? `&a=${aCount}` : ""}`,
           );
           setQrStatus("idle");
         }
         // _M dan _A2+ uploads paralel — AWAIT beneran, bukan forEach fire-and-forget.
         // Promise.allSettled: 1 gagal ga crash sisanya. Fail-safe: microsite <img onerror> retry.
-        const extraUploads: Promise<any>[] = [];
-        if (framedMulti.length > 0) {
-          extraUploads.push(
-            ...framedMulti.map((data, i) =>
-              uploadAsset(data, `M${i + 1}`, base, meta),
-            ),
-          );
-        }
-        if (framedExtraShots.length > 0) {
-          extraUploads.push(
-            ...framedExtraShots.map((data, i) =>
-              uploadAsset(data, `A${i + 2}`, base, meta),
-            ),
-          );
-        }
+        // Label ikut tiap upload biar pas ada yang gagal di lapangan log-nya nyebut _M2/_A3
+        // persis, bukan nomor urut gabungan yang ga bisa dipetakan balik ke file.
+        const extraUploads = [
+          ...framedMulti.map((data, i) => ({
+            label: `_M${i + 1}`,
+            task: uploadAsset(data, `M${i + 1}`, base, meta),
+          })),
+          ...framedExtraShots.map((data, i) => ({
+            label: `_A${i + 2}`,
+            task: uploadAsset(data, `A${i + 2}`, base, meta),
+          })),
+        ];
         if (extraUploads.length > 0) {
-          const extraResults = await Promise.allSettled(extraUploads);
+          const extraResults = await Promise.allSettled(
+            extraUploads.map((u) => u.task),
+          );
           extraResults.forEach((r, i) => {
             if (r.status === "rejected")
-              console.warn(`[preview] upload extra asset #${i + 1} gagal:`, r.reason);
+              console.warn(
+                `[preview] upload ${extraUploads[i].label} gagal:`,
+                r.reason,
+              );
           });
         }
         return;
@@ -933,10 +941,11 @@ export function PreviewScreen({
     (async () => {
       setFinalizing(true);
       try {
-        // QR JANGAN di-burn ke MP4 (lihat handleVideoConfirmOk) — overlay video = frame kepilih doang.
+        // QR ikut di-burn (lihat handleVideoConfirmOk). Effect ini udah nunggu shareUrl siap
+        // di guard atas, jadi QR yang kebakar DIJAMIN QR microsite asli, bukan placeholder.
         const overlay = await buildVideoOverlay(
           currentFrame?.url ?? null,
-          null,
+          qrSvgString(shareUrl),
         );
         const finalized = await finalizeVideo(
           preVideo,

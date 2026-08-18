@@ -1,3 +1,6 @@
+import { renderToStaticMarkup } from 'react-dom/server'
+import { createElement } from 'react'
+import { QRCodeSVG } from 'qrcode.react'
 import { proxied } from './facedetect'
 
 // Bikin PNG overlay 2:3 (transparan) buat di-burn ke video via ffmpeg server-side.
@@ -52,6 +55,22 @@ function toPngDataUrl(canvas: HTMLCanvasElement): Promise<string> {
       reader.readAsDataURL(blob)
     }, 'image/png')
   })
+}
+
+/** QR microsite → SVG string buat di-burn ke video. Di-render dari `url` LANGSUNG, bukan
+ *  dibaca dari DOM: QR di layar ada di 4 tempat (inline/fullscreen/print) yang muncul-ilang
+ *  ikut state, jadi nyomot dari DOM = balapan sama render. url kosong (upload belum kelar /
+ *  unlicensed) → null, buildVideoOverlay skip QR dan frame tetep jalan.
+ *  QR-nya sama persis dgn yang di foto & kertas print — satu QR buat ori/ai/video. */
+export function qrSvgString(url: string | null | undefined): string | null {
+  if (!url) return null
+  try {
+    return renderToStaticMarkup(
+      createElement(QRCodeSVG, { value: url, size: 512, level: 'M', includeMargin: true }),
+    )
+  } catch {
+    return null // QR gagal ≠ tamu kehilangan video — overlay lanjut tanpa QR
+  }
 }
 
 // frameUrl null = video tanpa frame (cuma QR). qrSvg null = tanpa QR (freemium/unlicensed).

@@ -6,7 +6,7 @@ import { useT } from '@/lib/i18n'
 import { TouchButton } from './TouchButton'
 import type { Ai4RLayout, Ai4ROrientation } from '@/lib/types'
 import type { StripSource } from '@/lib/strip-pool'
-import type { SlotTransform } from '@/lib/print-layout'
+import { composerSlotCount, type SlotTransform } from '@/lib/print-layout'
 
 type PrintLayoutMode = '2R_STRIP' | '4R_LANDSCAPE'
 
@@ -90,9 +90,15 @@ export function StripComposer({
   const hasCustom2Strip = !is4R && !!customSlots?.slots && customSlots.slots.length > 0
   const hasCustom4R = is4R && !!custom4rSlots?.slots && custom4rSlots.slots.length > 0
 
-  const activeSlots = is4R
-    ? (custom4rSlots?.slots?.length || (ai4rLayout === 'SINGLE_1' ? 1 : ai4rLayout === 'TRIO_3' || ai4rLayout === 'GRID_3' ? 3 : ai4rLayout === 'SPLIT_2' ? 2 : 4))
-    : (customSlots?.slots?.length || slots)
+  const slotCountFor = (m: PrintLayoutMode) =>
+    composerSlotCount(m, {
+      slots,
+      ai4rLayout,
+      customSlotCount: customSlots?.slots?.length,
+      custom4rSlotCount: custom4rSlots?.slots?.length,
+    })
+
+  const activeSlots = slotCountFor(mode)
   const activeOverlay = is4R ? overlay4rUrl : overlayUrl
 
   const [isSingleStripOverlay, setIsSingleStripOverlay] = useState(false)
@@ -122,7 +128,10 @@ export function StripComposer({
     : `${slots} Slot Strip`
 
   const fourRLocked = require4rOverlay && !overlay4rUrl
-  const slotOf = (id: string) => picked.indexOf(id)
+  // Slice ke activeSlots: entri yang lagi kesembunyiin (mode kecil) JANGAN dibaca "kepakai" —
+  // kartunya harus bisa dipilih lagi buat slot yang keliatan, bukan nampilin badge nomor
+  // slot yang ga ada di layar.
+  const slotOf = (id: string) => picked.slice(0, activeSlots).indexOf(id)
   const filled = picked.slice(0, activeSlots).filter(Boolean).length
   const isFull = filled >= activeSlots
 
@@ -132,14 +141,16 @@ export function StripComposer({
     if (printing || nextMode === mode) return
     if (nextMode === '4R_LANDSCAPE' && fourRLocked) return
     setMode(nextMode)
-    const targetSlots = nextMode === '4R_LANDSCAPE'
-      ? (custom4rSlots?.slots?.length || 4)
-      : (customSlots?.slots?.length || slots)
-    setPicked(Array.from({ length: targetSlots }, (_, i) => picked[i] ?? null))
+    // Array-nya dipanjangin ke MAX dua mode, ga dipotong ke mode tujuan. Pindah ke layout
+    // yang slotnya lebih sedikit cuma NYEMBUNYIIN kelebihannya (semua pembaca udah slice ke
+    // activeSlots); balik lagi ke layout gede, pilihan tamu utuh. Kalau dipotong beneran,
+    // bolak-balik tab = pilihan ilang permanen tanpa ada yang ngasih tau.
+    const keep = Math.max(slotCountFor(mode), slotCountFor(nextMode))
+    setPicked(Array.from({ length: keep }, (_, i) => picked[i] ?? null))
   }
 
   const fill = (id: string) => {
-    if (printing || picked.includes(id)) return
+    if (printing || slotOf(id) >= 0) return
     const at = picked.slice(0, activeSlots).findIndex(p => p === null)
     if (at < 0) return
     const next = [...picked]
