@@ -76,11 +76,12 @@ export function TemplateScreen({ state, dispatch, templates, maxTemplates, engin
                 <button
                   key={tmpl.id}
                   onClick={() => dispatch({ type: 'SELECT_TEMPLATE', template: tmpl, maxTemplates })}
-                  className="relative overflow-hidden active:scale-[0.97] transition-all duration-200"
+                  className="relative overflow-hidden active:scale-[0.97] transition-all duration-200 flex flex-col"
                   style={{
                     borderRadius: 'var(--radius-btn)',
-                    border: selected ? '2px solid rgba(255,255,255,0.7)' : 'none',
+                    border: selected ? '2px solid rgba(255,255,255,0.7)' : '1px solid rgba(255,255,255,0.1)',
                     boxShadow: selected ? '0 0 20px rgba(255,255,255,0.2)' : 'inset 1px 1px 0 rgba(255,255,255,0.3), inset -1px -1px 0 rgba(0,0,0,0.2)',
+                    background: selected ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.04)',
                   }}
                 >
                   <div className="w-full aspect-[2/3] relative flex items-center justify-center overflow-hidden" style={{ background: selected ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.08)' }}>
@@ -95,6 +96,22 @@ export function TemplateScreen({ state, dispatch, templates, maxTemplates, engin
                         <PinBadge size={13} color="#fff" />
                       </div>
                     )}
+                  </div>
+                  <div className="w-full py-1.5 px-2 flex items-center justify-center text-center" style={{ background: 'rgba(0,0,0,0.45)', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                    <span
+                      className="truncate"
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: 400,
+                        color: '#ffffff',
+                        letterSpacing: '0.02em',
+                        lineHeight: 1.2,
+                        textShadow: '0 1px 2px rgba(0,0,0,0.8)',
+                      }}
+                      title={tmpl.name}
+                    >
+                      {tmpl.name}
+                    </span>
                   </div>
                 </button>
               )

@@ -23,7 +23,7 @@ import { swapFace, isFaceServerAlive } from "@/lib/faceswap";
 import { refineResult } from "@/lib/refine-result";
 import { FaceRemapPanel } from "@/components/ui/FaceRemapPanel";
 import { animateImage, finalizeVideo, isVideoUnlocked } from "@/lib/video";
-import { buildVideoOverlay, qrSvgString } from "@/lib/video-overlay";
+import { buildVideoOverlay } from "@/lib/video-overlay";
 import { useMagicCatcher } from "@/lib/use-magic-catcher";
 import { useT } from "@/lib/i18n";
 
@@ -679,7 +679,12 @@ export function PreviewScreen({
   async function handleVideoConfirmOk(choice?: { positive: string, negative: string }) {
     if (videoGenRef.current) return; // double-tap guard — dialog confirm bisa ke-tap 2x sebelum state update
     
-    if (!choice && config.video_prompt_choices && config.video_prompt_choices.length > 0) {
+    const tmpl = config.templates.find((t) => t.id === state.templateId);
+    const hasCustomTemplatePrompt = !!tmpl?.video_positive_prompt;
+
+    // Jika template punya prompt video khusus (fixed/burned-in prompt), langsung render tanpa pop-up choice.
+    // Jika tidak ada prompt khusus DAN ada video_prompt_choices di settings, buka dialog pilihan prompt.
+    if (!choice && !hasCustomTemplatePrompt && config.video_prompt_choices && config.video_prompt_choices.length > 0) {
       setShowVideoConfirm(false);
       setShowVideoChoices(true);
       return;
@@ -704,17 +709,17 @@ export function PreviewScreen({
           /* seed upload gagal → kirim raw; FAL bisa nolak → null → fail-safe */
         }
       }
-      // Prompt gerak dikirim ke FAL (dulu ke-skip → PixVerse bisa 422). Default "smile & wave"
-      // dari video_defaults; override per-template (video_positive_prompt) nyusul plumbing state.
-      const tmpl = config.templates.find((t) => t.id === state.templateId);
+      // Prompt gerak dikirim ke FAL. Prioritas: choice user > template video_positive_prompt > video_defaults > default subtle LTX
       const positive =
         choice?.positive ||
         tmpl?.video_positive_prompt ||
-        config.video_defaults?.default_positive_prompt;
+        config.video_defaults?.default_positive_prompt ||
+        "Subtle slow cinematic push in. The subjects breathe naturally with gentle eye blinks, making a subtle confident nod and warm smile while holding steady.";
       const negative =
         choice?.negative ||
         tmpl?.video_negative_prompt ||
-        config.video_defaults?.default_negative_prompt;
+        config.video_defaults?.default_negative_prompt ||
+        "distorted face, face morphing, extra limbs, chaotic camera movement, glitch, blurry, deformed hands, mouth talking unnaturally, bad anatomy, cartoon, plastic skin";
       const video = await animateImage(
         seed,
         config.video_provider ?? "PIXVERSE",
@@ -729,14 +734,10 @@ export function PreviewScreen({
         },
       );
       if (video) {
-        // Baru DI SINI: overlay = frame KEPILIH + QR di-burn ke video (letterbox 2:3, ffmpeg server).
-        // Gagal finalize → fallback video mentah (tamu ga kehilangan video).
-        // QR sama persis dgn yang di foto/print — satu QR buat semua (ori/ai/video), microsite
-        // yang misahin lewat tab. shareUrl kosong (upload belum kelar / unlicensed) → QR di-skip,
-        // frame tetep ke-burn (buildVideoOverlay fail-safe per-bagian).
+        // Overlay video: cuma frame yang dipilih di-burn ke video (letterbox 2:3, ffmpeg server).
+        // QR TIDAK di-burn ke video (cukup di screen kiosk & microsite delivery).
         const overlay = await buildVideoOverlay(
           currentFrame?.url ?? null,
-          qrSvgString(shareUrl),
         );
         const finalized = state.base
           ? await finalizeVideo(video, overlay, eventName, state.base)
@@ -935,17 +936,15 @@ export function PreviewScreen({
   useEffect(() => {
     if (!isFinal || !preVideo || !state.base) return;
     if (finalizedBase.current === state.base) return; // udah difinalize buat foto ini
-    if (hasRental && !shareUrl) return; // licensed: tunggu QR asli dulu
     finalizedBase.current = state.base;
     let live = true;
     (async () => {
       setFinalizing(true);
       try {
-        // QR ikut di-burn (lihat handleVideoConfirmOk). Effect ini udah nunggu shareUrl siap
-        // di guard atas, jadi QR yang kebakar DIJAMIN QR microsite asli, bukan placeholder.
+        // Overlay video: cuma frame yang dipilih di-burn ke video (letterbox 2:3, ffmpeg server).
+        // QR TIDAK di-burn ke video (cukup di screen kiosk & microsite delivery).
         const overlay = await buildVideoOverlay(
           currentFrame?.url ?? null,
-          qrSvgString(shareUrl),
         );
         const finalized = await finalizeVideo(
           preVideo,

@@ -4,11 +4,10 @@ import { QRCodeSVG } from 'qrcode.react'
 import { proxied } from './facedetect'
 
 // Bikin PNG overlay 2:3 (transparan) buat di-burn ke video via ffmpeg server-side.
-// Isi: frame PNG (cover-fit) + QR yang udah di-render jadi PNG, ditaruh persis kayak di Preview
-// (pojok kanan atas). Video mentah dari FAL bisa 16:9 → ffmpeg letterbox ke 2:3 (item atas-bawah),
-// overlay ini nempel di kanvas 2:3 final. Output transparan biar cuma frame+QR yg keliatan.
+// Isi: frame PNG (cover-fit). QR TIDAK di-burn ke video — QR sudah ada di screen kiosk,
+// di kertas print, dan di microsite delivery. Video MP4 harus bersih dari QR.
 //
-// Kenapa PNG di client, bukan di ffmpeg: QR = SVG React + frame = branding, dua-duanya konteks UI.
+// Kenapa PNG di client, bukan di ffmpeg: frame = branding konteks UI.
 // ffmpeg cukup terima 1 PNG datar. Pisah concern: render di client, encode di server.
 
 const OVERLAY_W = 800   // kanvas 2:3 — cukup buat overlay tajam, ffmpeg scale ke resolusi video
@@ -24,8 +23,7 @@ function loadImg(url: string): Promise<HTMLImageElement> {
   })
 }
 
-// SVG string (dari QRCodeSVG yang di-serialize) → HTMLImageElement lewat data URI.
-// qrcode.react kadang emit <svg> TANPA xmlns → <img> nolak ("svg load failed"). Inject kalau kurang.
+// SVG string helper buat kebutuhan serialisasi SVG QR jika diperlukan di tempat lain.
 function loadSvg(svg: string): Promise<HTMLImageElement> {
   const withNs = svg.includes('xmlns')
     ? svg
@@ -57,11 +55,7 @@ function toPngDataUrl(canvas: HTMLCanvasElement): Promise<string> {
   })
 }
 
-/** QR microsite → SVG string buat di-burn ke video. Di-render dari `url` LANGSUNG, bukan
- *  dibaca dari DOM: QR di layar ada di 4 tempat (inline/fullscreen/print) yang muncul-ilang
- *  ikut state, jadi nyomot dari DOM = balapan sama render. url kosong (upload belum kelar /
- *  unlicensed) → null, buildVideoOverlay skip QR dan frame tetep jalan.
- *  QR-nya sama persis dgn yang di foto & kertas print — satu QR buat ori/ai/video. */
+/** QR microsite → SVG string jika diperlukan */
 export function qrSvgString(url: string | null | undefined): string | null {
   if (!url) return null
   try {
@@ -69,46 +63,31 @@ export function qrSvgString(url: string | null | undefined): string | null {
       createElement(QRCodeSVG, { value: url, size: 512, level: 'M', includeMargin: true }),
     )
   } catch {
-    return null // QR gagal ≠ tamu kehilangan video — overlay lanjut tanpa QR
+    return null
   }
 }
 
-// frameUrl null = video tanpa frame (cuma QR). qrSvg null = tanpa QR (freemium/unlicensed).
-// Return PNG dataURL transparan 2:3, atau null kalau dua-duanya kosong (ga ada yg perlu di-burn).
+// frameUrl null = video tanpa frame (mentah).
+// Return PNG dataURL transparan 2:3, atau null kalau frame kosong.
+// Note: _qrSvg diabaikan karena QR TIDAK boleh masuk ke dalam video file MP4.
 export async function buildVideoOverlay(
   frameUrl: string | null,
-  qrSvg: string | null,
+  _qrSvg?: string | null,
 ): Promise<string | null> {
-  if (!frameUrl && !qrSvg) return null
+  if (!frameUrl) return null
   const canvas = document.createElement('canvas')
   canvas.width = OVERLAY_W
   canvas.height = OVERLAY_H
   const ctx = canvas.getContext('2d')
   if (!ctx) return null
 
-  if (frameUrl) {
-    // Frame gagal load JANGAN matiin overlay (fail-safe) — QR bisa tetep ke-burn tanpa frame.
-    try {
-      const frame = await loadImg(frameUrl)
-      const { dx, dy, dw, dh } = coverFit(frame.naturalWidth, frame.naturalHeight, OVERLAY_W, OVERLAY_H)
-      ctx.drawImage(frame, dx, dy, dw, dh)
-    } catch { /* frame skip — QR-only overlay */ }
-  }
-  if (qrSvg) {
-    // QR gagal render (SVG malformed/kosong) JANGAN matiin overlay — skip QR, frame tetep jalan.
-    // Konsisten fail-safe video path: gagal QR ≠ tamu kehilangan video.
-    try {
-      const qr = await loadSvg(qrSvg)
-      // Pojok kanan atas + white plate, sama posisi kayak QR di Preview. Ukuran ~13% lebar kanvas.
-      const qrSize = Math.round(OVERLAY_W * 0.15)
-      const pad = Math.round(OVERLAY_W * 0.03)
-      const plate = qrSize + pad
-      const x = OVERLAY_W - plate - pad
-      const y = pad
-      ctx.fillStyle = '#fff'
-      ctx.fillRect(x, y, plate, plate)
-      ctx.drawImage(qr, x + pad / 2, y + pad / 2, qrSize, qrSize)
-    } catch { /* QR skip — frame-only overlay (atau null di bawah kalau frame juga kosong) */ }
+  // Frame gagal load JANGAN matiin overlay (fail-safe)
+  try {
+    const frame = await loadImg(frameUrl)
+    const { dx, dy, dw, dh } = coverFit(frame.naturalWidth, frame.naturalHeight, OVERLAY_W, OVERLAY_H)
+    ctx.drawImage(frame, dx, dy, dw, dh)
+  } catch {
+    return null
   }
   return toPngDataUrl(canvas)
 }

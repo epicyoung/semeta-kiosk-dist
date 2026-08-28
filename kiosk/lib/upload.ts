@@ -44,9 +44,81 @@ export async function resizeDataUrl(dataUrlOrUrl: string, maxPx: number = 1200):
   });
 }
 
+/**
+ * Fit dimensions for Video Generation Seed (e.g. LTX / Wan / Kling DiT models).
+ * Ensures both dimensions are exact multiples of 32, preserving the native aspect ratio.
+ * For 2:3 portrait, exact resolution is 768 x 1152.
+ */
+export function fitForVideoSeed(width: number, height: number): { w: number; h: number } {
+  const ratio = width / height;
+  // 2:3 portrait (ratio ~0.667)
+  if (Math.abs(ratio - (2 / 3)) < 0.05) {
+    return { w: 768, h: 1152 };
+  }
+  // 3:2 landscape (ratio ~1.5)
+  if (Math.abs(ratio - (3 / 2)) < 0.05) {
+    return { w: 1152, h: 768 };
+  }
+  // 9:16 vertical (ratio ~0.5625)
+  if (Math.abs(ratio - (9 / 16)) < 0.05) {
+    return { w: 704, h: 1280 };
+  }
+  // 16:9 landscape (ratio ~1.778)
+  if (Math.abs(ratio - (16 / 9)) < 0.05) {
+    return { w: 1280, h: 704 };
+  }
+  // 1:1 square (ratio ~1.0)
+  if (Math.abs(ratio - 1.0) < 0.05) {
+    return { w: 768, h: 768 };
+  }
+  // Fallback: Scale longest edge to max 1152, snap to nearest multiple of 32
+  const maxEdge = 1152;
+  const scale = Math.min(1, maxEdge / Math.max(width, height));
+  const snapW = Math.max(32, Math.round((width * scale) / 32) * 32);
+  const snapH = Math.max(32, Math.round((height * scale) / 32) * 32);
+  return { w: snapW, h: snapH };
+}
+
+async function resizeVideoSeedBlob(dataUrlOrUrl: string): Promise<Blob> {
+  const src = await toBlob(dataUrlOrUrl);
+  const bitmap = await createImageBitmap(src);
+  const ratio = bitmap.width / bitmap.height;
+
+  // 2:3 portrait (ratio ~0.667): Smart-pad to 9:16 (1080x1920) so FAL won't crop sides
+  if (Math.abs(ratio - (2 / 3)) < 0.05) {
+    const targetW = 1080;
+    const targetH = 1920;
+    const innerH = 1620;
+    const padY = 150;
+
+    const canvas = new OffscreenCanvas(targetW, targetH);
+    const ctx = canvas.getContext("2d")!;
+
+    // Fill background with edge extension/dark tone
+    ctx.fillStyle = "#111116";
+    ctx.fillRect(0, 0, targetW, targetH);
+
+    // Draw top & bottom edge extension for seamless AI background continuity
+    ctx.drawImage(bitmap, 0, 0, bitmap.width, 30, 0, 0, targetW, padY);
+    ctx.drawImage(bitmap, 0, bitmap.height - 30, bitmap.width, 30, 0, targetH - padY, targetW, padY);
+
+    // Draw main 2:3 image centered in 1080x1620
+    ctx.drawImage(bitmap, 0, padY, targetW, innerH);
+    bitmap.close();
+    return canvas.convertToBlob({ type: "image/jpeg", quality: 0.92 });
+  }
+
+  const { w, h } = fitForVideoSeed(bitmap.width, bitmap.height);
+  const canvas = new OffscreenCanvas(w, h);
+  const ctx = canvas.getContext("2d")!;
+  ctx.drawImage(bitmap, 0, 0, w, h);
+  bitmap.close();
+  return canvas.convertToBlob({ type: "image/jpeg", quality: 0.92 });
+}
+
 /** Upload a photo/video to R2 via the Next.js API route. Returns { url, key }.
- * S = seed img2vid: image bersih buat FAL (URL R2 publik). Di-resize kayak A/B, no watermark
- * (server skip S). Dipakai supaya FAL bisa akses seed walau hasil AI-nya blob/localhost. */
+ * S = seed img2vid: image bersih buat FAL (URL R2 publik). Di-resize ke resolusi DiT kelipatan 32
+ * (2:3 → 768x1152), no watermark (server skip S). Dipakai supaya FAL bisa akses seed walau hasil AI-nya blob/localhost. */
 export async function uploadAsset(
   dataUrlOrUrl: string,
   type: "A" | "B" | "C" | "S" | `M${number}` | `A${number}`,
@@ -55,11 +127,14 @@ export async function uploadAsset(
 ): Promise<{ url: string; key: string }> {
   // framed images (from compositeFrame) are already 1200px data URLs.
   // Bypass resizeBlob to prevent concurrent memory crashes.
+  // Type S (video seed) is always resized to 2:3 768x1152 (mult of 32) for DiT AI video.
   const isDataUrl = dataUrlOrUrl.startsWith("data:");
   const blob =
-    type === "C" || isDataUrl
-      ? await toBlob(dataUrlOrUrl)
-      : await resizeBlob(dataUrlOrUrl, MAX_PX);
+    type === "S"
+      ? await resizeVideoSeedBlob(dataUrlOrUrl)
+      : type === "C" || isDataUrl
+        ? await toBlob(dataUrlOrUrl)
+        : await resizeBlob(dataUrlOrUrl, MAX_PX);
 
   const ext = type === "C" ? "mp4" : "jpg";
   const form = new FormData();

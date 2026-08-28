@@ -23,7 +23,7 @@ export async function fetchPocketBaseTemplates(pbUrl: string): Promise<Template[
     // ilang diam-diam begitu tenant nembus batas (347 template kebaca 200 → 3 kategori ilang).
     for (let page = 1; ; page++) {
       const res = await fetch(
-        `${pbUrl}/api/collections/templates/records?filter=is_active%3Dtrue&perPage=500&page=${page}`,
+        `${pbUrl}/api/collections/templates/records?filter=is_active%3Dtrue&sort=name&perPage=500&page=${page}`,
         { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS), cache: 'no-store' },
       )
       if (!res.ok) break

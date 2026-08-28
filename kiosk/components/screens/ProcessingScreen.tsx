@@ -256,7 +256,10 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
             console.error('[video] seed upload gagal, kirim url asli (mungkin ditolak FAL):', e)
           }
         }
-        const video = await animateImage(seedUrl, videoProvider, { resolution: videoResolution })
+        const tmpl = state.templates[0]
+        const positive = tmpl?.video_positive_prompt ?? undefined
+        const negative = tmpl?.video_negative_prompt ?? undefined
+        const video = await animateImage(seedUrl, videoProvider, { resolution: videoResolution, positive, negative })
         return video ?? undefined
       } finally {
         setAnimating(false)
