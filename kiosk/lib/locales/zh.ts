@@ -116,6 +116,7 @@ const zh: Translations = {
   strip_print_4r: '打印 4R 明信片',
   strip_locked_4r: '4R 明信片已锁定 — 设置中尚未上传 4R 覆盖图。',
   strip_tip: '拖动可移动照片，双指捏合可缩放，双击可切换适配方式：↔ 按宽 ⇄ ↕ 按高。',
+  strip_fit_cover: '填满',
   strip_fit_width: '宽',
   strip_fit_height: '高',
   preview_btn_make_video: '制作视频',

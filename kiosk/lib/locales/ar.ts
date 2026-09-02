@@ -116,6 +116,7 @@ const ar: Translations = {
   strip_print_4r: 'اطبع بطاقة 4R',
   strip_locked_4r: 'بطاقة 4R مقفلة — لم يتم رفع غلاف 4R في الإعدادات.',
   strip_tip: 'اسحب لتحريك الصورة، وقرّص للتكبير، وانقر نقرًا مزدوجًا لتغيير الملاءمة: ↔ العرض ⇄ ↕ الارتفاع.',
+  strip_fit_cover: 'ملء',
   strip_fit_width: 'العرض',
   strip_fit_height: 'الارتفاع',
   preview_btn_make_video: 'إنشاء فيديو',

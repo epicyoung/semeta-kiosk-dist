@@ -52,7 +52,13 @@ export function StripComposer({
   // yang di-splice pas hapus, jadi buang slot 1 bikin isi 2/3/4 naik semua — foto pindah
   // tempat sendiri padahal tamu cuma mau ngosongin satu. Index = slot, titik.
   const [picked, setPicked] = useState<(string | null)[]>(() => Array(slots).fill(null))
-  type FitAxis = 'width' | 'height'
+  // 'cover' = default: foto NGISI PENUH slot, sisi yang lebih dipotong. Dulu default-nya
+  // 'width' — foto pas di lebar tapi nyisain pita transparan atas/bawah (atau kiri/kanan
+  // pas di-flip) tiap kali rasio slot ga sama persis sama rasio foto. Slot custom dari
+  // overlay operator hampir ga pernah 2:3 pas, jadi tiap cetak kudu double-tap manual dulu.
+  // 'width'/'height' tetep ada — double-tap muter cover → width → height buat yang mau
+  // liat foto UTUH (mis. slot landscape, foto ga boleh kepotong).
+  type FitAxis = 'cover' | 'width' | 'height'
   const [transforms, setTransforms] = useState<Record<number, { scale: number; x: number; y: number; fit: FitAxis; rotation: number }>>({})
   const [activeSlot, setActiveSlot] = useState<number | null>(null)
 
@@ -135,7 +141,7 @@ export function StripComposer({
   const filled = picked.slice(0, activeSlots).filter(Boolean).length
   const isFull = filled >= activeSlots
 
-  const getTransform = (i: number) => transforms[i] || { scale: 1, x: 0, y: 0, fit: 'width' as FitAxis, rotation: 0 }
+  const getTransform = (i: number) => transforms[i] || { scale: 1, x: 0, y: 0, fit: 'cover' as FitAxis, rotation: 0 }
 
   const handleModeSwitch = (nextMode: PrintLayoutMode) => {
     if (printing || nextMode === mode) return
@@ -184,8 +190,10 @@ export function StripComposer({
 
   const flipFit = (i: number) => {
     setTransforms(prev => {
-      const current = prev[i] || { scale: 1, x: 0, y: 0, fit: 'width' as FitAxis, rotation: 0 }
-      const next: FitAxis = current.fit === 'width' ? 'height' : 'width'
+      const current = prev[i] || { scale: 1, x: 0, y: 0, fit: 'cover' as FitAxis, rotation: 0 }
+      // cover → width → height → cover. Dua mode lama tetep kejangkau, tapi yang default
+      // (cover) sekarang yang pertama — mayoritas cetak ga perlu nyentuh ini sama sekali.
+      const next: FitAxis = current.fit === 'cover' ? 'width' : current.fit === 'width' ? 'height' : 'cover'
       return { ...prev, [i]: { ...current, fit: next, scale: 1, x: 0, y: 0 } }
     })
   }
@@ -216,7 +224,7 @@ export function StripComposer({
       if (pinchRef.current.startDist > 0) {
         const factor = dist / pinchRef.current.startDist
         const nextScale = clampScale(pinchRef.current.startScale * factor)
-        setTransforms(prev => ({ ...prev, [i]: { ...(prev[i] || { x: 0, y: 0, fit: 'width', rotation: 0 }), scale: nextScale } }))
+        setTransforms(prev => ({ ...prev, [i]: { ...(prev[i] || { x: 0, y: 0, fit: 'cover', rotation: 0 }), scale: nextScale } }))
       }
       return
     }
@@ -229,7 +237,7 @@ export function StripComposer({
         const lim = Math.max(1, getTransform(i).scale)
         const nextX = Math.max(-lim, Math.min(lim, dragStartRef.current.initialTfX + (dx / rect.width)))
         const nextY = Math.max(-lim, Math.min(lim, dragStartRef.current.initialTfY + (dy / rect.height)))
-        setTransforms(prev => ({ ...prev, [i]: { ...(prev[i] || { scale: 1, fit: 'width', rotation: 0 }), x: nextX, y: nextY } }))
+        setTransforms(prev => ({ ...prev, [i]: { ...(prev[i] || { scale: 1, fit: 'cover', rotation: 0 }), x: nextX, y: nextY } }))
       }
     }
   }
@@ -270,7 +278,7 @@ export function StripComposer({
 
   const rotateSlot = (i: number) => {
     setTransforms(prev => {
-      const current = prev[i] || { scale: 1, x: 0, y: 0, fit: 'width', rotation: 0 }
+      const current = prev[i] || { scale: 1, x: 0, y: 0, fit: 'cover', rotation: 0 }
       return { ...prev, [i]: { ...current, rotation: (current.rotation + 90) % 360 } }
     })
   }
@@ -311,8 +319,12 @@ export function StripComposer({
                 draggable={false}
                 className="max-w-none select-none pointer-events-none transition-transform duration-75"
                 style={{
-                  width: tf.fit === 'width' ? '100%' : 'auto',
+                  // cover: dua sumbu 100% + object-cover → browser yang milih sumbu mana yang
+                  // nutup, sisi lebihnya kepotong. width/height: satu sumbu 'auto' biar foto
+                  // kelihatan UTUH (bisa nyisain pita transparan — itu memang maunya).
+                  width: tf.fit === 'height' ? 'auto' : '100%',
                   height: tf.fit === 'width' ? 'auto' : '100%',
+                  objectFit: tf.fit === 'cover' ? 'cover' : undefined,
                   transform: `translate(${tf.x * 100}%, ${tf.y * 100}%) scale(${tf.scale}) rotate(${tf.rotation}deg)`,
                 }}
               />
@@ -374,12 +386,14 @@ export function StripComposer({
                 is4R || activeSlots >= 3 ? 'gap-1 px-2 py-0.5 text-[9px]' : 'gap-1.5 px-2.5 py-1 text-[11px]'
               }`}
               style={{ background: 'rgba(0,0,0,0.7)', border: '1px solid rgba(255,255,255,0.2)' }}
-              title="Klik atau ketuk 2x foto untuk ganti Fit Lebar / Fit Tinggi"
+              title="Klik atau ketuk 2x foto untuk ganti Penuh / Fit Lebar / Fit Tinggi"
             >
               <span className="font-mono">{(tf.scale * 100).toFixed(0)}%</span>
               <span style={{ opacity: 0.35 }}>|</span>
               <span className="font-semibold tracking-wider">
-                {tf.fit === 'width'
+                {tf.fit === 'cover'
+                  ? `⛶ ${t('strip_fit_cover') as string}`
+                  : tf.fit === 'width'
                   ? `↔ ${t('strip_fit_width') as string}`
                   : `↕ ${t('strip_fit_height') as string}`}
               </span>

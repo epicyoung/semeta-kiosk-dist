@@ -1,5 +1,5 @@
 'use client'
-import { useReducer, useRef, useEffect, useState, useCallback } from 'react'
+import { useReducer, useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import { kioskReducer, initialState } from '@/lib/reducer'
 import { useCountdown, useHeartbeat } from '@/lib/billing'
 import { logVisitorEvent } from '@/lib/analytics'
@@ -90,6 +90,11 @@ export function KioskApp({ config: initialConfig }: { config: KioskConfig }) {
             t.category === SPINDONESIA_CATEGORY ||
             (config.engine_mode === 'fullbody_local' ? t.engine_type === 'comfy' : t.engine_type !== 'comfy' && t.engine_type !== 'print' && t.engine_type !== 'api'))
   const [templates, setTemplates] = useState(config.templates)
+  // config.templates = snapshot dari handshake pas kiosk start; `templates` = yang hidup,
+  // di-refresh tiap sync. Layar yang baca config langsung (PreviewScreen) dapet data BASI —
+  // efeknya sunyi: tmpl.video_positive_prompt kebaca kosong, jadi tamu dikasih dialog
+  // "pilih gaya video" padahal template-nya udah punya prompt gerak sendiri.
+  const liveConfig = useMemo(() => ({ ...config, templates }), [config, templates])
   const orientedFrames = useOrientedFrames(config.frames)
   const direction = useRef<'forward' | 'backward'>('forward')
 
@@ -266,8 +271,8 @@ export function KioskApp({ config: initialConfig }: { config: KioskConfig }) {
       // Engine 'api' + input_label — teks tamu masuk prompt berbayar, jadi harus fix sebelum processing.
       case 'nameinput':   return <NameInputScreen template={state.templates[0]} dispatch={wrappedDispatch} />
       case 'processing':  return <ProcessingScreen state={state} dispatch={wrappedDispatch} generationSource={config.generation_source} eventName={config.event_name} licensed={config.licensed ?? false} videoUnlocked={isVideoUnlocked(config)} comfy={comfyCfg} enableVideoEngine={config.enable_video_engine ?? false} videoProvider={config.video_provider ?? 'PIXVERSE'} videoResolution={config.video_resolution ?? '720p'} imageEngine={engineKeyFor(config.image_model ?? '', config.image_resolution ?? '') ?? ''} imageVariants={config.image_variants ?? 4} onUploadFailed={(meta) => log('UPLOAD_FAILED', meta)} />
-      case 'framechooser': return <PreviewScreen mode="choose" state={state} dispatch={wrappedDispatch} frames={orientedFrames} config={config} licensed={config.licensed ?? false} eventName={config.event_name} onAction={(a) => log('VISITOR_ACTION', { action: a })} />
-      case 'preview':     return <PreviewScreen mode="final" state={state} dispatch={wrappedDispatch} frames={orientedFrames} config={config} licensed={config.licensed ?? false} eventName={config.event_name} onAction={(a) => log('VISITOR_ACTION', { action: a })} />
+      case 'framechooser': return <PreviewScreen mode="choose" state={state} dispatch={wrappedDispatch} frames={orientedFrames} config={liveConfig} licensed={config.licensed ?? false} eventName={config.event_name} onAction={(a) => log('VISITOR_ACTION', { action: a })} />
+      case 'preview':     return <PreviewScreen mode="final" state={state} dispatch={wrappedDispatch} frames={orientedFrames} config={liveConfig} licensed={config.licensed ?? false} eventName={config.event_name} onAction={(a) => log('VISITOR_ACTION', { action: a })} />
     }
   })()
 

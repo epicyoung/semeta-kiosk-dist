@@ -116,6 +116,7 @@ const ko: Translations = {
   strip_print_4r: '4R 엽서 인쇄',
   strip_locked_4r: '4R 엽서 잠김 — 설정에서 4R 오버레이가 업로드되지 않았습니다.',
   strip_tip: '끌어서 사진 이동, 손가락을 오므렸다 펴서 확대/축소, 두 번 탭하면 맞춤 변경: ↔ 가로 ⇄ ↕ 세로.',
+  strip_fit_cover: '채움',
   strip_fit_width: '가로',
   strip_fit_height: '세로',
   preview_btn_make_video: '동영상 만들기',

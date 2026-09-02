@@ -6,6 +6,9 @@ export type SyncResult = {
   added: number
   cropped: number
   deleted: number
+  // Template yang udah ada tapi file-nya diedit setelah sync terakhir (crop ulang, tweak
+  // prompt, ganti referensi) → diganti otomatis. Opsional: kiosk lama ga ngirim field ini.
+  updated?: number
   detectDown: boolean
   skipped: { name: string; reason: string }[]
   loaded: number // jumlah template yang akhirnya kebaca dari PB setelah sync
@@ -91,6 +94,7 @@ export function SyncProgress({ phase, onClose }: Props) {
 
             <div style={{ overflowY: 'auto', flex: 1 }}>
               {row('Template baru masuk', phase.result.added, phase.result.added ? '#a3be8c' : undefined)}
+              {!!phase.result.updated && row('Diperbarui (file berubah)', phase.result.updated, '#7dcfff')}
               {row('Di-crop ke 2:3', phase.result.cropped)}
               {row('Dihapus (tak ada di folder)', phase.result.deleted, phase.result.deleted ? '#e5c07b' : undefined)}
               {row('Di-skip', phase.result.skipped.length, phase.result.skipped.length ? '#ff6b6b' : undefined)}

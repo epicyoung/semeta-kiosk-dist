@@ -124,6 +124,7 @@ export interface Translations {
   strip_print_4r: string
   strip_locked_4r: string
   strip_tip: string
+  strip_fit_cover: string
   strip_fit_width: string
   strip_fit_height: string
   preview_btn_make_video: string

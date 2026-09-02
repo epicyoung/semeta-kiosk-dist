@@ -116,6 +116,7 @@ const ja: Translations = {
   strip_print_4r: '4Rポストカードを印刷',
   strip_locked_4r: '4Rポストカードはロック中 — 設定で4Rオーバーレイが未アップロードです。',
   strip_tip: 'ドラッグで写真を移動、ピンチで拡大縮小、ダブルタップで合わせ方を切替: ↔ 幅 ⇄ ↕ 高さ。',
+  strip_fit_cover: '全体',
   strip_fit_width: '幅',
   strip_fit_height: '高さ',
   preview_btn_make_video: '動画を作成',

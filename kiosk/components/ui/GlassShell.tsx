@@ -2,6 +2,7 @@
 import { useRef, useState, useLayoutEffect, useEffect, type ReactNode } from 'react'
 import { SettingsPanel } from './SettingsPanel'
 import { SyncProgress, type SyncPhase } from './SyncProgress'
+import { TouchButton } from './TouchButton'
 import { LocaleProvider } from '@/lib/i18n'
 import { EPIC_LOGO } from '@/lib/brand'
 import { fetchPocketBaseTemplates } from '@/lib/pocketbase'
@@ -34,6 +35,7 @@ export function GlassShell({ screenKey, direction, children, config, onLogoClick
   const [localConfig, setLocalConfig] = useState(config)
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'ok' | 'err'>('idle')
   const [syncPhase, setSyncPhase] = useState<SyncPhase | null>(null)
+  const [confirmRebuild, setConfirmRebuild] = useState(false)
 
   // Sync folder→PB lalu refresh templates ke kiosk. Sama seperti tombol di Settings.
   // Popup progress via syncPhase; tombol ↻ tetap punya warna via syncStatus.
@@ -88,6 +90,7 @@ export function GlassShell({ screenKey, direction, children, config, onLogoClick
         kind: 'done',
         result: {
           added: d.added ?? 0, cropped: d.cropped ?? 0, deleted: d.deleted ?? 0,
+          updated: d.updated ?? 0,
           detectDown: d.detectDown ?? false, skipped: d.skipped ?? [],
           loaded: results.length,
         },
@@ -256,6 +259,70 @@ export function GlassShell({ screenKey, direction, children, config, onLogoClick
               >
                 <span style={{ display: 'inline-block', animation: syncStatus === 'syncing' ? 'sync-spin 0.8s linear infinite' : 'none' }}>↻</span>
               </button>
+            )}
+
+            {/* Rebuild — palu godam buat kasus yang sync biasa ga bisa sembuhin: record ada
+                tapi file storage-nya ilang/korup (thumbnail 404, rasio nyangkut versi lama).
+                Wipe SEMUA record lalu add ulang dari folder. Sengaja dikasih konfirmasi:
+                kalau ke-tap pas event jalan, grid template kosong beberapa detik. */}
+            {showSync && (
+              <button
+                onClick={() => setConfirmRebuild(true)}
+                disabled={syncStatus === 'syncing'}
+                title="Rebuild — hapus semua lalu muat ulang dari folder"
+                style={{
+                  position: 'absolute', top: 14, right: 50, zIndex: 30,
+                  width: 32, height: 32, borderRadius: 'var(--radius-glass)', border: 'none',
+                  background: 'transparent', cursor: syncStatus === 'syncing' ? 'default' : 'pointer',
+                  opacity: 0.35, fontSize: 'var(--text-base)', color: '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'opacity 0.2s, color 0.2s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.opacity = '0.85'; e.currentTarget.style.color = '#e5c07b' }}
+                onMouseLeave={e => { e.currentTarget.style.opacity = '0.35'; e.currentTarget.style.color = '#fff' }}
+              >
+                ⟳
+              </button>
+            )}
+
+            {confirmRebuild && (
+              <div
+                onClick={() => setConfirmRebuild(false)}
+                style={{
+                  position: 'absolute', inset: 0, zIndex: 61,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: 'rgba(9,1,53,0.55)', backdropFilter: 'blur(6px)',
+                }}
+              >
+                <div
+                  onClick={e => e.stopPropagation()}
+                  style={{
+                    width: 'min(420px, 88%)', padding: 24,
+                    borderRadius: 'var(--radius-glass)',
+                    border: '1px solid rgba(255,255,255,0.18)',
+                    background: 'rgba(255,255,255,0.08)',
+                    boxShadow: '0 20px 60px rgba(0,0,0,0.45), inset 1px 1px 0 rgba(255,255,255,0.25)',
+                    textAlign: 'center',
+                  }}
+                >
+                  <div style={{ fontSize: 36, marginBottom: 10, color: '#e5c07b' }}>⟳</div>
+                  <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 500, marginBottom: 8 }}>Rebuild template?</h2>
+                  <p style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-muted)', lineHeight: 1.5, marginBottom: 20 }}>
+                    Semua template dihapus dari database lalu dimuat ulang dari folder.
+                    Pakai ini kalau thumbnail atau gambar referensi nyangkut versi lama.
+                    Jangan dipakai pas ada tamu antre.
+                  </p>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <TouchButton onClick={() => setConfirmRebuild(false)} className="flex-1">Batal</TouchButton>
+                    <TouchButton
+                      onClick={() => { setConfirmRebuild(false); handleQuickSync(true) }}
+                      className="flex-1"
+                    >
+                      Rebuild
+                    </TouchButton>
+                  </div>
+                </div>
+              </div>
             )}
 
             {/* Sync progress popup — muncul saat quick-sync, informatif hasil */}

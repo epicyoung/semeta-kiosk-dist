@@ -33,10 +33,18 @@ export function buildFfmpegArgs(inMp4: string, outPath: string, overlayPng: stri
     return [
       '-y', '-i', inMp4, '-i', overlayPng,
       '-filter_complex',
-      `[0:v]${padChain}[bg];[1:v]scale=${OUT_W}:${OUT_H}[ov];[bg][ov]overlay=0:0`,
+      `[0:v]${padChain}[bg];[1:v]scale=${OUT_W}:${OUT_H}[ov];[bg][ov]overlay=0:0[v]`,
+      // -map WAJIB di jalur filter_complex. Tanpa itu ffmpeg milih stream sendiri dan audio
+      // input KEBUANG — '-c:a copy' jadi mubazir karena ga ada audio yang kepetakan. Provider
+      // yang audionya nyala (LTX native) bakal keluar bisu, dan kita tetep bayar penuh.
+      '-map', '[v]',
+      // '?' = opsional: provider yang audionya mati (VEO/KLING generate_audio:false) ga punya
+      // stream 0:a sama sekali → tanpa '?' ffmpeg exit 1 dan SELURUH finalize gagal.
+      '-map', '0:a?',
       '-c:a', 'copy', '-movflags', '+faststart', outPath,
     ]
   }
+  // Jalur -vf (tanpa overlay): ffmpeg auto-map 1 video + 1 audio, audio ikut sendiri.
   return ['-y', '-i', inMp4, '-vf', padChain, '-c:a', 'copy', '-movflags', '+faststart', outPath]
 }
 

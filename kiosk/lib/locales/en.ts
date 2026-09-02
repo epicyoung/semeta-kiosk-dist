@@ -116,6 +116,7 @@ const en: Translations = {
   strip_print_4r: 'Print 4R postcard',
   strip_locked_4r: '4R Postcard is locked — no 4R overlay uploaded in Settings.',
   strip_tip: 'Drag to move a photo, pinch to zoom, double-tap to change its fit: ↔ width ⇄ ↕ height.',
+  strip_fit_cover: 'FILL',
   strip_fit_width: 'WIDTH',
   strip_fit_height: 'HEIGHT',
   preview_btn_make_video: 'Make Video',

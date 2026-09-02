@@ -116,6 +116,7 @@ const nl: Translations = {
   strip_print_4r: '4R-kaart printen',
   strip_locked_4r: '4R Postcard is vergrendeld — nog geen 4R-overlay geüpload in Instellingen.',
   strip_tip: 'Sleep om een foto te verplaatsen, knijp om te zoomen, dubbeltik om de pasvorm te wisselen: ↔ breedte ⇄ ↕ hoogte.',
+  strip_fit_cover: 'VULLEN',
   strip_fit_width: 'BREEDTE',
   strip_fit_height: 'HOOGTE',
   preview_btn_make_video: 'Video maken',

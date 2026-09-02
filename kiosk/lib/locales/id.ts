@@ -117,6 +117,7 @@ const id: Translations = {
   strip_print_4r: 'Cetak 4R Postcard',
   strip_locked_4r: '4R Postcard terkunci — overlay 4R belum diunggah di Settings.',
   strip_tip: 'Seret buat geser foto, cubit buat zoom, ketuk dua kali buat ganti pas-nya: ↔ lebar ⇄ ↕ tinggi.',
+  strip_fit_cover: 'PENUH',
   strip_fit_width: 'LEBAR',
   strip_fit_height: 'TINGGI',
   preview_btn_make_video: 'Buat Video',

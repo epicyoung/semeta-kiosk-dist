@@ -38,11 +38,9 @@ async function readDims(fp: string): Promise<{ w: number; h: number } | null> {
   }
 }
 
-type FolderFile = { name: string; category: string; fp: string; sidecar: TemplateSidecar | null }
+type FolderFile = { name: string; category: string; fp: string; sidecar: TemplateSidecar | null; mtime: number }
 
 // Sidecar <nama>.json di sebelah gambar → template comfy (engine_type + prompts + denoise).
-// ponytail: edit sidecar SETELAH ke-sync gak auto-update (dedup by category||name) —
-// hapus record di PB / rename file kalau mau re-sync isi barunya.
 function readSidecar(imagePath: string): TemplateSidecar | null {
   const jsonPath = imagePath.replace(/\.[^.]+$/, '.json')
   if (!fs.existsSync(jsonPath)) return null
@@ -50,6 +48,29 @@ function readSidecar(imagePath: string): TemplateSidecar | null {
     return parseSidecar(fs.readFileSync(jsonPath, 'utf-8'))
   } catch {
     return null
+  }
+}
+
+// mtime "efektif" satu template = yang paling baru antara gambar & sidecar-nya. Dua-duanya
+// bisa diedit sendiri-sendiri (crop ulang thumbnail, atau tweak prompt doang) dan keduanya
+// sama-sama harus micu re-sync. Referensi (gf-products.jpg dkk) ikut dihitung juga — ganti
+// file referensi tanpa nyentuh apa pun yang lain tetep kudu naik ulang.
+function effectiveMtime(fp: string, sidecar: TemplateSidecar | null): number {
+  const stamps = [statMtime(fp)]
+  const jsonPath = fp.replace(/\.[^.]+$/, '.json')
+  if (fs.existsSync(jsonPath)) stamps.push(statMtime(jsonPath))
+  for (const ref of sidecar?.reference_images ?? []) {
+    const refPath = path.join(path.dirname(fp), ref)
+    if (fs.existsSync(refPath)) stamps.push(statMtime(refPath))
+  }
+  return Math.max(...stamps)
+}
+
+function statMtime(fp: string): number {
+  try {
+    return fs.statSync(fp).mtimeMs
+  } catch {
+    return 0
   }
 }
 
@@ -132,11 +153,13 @@ function scanFolder(inbox: string): FolderFile[] {
       const subdir = path.join(inbox, entry.name)
       for (const file of fs.readdirSync(subdir).filter(f => EXTS.includes(path.extname(f).toLowerCase()))) {
         const fp = path.join(subdir, file)
-        result.push({ name: toTitleCase(file), category: entry.name, fp, sidecar: readSidecar(fp) })
+        const sidecar = readSidecar(fp)
+        result.push({ name: toTitleCase(file), category: entry.name, fp, sidecar, mtime: effectiveMtime(fp, sidecar) })
       }
     } else if (EXTS.includes(path.extname(entry.name).toLowerCase())) {
       const fp = path.join(inbox, entry.name)
-      result.push({ name: toTitleCase(entry.name), category: DEFAULT_CATEGORY, fp, sidecar: readSidecar(fp) })
+      const sidecar = readSidecar(fp)
+      result.push({ name: toTitleCase(entry.name), category: DEFAULT_CATEGORY, fp, sidecar, mtime: effectiveMtime(fp, sidecar) })
     }
   }
   // Gambar referensi (engine 'api') tinggal SEFOLDER sama thumbnail, jadi loop di atas
@@ -164,7 +187,27 @@ async function login(): Promise<string> {
   return body.token
 }
 
-type PbTemplate = { id: string; name: string; category: string }
+// `updated` = field sistem PocketBase, selalu ada. Dipakai buat bandingin sama mtime file
+// di folder → file yang diedit setelah ke-sync bakal kedeteksi & diganti otomatis.
+type PbTemplate = { id: string; name: string; category: string; updated?: string }
+
+// Toleransi 2 detik. `updated` PB ditulis beberapa ratus ms SETELAH file dibaca pas upload,
+// jadi tanpa buffer tiap file yang barusan naik kebaca "lebih baru" lagi di sync berikutnya
+// → upload ulang selamanya tiap kali operator pencet ↻. Juga nutupin mtime FAT/SMB yang
+// resolusinya kasar (FAT32 = 2 detik).
+export const STALE_TOLERANCE_MS = 2000
+
+/** File di folder lebih baru dari record PB → perlu diganti.
+ *  PocketBase ngirim `updated` format "2026-09-02 10:30:00.123Z" — spasi, bukan 'T'.
+ *  UTC-nya WAJIB dipaksa: tanpa 'Z' string kebaca sebagai waktu LOKAL, dan di WIB (UTC+7)
+ *  tiap record kegeser 7 jam ke belakang → semua file kebaca stale terus, re-upload tiap sync. */
+export function isStale(fileMtimeMs: number, pbUpdated: string | undefined): boolean {
+  if (!pbUpdated) return false // PB ga ngasih timestamp → jangan nebak, biarin apa adanya
+  const iso = pbUpdated.trim().replace(' ', 'T')
+  const recordMs = Date.parse(/[Zz]|[+-]\d{2}:?\d{2}$/.test(iso) ? iso : iso + 'Z')
+  if (Number.isNaN(recordMs)) return false
+  return fileMtimeMs > recordMs + STALE_TOLERANCE_MS
+}
 
 async function listTemplates(token: string): Promise<PbTemplate[]> {
   const all: PbTemplate[] = []
@@ -276,13 +319,32 @@ export async function POST(req: Request) {
         const folderKeys = new Set(folderFiles.map(f => key(f.category, f.name)))
         const pbByKey = new Map(pbTemplates.map(t => [key(t.category, t.name), t]))
 
-        // rebuild (repair): wipe SEMUA record lalu re-add semua dari folder. Perlu karena dedup
-        // by category||name GA nyembuhin kasus "record ada tapi file storage ilang" (thumbnail 404) —
-        // nama udah kepakai jadi sync biasa skip file-nya. Delete dijalanin duluan (bawah) → nama bebas.
-        const toAdd = rebuild ? folderFiles : folderFiles.filter(f => !pbByKey.has(key(f.category, f.name)))
-        const toDelete = rebuild ? pbTemplates : (folderFiles.length === 0 ? [] : pbTemplates.filter(t => !folderKeys.has(key(t.category, t.name))))
+        // rebuild (repair): wipe SEMUA record lalu re-add semua dari folder. Masih perlu buat
+        // kasus "record ada tapi file storage ilang" (thumbnail 404) — mtime ga ketolong di situ
+        // karena file folder-nya sendiri gak berubah. Delete dijalanin duluan (bawah) → nama bebas.
+        const stale = rebuild ? [] : folderFiles.filter(f => {
+          const t = pbByKey.get(key(f.category, f.name))
+          return t ? isStale(f.mtime, t.updated) : false
+        })
+        const staleIds = new Set(stale.map(f => pbByKey.get(key(f.category, f.name))!.id))
+        const staleSet = new Set(stale) // identity-based — addTasks pakai ini buat misahin laporan
 
-        let added = 0, cropped = 0, deleted = 0, anyDetectDown = false
+        // File baru + file yang berubah. Yang berubah di-delete dulu (bawah) biar namanya bebas.
+        const toAdd = rebuild
+          ? folderFiles
+          : [...folderFiles.filter(f => !pbByKey.has(key(f.category, f.name))), ...stale]
+
+        // Mirror-delete: record yang filenya udah ga ada di folder. Dijaga guard folder-kosong —
+        // folder ke-unmount / path salah bikin scan balik [] dan tanpa guard itu ngehapus SEMUA
+        // template. Record stale tetep ikut kehapus (bakal langsung naik lagi di addTasks).
+        const orphans = folderFiles.length === 0
+          ? []
+          : pbTemplates.filter(t => !folderKeys.has(key(t.category, t.name)))
+        const toDelete = rebuild
+          ? pbTemplates
+          : [...orphans, ...pbTemplates.filter(t => staleIds.has(t.id))]
+
+        let added = 0, cropped = 0, deleted = 0, updated = 0, anyDetectDown = false
         const skipped: { name: string; reason: string }[] = []
 
         const total = toAdd.length + toDelete.length
@@ -324,7 +386,11 @@ export async function POST(req: Request) {
               : await cropToAspect(f.fp, dims.w, dims.h)
             if (out.detectDown) anyDetectDown = true
             const ok = await uploadTemplate(token, f, out.buf, out.mime)
-            if (ok) { added++; if (out.cropped) cropped++ }
+            if (ok) {
+              added++
+              if (out.cropped) cropped++
+              if (staleSet.has(f)) updated++ // pengganti, bukan template baru — buat laporan
+            }
             else skipped.push({ name: `${f.category}/${f.name}`, reason: 'upload gagal' })
           } catch {
             skipped.push({ name: `${f.category}/${f.name}`, reason: 'crop/encode gagal (file rusak?)' })
@@ -343,11 +409,23 @@ export async function POST(req: Request) {
           }
         })
 
-        // rebuild: delete DULU (bebasin nama) baru add ulang. Normal: add dulu, baru mirror-delete.
-        if (rebuild) { await runWithConcurrency(deleteTasks, 5); await runWithConcurrency(addTasks, 5) }
-        else { await runWithConcurrency(addTasks, 5); await runWithConcurrency(deleteTasks, 5) }
+        // Delete SELALU duluan sekarang. Dulu jalur normal add-dulu-baru-delete, tapi begitu
+        // sync bisa ngeganti file yang berubah, record lamanya WAJIB ilang sebelum yang baru
+        // naik — kalau kebalik, dua-duanya nyangkut sebagai record kembar dengan nama sama.
+        await runWithConcurrency(deleteTasks, 5)
+        await runWithConcurrency(addTasks, 5)
 
-        send({ ok: true, added, cropped, deleted, detectDown: anyDetectDown, skipped })
+        // `added` & `deleted` ngitung baru + pengganti campur. Dipisah buat laporan biar kebaca:
+        // "3 baru, 2 diperbarui" lebih jelas buat operator dari "5 ditambah, 2 dihapus".
+        send({
+          ok: true,
+          added: added - updated,
+          cropped,
+          deleted: Math.max(0, deleted - updated),
+          updated,
+          detectDown: anyDetectDown,
+          skipped,
+        })
       } catch (e) {
         const message = e instanceof Error ? e.message : 'Sync gagal'
         send({ ok: false, error: message })

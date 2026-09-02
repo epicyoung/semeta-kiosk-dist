@@ -297,7 +297,7 @@ export async function compose2UpSheet(
     imgs.forEach((img, i) => {
       const s = baseSlots[i]
       const tf = transforms?.[i]
-      const fitMode = tf?.fit || 'width'
+      const fitMode = tf?.fit || 'cover'
       const rotation = (tf?.rotation || 0) % 360
 
       const isRotated90 = rotation === 90 || rotation === 270
@@ -379,18 +379,27 @@ export type SlotTransform = {
   scale?: number
   x?: number
   y?: number
-  // Sumbu mana yang dipaskan ke slot. 'width' = default (lebar foto = lebar slot; sisi
-  // atas-bawah kepotong atau nyisa), 'height' = kebalikannya. Bukan cover/contain:
-  // cover ngambil sumbu TERBESAR, contain yang TERKECIL — dua-duanya milih sendiri
-  // tergantung orientasi foto, jadi tamu ga bisa nebak hasilnya sebelum nge-tap.
-  fit?: 'width' | 'height'
+  // Sumbu mana yang dipaskan ke slot.
+  //   'cover'  = DEFAULT: pilih sumbu yang NUTUP slot, sisi lebihnya kepotong — nol pita
+  //              transparan. Slot custom dari overlay operator hampir ga pernah pas 2:3,
+  //              jadi 'width' sebagai default bikin tiap cetak butuh double-tap manual dulu.
+  //   'width'  = lebar foto = lebar slot, atas-bawah boleh nyisa (foto keliatan UTUH)
+  //   'height' = kebalikannya
+  // Dulu cover sengaja DIHINDARI: "tamu ga bisa nebak hasilnya sebelum nge-tap". Itu bener
+  // pas cover cuma bisa dicapai lewat tap. Sekarang cover jadi default yang KELIATAN di
+  // preview sejak awal — ga ada yang perlu ditebak, dan double-tap tetep nyediain dua mode
+  // utuh buat yang emang ga mau kepotong.
+  fit?: 'cover' | 'width' | 'height'
   rotation?: number
 }
 
 /** Paskan satu sumbu ke slot, sumbu lain ngikut rasio. Ke-center dua-duanya; yang lewat
- *  slot dipotong sama clip di composePrintLayout. */
-export function fitAxis(srcW: number, srcH: number, boxW: number, boxH: number, axis: 'width' | 'height') {
-  const scale = axis === 'width' ? boxW / srcW : boxH / srcH
+ *  slot dipotong sama clip di composePrintLayout.
+ *  'cover' = pilih skala TERBESAR dari dua sumbu → slot ketutup penuh. */
+export function fitAxis(srcW: number, srcH: number, boxW: number, boxH: number, axis: 'cover' | 'width' | 'height') {
+  const scale = axis === 'cover'
+    ? Math.max(boxW / srcW, boxH / srcH)
+    : axis === 'width' ? boxW / srcW : boxH / srcH
   const dw = Math.round(srcW * scale)
   const dh = Math.round(srcH * scale)
   return { dx: Math.round((boxW - dw) / 2), dy: Math.round((boxH - dh) / 2), dw, dh }
@@ -421,7 +430,7 @@ export async function composePrintLayout(
   imgs.forEach((img, i) => {
     const s = slots[i]
     const tf = transforms?.[i]
-    const fitMode = tf?.fit || 'width'
+    const fitMode = tf?.fit || 'cover'
     const rotation = (tf?.rotation || 0) % 360
 
     const isRotated90 = rotation === 90 || rotation === 270

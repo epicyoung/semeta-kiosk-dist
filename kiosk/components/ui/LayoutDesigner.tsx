@@ -279,7 +279,13 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
                 left: 0, top: 0,
                 width: is2Stripe ? panelW : displayW, height: displayH,
                 backgroundImage: `url(${template.overlay_url})`,
-                backgroundSize: is2Stripe ? `${panelW}px ${displayH}px` : 'contain',
+                // WAJIB cover, BUKAN contain. Cetakan asli nempatin overlay pakai coverFit
+                // (print-layout.ts composePrintLayout) dan composer pakai object-cover — kalau
+                // designer nampilin 'contain', overlay yang rasionya beda dikit dari kanvas
+                // tampil MENGECIL di sini. Slot digambar relatif ke kanvas penuh, jadi yang
+                // keliatan pas di designer meleset pas dipakai: foto nabrak bingkai, nutupin
+                // logo. Tiga tempat ini harus sepakat satu cara skala.
+                backgroundSize: is2Stripe ? `${panelW}px ${displayH}px` : 'cover',
                 backgroundRepeat: 'no-repeat',
                 backgroundPosition: 'center',
                 pointerEvents: 'none', zIndex: 5,

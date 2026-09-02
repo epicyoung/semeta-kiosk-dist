@@ -114,7 +114,8 @@ export function PrintLayoutPreview({ template, shots, containerWidth, containerH
                   inset: 0,
                   width: '100%',
                   height: '100%',
-                  objectFit: 'contain',
+                  // cover, samain sama coverFit di print-layout & composer (#slot-align)
+                  objectFit: 'cover',
                   pointerEvents: 'none'
                 }}
               />
@@ -179,7 +180,8 @@ function StripPanel({ slots, shots, canvas, overlayUrl, style }: {
               inset: 0,
               width: '100%',
               height: '100%',
-              objectFit: 'contain',
+              // cover, samain sama coverFit di print-layout & composer (#slot-align)
+              objectFit: 'cover',
               pointerEvents: 'none'
             }}
           />
