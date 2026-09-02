@@ -719,7 +719,7 @@ export function PreviewScreen({
         choice?.negative ||
         tmpl?.video_negative_prompt ||
         config.video_defaults?.default_negative_prompt ||
-        "distorted face, face morphing, extra limbs, chaotic camera movement, glitch, blurry, deformed hands, mouth talking unnaturally, bad anatomy, cartoon, plastic skin";
+        "distorted face, face morphing, extra limbs, chaotic camera movement, glitch, blurry, deformed hands, mouth talking unnaturally, bad anatomy, cartoon, plastic skin, fade to black, fade out, fading out, fade in, black screen, dip to black";
       const video = await animateImage(
         seed,
         config.video_provider ?? "PIXVERSE",
@@ -1262,14 +1262,7 @@ export function PreviewScreen({
                         className="absolute inset-0 w-full h-full object-cover pointer-events-none z-20"
                       />
                     )}
-                    {/* Edit Wajah — cuma pas satu foto lagi dizoom dari grid multi-AI.
-                        Ditaro di ATAS foto: bawah udah dipake chip "Tap to compare" (bottom-3),
-                        dua-duanya di tengah-bawah = ketiban. Gaya nyontek chip itu persis
-                        (chip kaca, uppercase, tracking lebar) biar satu bahasa visual.
-                        stopPropagation wajib: klik di area foto = keluar zoom. */}
-                    {/* Balik ke grid — tombol EKSPLISIT. Tap-di-foto juga masih jalan, tapi itu
-                        ga keliatan, apalagi sesudah edit pas chip OK/Undo nutupin sebagian foto:
-                        tamu ngira variasi AI yang lain ilang. */}
+                    {/* Balik ke grid — tombol kotak icon panah di kiri atas biar ga numpuk */}
                     {zoomIndex !== null && !showOriginal && multiResults && (
                       <div
                         className="absolute top-3 left-3"
@@ -1278,16 +1271,33 @@ export function PreviewScreen({
                       >
                         <button
                           onClick={exitZoom}
-                          style={{ ...refineChip, color: "var(--fg-muted)" }}
+                          style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 8,
+                            background: "rgba(0,0,0,0.55)",
+                            border: "1px solid rgba(255,255,255,0.18)",
+                            backdropFilter: "blur(8px)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            cursor: "pointer",
+                            color: "#fff",
+                            padding: 0,
+                            fontSize: "18px",
+                            fontFamily: "var(--font-ui)",
+                          }}
+                          title={t("remap_back_grid") as string}
                         >
-                          {t("remap_back_grid") as string}
+                          ←
                         </button>
                       </div>
                     )}
+                    {/* Edit Face — dipindah ke kanan atas (top-3 right-3) kotak icon edit biar tengah bersih buat tab [PHOTO] [VIDEO] */}
                     {zoomIndex !== null && !showOriginal && (canRefine || refining || undoState) && (
                       <div
-                        className="absolute top-3 inset-x-0 flex justify-center gap-2"
-                        style={{ zIndex: 40 }}
+                        className="absolute top-3 right-3 flex items-center gap-2"
+                        style={{ zIndex: 41 }}
                         onClick={(e) => e.stopPropagation()}
                       >
                         {refining ? (
@@ -1300,9 +1310,6 @@ export function PreviewScreen({
                               {t("remap_undo") as string}
                             </button>
                             <button
-                              // OK = "kelar sama foto ini" → balikin ke grid biar tamu bisa
-                              // liat variasi AI yang lain. Nyangkut di foto yang barusan diedit
-                              // bikin variasi lain kayak ilang.
                               onClick={exitZoom}
                               style={{ ...refineChip, color: "#fff", borderColor: "var(--brand)" }}
                             >
@@ -1312,9 +1319,26 @@ export function PreviewScreen({
                         ) : canRefine ? (
                           <button
                             onClick={() => { setRefineError(false); setRemapOpen(true); }}
-                            style={{ ...refineChip, color: "#fff" }}
+                            style={{
+                              width: 36,
+                              height: 36,
+                              borderRadius: 8,
+                              background: "rgba(0,0,0,0.55)",
+                              border: "1px solid rgba(255,255,255,0.18)",
+                              backdropFilter: "blur(8px)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              cursor: "pointer",
+                              color: "#fff",
+                              padding: 0,
+                            }}
+                            title={t("remap_edit_face") as string}
                           >
-                            {t("remap_edit_face") as string}
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                            </svg>
                           </button>
                         ) : null}
                       </div>
@@ -1334,7 +1358,7 @@ export function PreviewScreen({
               </div>
             ) : (
               <div
-                className="absolute inset-0 animate-fade-in"
+                className="absolute inset-0"
                 style={{ background: "#000" }}
               >
                 {videoUrl ? (
