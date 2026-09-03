@@ -80,8 +80,6 @@ if errorlevel 1 (
   git reset --hard origin/main
 )
 
-REM Bersihkan sisa file sampah (kecuali pb_data, env, dan onnx)
-git clean -fd -e pb/pb_data -e kiosk/.env.local -e kiosk/.env -e kiosk/face_server/*.onnx -e **/venv >nul 2>&1
 echo       Update kode berhasil ditarik dan disinkronkan 100%%.
 
 REM ---- Hapus cache build lama agar dipaksa re-compile ----

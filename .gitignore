@@ -1,4 +1,8 @@
 pb/pb_data/
 kiosk/.env.local
+kiosk/.env
 kiosk/node_modules/
 kiosk/.next/
+**/venv/
+kiosk/face_server/*.onnx
+buffalo_l/
