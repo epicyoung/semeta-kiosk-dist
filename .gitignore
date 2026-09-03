@@ -1,4 +1,5 @@
 pb/pb_data/
+kiosk/face_server/put-template-here/
 kiosk/.env.local
 kiosk/.env
 kiosk/node_modules/

@@ -25,10 +25,15 @@ export function buildFfmpegArgs(inMp4: string, outPath: string, overlayPng: stri
   // FULL WIDTH (FIT WIDTH): Scale lebar ke 1080, tinggi ngikut proporsional.
   // - Kalau hasil tinggi < 1620 (horizontal): pad hitam atas bawah ("atas bawah item").
   // - Kalau hasil tinggi > 1620 (vertical 9:16): crop atas bawah ("atas bawah ke potong").
-  const padChain =
-    `scale=${OUT_W}:-2,` + // lebar fixed 1080, tinggi proporsional genap
-    `pad=${OUT_W}:max(ih\\,${OUT_H}):(ow-iw)/2:(oh-ih)/2:black,` + // kalau pendek, pad hitam atas-bawah
-    `crop=${OUT_W}:${OUT_H}` // kalau kepanjangan, potong atas-bawah (center by default)
+  // SATU template literal, TANPA concat '+' dan TANPA komentar sebaris di tengahnya.
+  // Bentuk lama (`a` + // komentar \n `b` + …) ke-mangle minifier build produksi: potongan
+  // sesudah tiap komentar KEBUANG, chain jadi "scale=1080pad=1080:max(ih\,1620crop=1080:1620"
+  // → ffmpeg "No option name" → /api/finalize-video 500 → video ga ke-save & ga ke-upload,
+  // padahal dev (unminified) jalan mulus. Jangan pecah lagi jadi concat.
+  //   scale : lebar fixed 1080, tinggi proporsional genap (-2)
+  //   pad   : kalau hasilnya lebih pendek dari 1620 → bar hitam atas-bawah
+  //   crop  : kalau kepanjangan (9:16) → potong atas-bawah, center
+  const padChain = `scale=${OUT_W}:-2,pad=${OUT_W}:max(ih\\,${OUT_H}):(ow-iw)/2:(oh-ih)/2:black,crop=${OUT_W}:${OUT_H}`
   if (overlayPng) {
     return [
       '-y', '-i', inMp4, '-i', overlayPng,

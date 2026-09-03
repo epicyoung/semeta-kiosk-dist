@@ -14,7 +14,7 @@ echo.
 echo   Script ini akan:
 echo     1. Menutup semua service kiosk yang sedang berjalan
 echo     2. Menarik KODE TERBARU dari GitHub (menimpa konflik kode)
-echo     3. AMAN: Template, frame, secret, dan model AI TIDAK terhapus
+echo     3. AMAN: Template (put-template-here), PocketBase (pb_data), frame, secret, dan model AI TIDAK terhapus
 echo     4. Re-compile otomatis ke versi terbaru & buka Kiosk
 echo.
 
@@ -42,16 +42,23 @@ echo       OK.
 REM ---- Bersihkan lock git jika ada crash sebelumnya ----
 if exist "%ROOT%\.git\index.lock" del /f /q "%ROOT%\.git\index.lock" >nul 2>&1
 
-REM ---- Pastikan safety net .gitignore lokal melindungi data lapangan ----
-echo [2/6] Memeriksa proteksi data lokal...
+REM ---- Pastikan safety net .gitignore lokal melindungi data lapangan & template ----
+echo [2/6] Memeriksa proteksi data lokal (PocketBase & template)...
 if not exist "%ROOT%\.gitignore" (
   > "%ROOT%\.gitignore" echo pb/pb_data/
+  >> "%ROOT%\.gitignore" echo kiosk/face_server/put-template-here/
   >> "%ROOT%\.gitignore" echo kiosk/.env.local
   >> "%ROOT%\.gitignore" echo kiosk/.env
   >> "%ROOT%\.gitignore" echo kiosk/node_modules/
   >> "%ROOT%\.gitignore" echo kiosk/.next/
   >> "%ROOT%\.gitignore" echo **/venv/
   >> "%ROOT%\.gitignore" echo kiosk/face_server/*.onnx
+  >> "%ROOT%\.gitignore" echo buffalo_l/
+) else (
+  findstr /i /c:"put-template-here" "%ROOT%\.gitignore" >nul 2>&1
+  if errorlevel 1 >> "%ROOT%\.gitignore" echo kiosk/face_server/put-template-here/
+  findstr /i /c:"pb_data" "%ROOT%\.gitignore" >nul 2>&1
+  if errorlevel 1 >> "%ROOT%\.gitignore" echo pb/pb_data/
 )
 echo       OK.
 

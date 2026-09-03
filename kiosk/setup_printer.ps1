@@ -65,4 +65,6 @@ Write-Host "[3/3] Membuka jendela Printing Preferences..." -ForegroundColor Yell
 & rundll32.exe printui.dll,PrintUIEntry /e /n "RX1-STRIP"
 
 Write-Host ""
-Write-Host "Selesai! Jika sudah di-Enable, tekan Enter untuk menutup window ini." -ForegroundColor Magenta
+Write-Host "Selesai! Jika sudah di-Enable '2inch Cut', tekan Enter untuk menutup window ini." -ForegroundColor Magenta
+Read-Host "Tekan Enter untuk keluar..."
+
