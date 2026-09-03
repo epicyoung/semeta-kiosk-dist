@@ -1089,8 +1089,11 @@ export function PreviewScreen({
           {t(isChoose ? "preview_subtitle" : "delivery_subtitle") as string}
         </p>
         {/* Landscape-only: QR persis di bawah subtitle — "The seal below carries it
-            beyond these walls" literal nunjuk ke sini. Portrait: display:none (globals.css). */}
-        {isFinal && activeTab === "photo" && (
+            beyond these walls" literal nunjuk ke sini. Portrait: display:none (globals.css).
+            QR tampil di DUA tab: URL-nya sama (shareUrl), dan video nyusul ke microsite yang
+            sama lewat upload tipe C. Dulu disembunyiin pas tab video — akibatnya tamu yang
+            lagi nonton videonya kehilangan satu-satunya cara nyimpen. */}
+        {isFinal && (
           <div className="preview-qr-title-slot">{qrButton}</div>
         )}
       </div>
@@ -1105,9 +1108,11 @@ export function PreviewScreen({
               pengaruh ke tinggi/posisi foto (versi normal-flow bikin foto kedorong turun).
               Ketuk = buka overlay QR gede (retry + pesan lisensi ada di situ, ga diduplikasi). */}
           {/* Pita atas foto (portrait): [PHOTO] [QR] [VIDEO] — tab dipecah ngapit QR.
-              Tabs WAJIB tetep render pas tab video aktif (QR-nya doang yang ngumpet),
-              kalau nggak ga ada jalan balik ke photo. Landscape: slot ini display:none
-              (globals.css) — QR pindah kolom kiri, tabs pakai versi -landscape. */}
+              Tabs WAJIB tetep render pas tab video aktif, kalau nggak ga ada jalan balik
+              ke photo. QR ikut tampil di dua-duanya — URL-nya sama (shareUrl) dan video
+              nyusul ke microsite yang sama (upload tipe C), jadi nyembunyiin QR pas tab
+              video cuma bikin tamu kehilangan cara nyimpen videonya. Landscape: slot ini
+              display:none (globals.css) — QR pindah kolom kiri, tabs pakai versi -landscape. */}
           {isFinal && (activeTab === "photo" || videoAllowed) && (
             <div className="preview-qr-slot" style={qrSlotStyle}>
               {videoAllowed && (
@@ -1124,7 +1129,7 @@ export function PreviewScreen({
                   />
                 </div>
               )}
-              {activeTab === "photo" && qrButton}
+              {qrButton}
               {videoAllowed && (
                 <div
                   className="preview-tab-switcher"
