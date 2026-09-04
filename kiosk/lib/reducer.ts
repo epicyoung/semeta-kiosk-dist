@@ -125,6 +125,13 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
       // auto-preselect frame (bakal numpuk PNG kedua di print+upload). selectedFrame null.
       if (action.direct)
         return { screen: 'preview', aiUrl: action.aiUrl, originalUrl: action.originalUrl, sourceUrl: action.sourceUrl, rawAiUrl: action.rawAiUrl, base: action.base, processingSec: action.processingSec, selectedFrame: null, videoUrl: action.videoUrl, printSize: action.printSize, templateId: action.templateId, shots: 'shots' in state ? state.shots : undefined }
+      // Frame keikat template (sidecar `frame`): langsung preview dengan frame itu kepasang.
+      // Framechooser di-skip on purpose — event korporat, tiap template punya overlay judul
+      // divisinya sendiri. Kalau tamu boleh milih, judul "THE STRATEGIST" bisa nempel di foto
+      // template "The Innovation". Beda dari `direct`: di situ overlay udah kebakar di
+      // composite jadi selectedFrame HARUS null; di sini frame-nya justru baru dipasang.
+      if (action.autoFrame)
+        return { screen: 'preview', aiUrl: action.aiUrl, originalUrl: action.originalUrl, sourceUrl: action.sourceUrl, rawAiUrl: action.rawAiUrl, base: action.base, processingSec: action.processingSec, selectedFrame: action.autoFrame, videoUrl: action.videoUrl, templateId: action.templateId, allResults: action.allResults, shots: 'shots' in state ? state.shots : undefined }
       // Landing di frame chooser dulu — tamu pilih frame, baru NEXT ke preview (upload+print).
       // videoUrl = hasil video engine (opsional) — kebawa terus sampai preview buat tab Video.
       // allResults = multi-template (2-4 hasil): kebawa langsung ke preview grid TANPA resultchooser.

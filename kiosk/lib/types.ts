@@ -234,7 +234,10 @@ export type KioskAction =
   | { type: 'START_PROCESSING'; faceMappings?: (number | null)[][]; userInput?: string }
   | { type: 'SET_PROGRESS'; progress: number }
   // direct = skip framechooser langsung ke preview (Photo Print: overlay udah dibakar, frame dobel haram)
-  | { type: 'SHOW_PREVIEW'; aiUrl: string; originalUrl: string; sourceUrl?: string; rawAiUrl?: string; base?: string; processingSec?: number; videoUrl?: string; direct?: boolean; printSize?: PrintSize; templateId?: string; allResults?: SwapResult[] }
+  // autoFrame: frame yang KEIKAT ke template (sidecar `frame`). Ada ⇒ framechooser di-skip
+  // dan frame ini yang kepasang — tamu ga milih. Beda dari `direct` (Photo Print) yang
+  // overlay-nya udah kebakar di composite, jadi selectedFrame-nya justru HARUS null.
+  | { type: 'SHOW_PREVIEW'; aiUrl: string; originalUrl: string; sourceUrl?: string; rawAiUrl?: string; base?: string; processingSec?: number; videoUrl?: string; direct?: boolean; autoFrame?: Frame | null; printSize?: PrintSize; templateId?: string; allResults?: SwapResult[] }
   | { type: 'GO_DELIVERY'; aiUrl: string; originalUrl: string; uploadAiUrl: string; uploadOriginalUrl: string }
   | { type: 'SELECT_FRAME'; frame: Frame | null }
   | { type: 'REPLACE_RESULTS'; results: SwapResult[]; index: number } // Edit Wajah — ganti isi allResults di tempat

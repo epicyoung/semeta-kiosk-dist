@@ -63,6 +63,12 @@ function effectiveMtime(fp: string, sidecar: TemplateSidecar | null): number {
     const refPath = path.join(path.dirname(fp), ref)
     if (fs.existsSync(refPath)) stamps.push(statMtime(refPath))
   }
+  // Frame ikut dihitung: ganti PNG overlay doang (tanpa nyentuh jpeg/json) tetep kudu
+  // micu re-sync, kalau nggak frame lama nyangkut di PocketBase.
+  if (sidecar?.frame) {
+    const framePath = path.join(path.dirname(fp), sidecar.frame)
+    if (fs.existsSync(framePath)) stamps.push(statMtime(framePath))
+  }
   return Math.max(...stamps)
 }
 
@@ -162,13 +168,16 @@ function scanFolder(inbox: string): FolderFile[] {
       result.push({ name: toTitleCase(entry.name), category: DEFAULT_CATEGORY, fp, sidecar, mtime: effectiveMtime(fp, sidecar) })
     }
   }
-  // Gambar referensi (engine 'api') tinggal SEFOLDER sama thumbnail, jadi loop di atas
-  // ngangkat dia jadi template sendiri — halte kosong nongol di grid pilihan tamu.
-  // Buang berdasarkan yang beneran dirujuk sidecar, bukan tebak-tebakan nama file.
+  // Gambar referensi (engine 'api') DAN frame per-template tinggal SEFOLDER sama thumbnail,
+  // jadi loop di atas ngangkat mereka jadi template sendiri — halte kosong nongol di grid
+  // pilihan tamu. Buang berdasarkan yang beneran dirujuk sidecar, bukan tebak-tebakan nama file.
   const referenced = new Set<string>()
   for (const f of result) {
     for (const ref of f.sidecar?.reference_images ?? []) {
       referenced.add(path.resolve(path.dirname(f.fp), ref))
+    }
+    if (f.sidecar?.frame) {
+      referenced.add(path.resolve(path.dirname(f.fp), f.sidecar.frame))
     }
   }
   return referenced.size === 0 ? result : result.filter(f => !referenced.has(path.resolve(f.fp)))
@@ -246,6 +255,21 @@ async function uploadTemplate(token: string, f: FolderFile, buf: Buffer, mime: s
     if (path.extname(f.fp).toLowerCase() === '.png') {
       const raw = fs.readFileSync(f.fp)
       fd.append('overlay', new Blob([new Uint8Array(raw)], { type: 'image/png' }), path.basename(f.fp))
+    }
+  }
+  // Frame per-template: PNG sefolder yang OTOMATIS kepasang pas template ini dipilih.
+  // Naik ke field 'overlay' yang SAMA dipakai Photo Print — PNG mentah, alpha selamat
+  // (normalizeJpeg bakal ngeflatten transparansi jadi putih, jadi JANGAN lewat situ).
+  // Bukan koleksi `frames`: itu global + tamu yang milih + di-cap perPage=10.
+  if (f.sidecar?.frame) {
+    const dir = path.dirname(f.fp)
+    const framePath = path.join(dir, f.sidecar.frame)
+    // Sabuk kedua sesudah isSafeFilename di parseSidecar — resolve yang nyasar keluar
+    // folder template jangan dibaca sama sekali.
+    if (!path.relative(dir, framePath).startsWith('..') && fs.existsSync(framePath)) {
+      const frameBuf = fs.readFileSync(framePath)
+      fd.append('overlay', new Blob([new Uint8Array(frameBuf)], { type: 'image/png' }),
+        path.basename(f.sidecar.frame))
     }
   }
   // Engine 'api' (Nano Banana Pro): model + label input + rasio, lalu gambar referensi BG.

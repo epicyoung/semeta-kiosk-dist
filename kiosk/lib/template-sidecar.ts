@@ -26,6 +26,12 @@ export type TemplateSidecar = {
   reference_images?: string[]
   input_field?: SidecarInputField
   aspect_ratio?: string
+  // Frame PNG yang OTOMATIS kepasang begitu template ini dipilih — file sefolder sama
+  // gambarnya (pola sama kayak reference_images). Kepake buat event korporat: tiap template
+  // punya overlay judul sendiri, jadi tamu ga usah (dan ga boleh) milih frame sendiri —
+  // framechooser di-skip, salah pasangan judul-divisi ga mungkin kejadian.
+  // Kosong = perilaku lama: tamu milih frame di framechooser.
+  frame?: string
   // UUID row `templates` di SUPABASE yang dipakai buat nagih token. Wajib buat engine 'api':
   // RPC deduct_token nerima `p_template_id uuid`, sedangkan id record PocketBase itu string
   // 15-char — dikirim apa adanya bikin RPC balas 400 dan generate mati sebelum mulai.
@@ -89,6 +95,10 @@ export function parseSidecar(raw: string): TemplateSidecar | null {
       const refs = o.reference_images.filter(isSafeFilename).slice(0, MAX_REFERENCE_IMAGES)
       if (refs.length > 0) out.reference_images = refs
     }
+    // Guard path traversal SAMA kayak reference_images: nama file ini dipakai buat baca
+    // file dari folder template. Tanpa isSafeFilename, sidecar bisa nyuruh baca file mana
+    // pun di disk lalu naik ke PocketBase sebagai "frame".
+    if (typeof o.frame === 'string' && isSafeFilename(o.frame)) out.frame = o.frame
     if (typeof o.input_field === 'object' && o.input_field !== null && !Array.isArray(o.input_field)) {
       const label = (o.input_field as Record<string, unknown>).label
       if (typeof label === 'string' && label.trim().length > 0) {

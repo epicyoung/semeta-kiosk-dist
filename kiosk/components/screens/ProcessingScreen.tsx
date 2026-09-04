@@ -4,7 +4,7 @@ import { TouchButton } from '@/components/ui/TouchButton'
 import { comfyGenerate, type ComfyCfg } from '@/lib/comfy'
 import { proxied } from '@/lib/facedetect'
 import { swapFace } from '@/lib/faceswap'
-import type { GenerationSource, KioskAction, KioskState, SwapResult, VideoProvider } from '@/lib/types'
+import type { Frame, GenerationSource, KioskAction, KioskState, SwapResult, VideoProvider } from '@/lib/types'
 import { animateImage } from '@/lib/video'
 import { uploadAsset, resizeDataUrl } from '@/lib/upload'
 import { compositeFrame } from '@/lib/frame-composite'
@@ -195,6 +195,16 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
   // → dua promise generate → dua finalizeLocal → dua next-seq → file & entri microsite DOBEL
   // (#010 == #011, isi identik). next-seq counter mentah, ga dedup. Ref ini ngunci: finalize
   // cuma jalan SEKALI per mount sesi. Same filosofi kayak uploadedBase.current di R2 upload.
+  // Frame yang KEIKAT ke template (sidecar `frame` → PB field overlay → overlay_url).
+  // Ada ⇒ framechooser di-skip, frame ini yang kepasang. Dipakai event korporat: tiap
+  // template punya overlay judul divisinya sendiri, jadi salah pasangan judul-divisi
+  // ga mungkin kejadian. Kosong ⇒ perilaku lama (tamu milih di framechooser).
+  const autoFrameFor = (tmplId: string | undefined): Frame | null => {
+    const t = state.templates.find(x => x.id === tmplId)
+    if (!t?.overlay_url) return null
+    return { id: `tmpl-${t.id}`, url: t.overlay_url, name: t.name }
+  }
+
   const finalizedRef = useRef(false)
   const finalizeOnce: typeof finalizeLocal = async (...args) => {
     if (finalizedRef.current) return null // sesi ini udah di-finalize → run kedua no-op
@@ -362,6 +372,7 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
           type: 'SHOW_PREVIEW', aiUrl: r.aiUrl, originalUrl: r.originalUrl,
           sourceUrl: r.sourceUrl, rawAiUrl: r.rawAiUrl, base: r.base,
           processingSec: r.processingSec, videoUrl, templateId: r.templateId,
+          autoFrame: autoFrameFor(r.templateId),
           allResults: results.length > 1 ? results : undefined,
         })
       })()
@@ -407,6 +418,7 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
         dispatch({
           type: 'SHOW_PREVIEW', aiUrl: r.aiUrl, originalUrl: r.originalUrl,
           sourceUrl: r.sourceUrl, rawAiUrl: r.rawAiUrl, base: r.base, processingSec: r.processingSec, videoUrl, templateId: r.templateId,
+          autoFrame: autoFrameFor(r.templateId),
           allResults: results.length > 1 ? results : undefined,
         })
       })()
@@ -506,6 +518,7 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
           allResults: results.length > 1 ? results : undefined,
           sourceUrl: r0.sourceUrl, rawAiUrl: r0.rawAiUrl, base: base ?? undefined,
           processingSec: r0.processingSec, videoUrl, templateId: r0.templateId,
+          autoFrame: autoFrameFor(r0.templateId),
         })
       })
       // Log dulu baru layar error: sebabnya (referensi ga ke-load / FAL nolak) cuma
