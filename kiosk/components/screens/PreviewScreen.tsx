@@ -281,12 +281,17 @@ export function PreviewScreen({
   const cyclingFrame =
     frameIdx === null ? null : (allFrames[frameIdx - 1] ?? null);
   // Choose = frame lagi dipilih (cycling). Final = frame kepilih dari framechooser (fixed by id, no index drift).
-  const chosenFrameId =
-    state.screen === "preview" ? (state.selectedFrame?.id ?? null) : null;
-  const currentFrame = isChoose
+  const chosenFrame = state.screen === "preview" ? state.selectedFrame : null;
+  // Lookup by id ke `frames` (koleksi Settings) DULU — itu yang bikin index drift ga
+  // kejadian pas daftar frame berubah, dan orientasi aslinya kebawa. Tapi frame
+  // per-template (sidecar `frame`) ga ADA di koleksi itu: id-nya `tmpl-<id>`, jadi find()
+  // balik undefined dan overlay judul divisinya ILANG diam-diam. Fallback: pakai objek di
+  // state, orientasi dipatok portrait — spek overlay judul divisi emang 2:3 portrait.
+  const currentFrame: OrientedFrame | null = isChoose
     ? cyclingFrame
-    : chosenFrameId
-      ? (frames.find((f) => f.id === chosenFrameId) ?? null)
+    : chosenFrame
+      ? (frames.find((f) => f.id === chosenFrame.id)
+          ?? { ...chosenFrame, orientation: "portrait" as const })
       : null;
   // frameIdx: null = no frame, 1-based index into allFrames
   function prevFrame() {
