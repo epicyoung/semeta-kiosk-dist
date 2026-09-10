@@ -4,7 +4,7 @@ import { TouchButton } from './TouchButton'
 import { LayoutDesigner } from './LayoutDesigner'
 import { PrintLayoutPreview } from './PrintLayoutPreview'
 import type { Template, PrintSize } from '@/lib/types'
-import { CANVAS_4R_PORTRAIT, CANVAS_4R_LANDSCAPE, PANEL_2R_STRIP } from '@/lib/print-layout'
+import { CANVAS_4R_PORTRAIT, CANVAS_4R_LANDSCAPE, PANEL_2R_STRIP, canvasForPrintSize } from '@/lib/print-layout'
 import { useT } from '@/lib/i18n'
 import type { Translations } from '@/lib/locales/types'
 
@@ -13,33 +13,43 @@ type Props = {
 }
 
 // ── Print Style visual config ────────────────────────────────────────────────
-// Text labels/descs live in i18n; only icon is fixed here.
-type PrintStyle = '4R' | '2_STRIPE'
-const STYLE_ICON: Record<PrintStyle, string> = { '4R': '🖼️', '2_STRIPE': '📸' }
-const STYLE_LABEL_KEY: Record<PrintStyle, keyof Translations> = { '4R': 'ltm_style_4r_label', '2_STRIPE': 'ltm_style_2stripe_label' }
-const STYLE_DESC_KEY: Record<PrintStyle, keyof Translations> = { '4R': 'ltm_style_4r_desc', '2_STRIPE': 'ltm_style_2stripe_desc' }
+type PrintStyle = '4R' | '2_STRIPE' | 'A4' | 'A3'
+const STYLE_ICON: Record<PrintStyle, string> = { '4R': '🖼️', '2_STRIPE': '📸', 'A4': '📄', 'A3': '📜' }
+
+function getStyleLabel(style: PrintStyle, t: (k: any) => any): string {
+  if (style === '4R') return (t('ltm_style_4r_label') as string) || '4R Print'
+  if (style === '2_STRIPE') return (t('ltm_style_2stripe_label') as string) || '2 Stripe'
+  if (style === 'A4') return 'A4 Print'
+  if (style === 'A3') return 'A3 Print'
+  return style
+}
+
+function getStyleDesc(style: PrintStyle, t: (k: any) => any): string {
+  if (style === '4R') return (t('ltm_style_4r_desc') as string) || 'Standard 4×6" photo print — portrait or landscape'
+  if (style === '2_STRIPE') return (t('ltm_style_2stripe_desc') as string) || 'Two identical 2×6" strips on one 4R sheet'
+  if (style === 'A4') return 'Standard A4 (210×297mm) — portrait or landscape'
+  if (style === 'A3') return 'Large A3 (297×420mm) — portrait or landscape'
+  return ''
+}
 
 // Derive PrintSize from style + orientation
 function derivePrintSize(style: PrintStyle, orientation: 'portrait' | 'landscape'): PrintSize {
   if (style === '2_STRIPE') return '2R_STRIP'
+  if (style === 'A4') return orientation === 'landscape' ? 'A4_LANDSCAPE' : 'A4_PORTRAIT'
+  if (style === 'A3') return orientation === 'landscape' ? 'A3_LANDSCAPE' : 'A3_PORTRAIT'
   return orientation === 'landscape' ? '4R_LANDSCAPE' : '4R_PORTRAIT'
 }
 
 function deriveStyle(ps: PrintSize | null | undefined): PrintStyle {
   if (ps === '2R_STRIP') return '2_STRIPE'
+  if (ps === 'A4_PORTRAIT' || ps === 'A4_LANDSCAPE') return 'A4'
+  if (ps === 'A3_PORTRAIT' || ps === 'A3_LANDSCAPE') return 'A3'
   return '4R'
 }
 
 function deriveOrientation(ps: PrintSize | null | undefined): 'portrait' | 'landscape' {
-  if (ps === '4R_LANDSCAPE') return 'landscape'
+  if (ps === '4R_LANDSCAPE' || ps === 'A4_LANDSCAPE' || ps === 'A3_LANDSCAPE') return 'landscape'
   return 'portrait'
-}
-
-// ── Canvas spec for preview badges ──────────────────────────────────────────
-function canvasForSize(ps: PrintSize) {
-  if (ps === '4R_LANDSCAPE') return CANVAS_4R_LANDSCAPE
-  if (ps === '2R_STRIP') return PANEL_2R_STRIP
-  return CANVAS_4R_PORTRAIT
 }
 
 export function LocalTemplateManager({ onRefreshTemplates }: Props) {
@@ -188,7 +198,7 @@ export function LocalTemplateManager({ onRefreshTemplates }: Props) {
           const currentStyle = deriveStyle(tmpl.print_size)
           const currentOrientation = deriveOrientation(tmpl.print_size)
           const currentSize = tmpl.print_size || '4R_PORTRAIT'
-          const canvas = canvasForSize(currentSize)
+          const canvas = canvasForPrintSize(currentSize)
           const isExpanded = expandedId === tmpl.id
           const isLandscape = currentOrientation === 'landscape'
 
@@ -227,10 +237,10 @@ export function LocalTemplateManager({ onRefreshTemplates }: Props) {
                   {tmpl.name}
                 </p>
                 <p style={{ margin: '3px 0 0', fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.45)' }}>
-                  {STYLE_ICON[currentStyle]} {t(STYLE_LABEL_KEY[currentStyle]) as string}
+                  {STYLE_ICON[currentStyle]} {getStyleLabel(currentStyle, t)}
                   <span style={{ margin: '0 6px', color: 'rgba(255,255,255,0.15)' }}>·</span>
                   {tmpl.shot_count ?? 4} {t('ltm_shots_suffix') as string}
-                  {currentStyle === '4R' && (
+                  {currentStyle !== '2_STRIPE' && (
                     <>
                       <span style={{ margin: '0 6px', color: 'rgba(255,255,255,0.15)' }}>·</span>
                       {currentOrientation}
@@ -269,8 +279,8 @@ export function LocalTemplateManager({ onRefreshTemplates }: Props) {
                   <span style={{ fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', fontWeight: 700, display: 'block', marginBottom: 8 }}>
                     {t('ltm_step1') as string}
                   </span>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    {(['4R', '2_STRIPE'] as PrintStyle[]).map(style => {
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+                    {(['4R', '2_STRIPE', 'A4', 'A3'] as PrintStyle[]).map(style => {
                       const active = currentStyle === style
                       return (
                         <button
@@ -280,8 +290,8 @@ export function LocalTemplateManager({ onRefreshTemplates }: Props) {
                             updateTemplate(tmpl.id, { print_size: newSize, layout_config: null })
                           }}
                           style={{
-                            flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-                            padding: '14px 10px', borderRadius: 10,
+                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                            padding: '14px 8px', borderRadius: 10,
                             background: active ? 'rgba(124,58,237,0.18)' : 'rgba(255,255,255,0.04)',
                             border: active ? '1.5px solid rgba(124,58,237,0.6)' : '1.5px solid rgba(255,255,255,0.08)',
                             color: '#fff', cursor: 'pointer',
@@ -289,16 +299,16 @@ export function LocalTemplateManager({ onRefreshTemplates }: Props) {
                           }}
                         >
                           <span style={{ fontSize: 22 }}>{STYLE_ICON[style]}</span>
-                          <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600 }}>{t(STYLE_LABEL_KEY[style]) as string}</span>
-                          <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', textAlign: 'center', lineHeight: 1.3 }}>{t(STYLE_DESC_KEY[style]) as string}</span>
+                          <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600 }}>{getStyleLabel(style, t)}</span>
+                          <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', textAlign: 'center', lineHeight: 1.3 }}>{getStyleDesc(style, t)}</span>
                         </button>
                       )
                     })}
                   </div>
                 </div>
 
-                {/* ── 4R: Orientation toggle ─────────────────────── */}
-                {currentStyle === '4R' && (
+                {/* ── Orientation toggle (4R, A4, A3) ─────────────────────── */}
+                {currentStyle !== '2_STRIPE' && (
                   <div>
                     <span style={{ fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', fontWeight: 700, display: 'block', marginBottom: 8 }}>
                       {t('ltm_orientation') as string}
@@ -310,7 +320,7 @@ export function LocalTemplateManager({ onRefreshTemplates }: Props) {
                           <button
                             key={ori}
                             onClick={() => {
-                              updateTemplate(tmpl.id, { print_size: derivePrintSize('4R', ori), layout_config: null })
+                              updateTemplate(tmpl.id, { print_size: derivePrintSize(currentStyle, ori), layout_config: null })
                             }}
                             style={{
                               flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
@@ -371,7 +381,7 @@ export function LocalTemplateManager({ onRefreshTemplates }: Props) {
                   fontSize: 11, color: 'rgba(255,255,255,0.5)', fontVariantNumeric: 'tabular-nums',
                 }}>
                   <strong style={{ color: '#fff', fontWeight: 600 }}>
-                    {currentStyle === '2_STRIPE' ? '2 Stripe (2R)' : `4R ${currentOrientation}`}
+                    {currentStyle === '2_STRIPE' ? '2 Stripe (2R)' : `${currentStyle} ${currentOrientation}`}
                   </strong>
                   {canvas.w} × {canvas.h} px
                   <span style={{ color: 'rgba(255,255,255,0.3)' }}>@ 300dpi</span>

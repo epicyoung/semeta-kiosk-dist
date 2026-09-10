@@ -7,6 +7,8 @@
 //    dulu jatuh ke timeout yang resolve TANPA manggil print() (gejala: ga keluar apa-apa).
 //    Sekarang: tunggu img.decode() (cap 10s), lalu print() SELALU dipanggil.
 
+import type { PrintSize } from './types'
+
 const FRAME_ID = 'semeta-print-frame'
 const DECODE_TIMEOUT_MS = 10_000 // decode nyangkut 10s → print aja, halaman telat lebih baik daripada ga keluar
 
@@ -31,15 +33,66 @@ async function toDataUrl(url: string): Promise<string> {
   })
 }
 
+/** Baca orientasi & dimensi foto dari dataURL. */
+function readImageSpec(dataUrl: string): Promise<{ orient: 'portrait' | 'landscape'; width: number; height: number }> {
+  return new Promise(resolve => {
+    const im = new Image()
+    im.onload = () => resolve({
+      orient: im.naturalWidth > im.naturalHeight ? 'landscape' : 'portrait',
+      width: im.naturalWidth,
+      height: im.naturalHeight,
+    })
+    im.onerror = () => resolve({ orient: 'portrait', width: 1200, height: 1800 })
+    im.src = dataUrl
+  })
+}
+
+/** Tentukan CSS @page size dan dimensi img berdasarkan paperSize atau rasio gambar. */
+export function resolvePageStyle(
+  spec: { orient: 'portrait' | 'landscape'; width: number; height: number },
+  paperSize?: PrintSize
+): { page: string; imgSize: string } {
+  let size = paperSize
+
+  // Auto-detect jika paperSize tidak disuplai secara eksplisit
+  if (!size) {
+    const maxD = Math.max(spec.width, spec.height)
+    const minD = Math.min(spec.width, spec.height)
+    const ratio = minD / (maxD || 1)
+    // Rasio ISO 216 A-series (1 : √2) ≈ 0.707 (toleransi 0.68 - 0.73)
+    if (ratio > 0.68 && ratio < 0.73) {
+      if (maxD > 4200) {
+        size = spec.orient === 'landscape' ? 'A3_LANDSCAPE' : 'A3_PORTRAIT'
+      } else {
+        size = spec.orient === 'landscape' ? 'A4_LANDSCAPE' : 'A4_PORTRAIT'
+      }
+    }
+  }
+
+  if (size === 'A4_PORTRAIT') {
+    return { page: 'A4 portrait', imgSize: 'width:210mm;height:297mm' }
+  }
+  if (size === 'A4_LANDSCAPE') {
+    return { page: 'A4 landscape', imgSize: 'width:297mm;height:210mm' }
+  }
+  if (size === 'A3_PORTRAIT') {
+    return { page: 'A3 portrait', imgSize: 'width:297mm;height:420mm' }
+  }
+  if (size === 'A3_LANDSCAPE') {
+    return { page: 'A3 landscape', imgSize: 'width:420mm;height:297mm' }
+  }
+
+  const isLandscape = size === '4R_LANDSCAPE' || spec.orient === 'landscape'
+  return {
+    page: isLandscape ? '6in 4in' : '4in 6in',
+    imgSize: isLandscape ? 'width:6in;height:4in' : 'width:4in;height:6in',
+  }
+}
+
 /** Baca orientasi foto dari dimensi. Landscape → kertas 6×4, portrait → 4×6.
  *  Biar foto landscape ga ke-crop dipaksa masuk kertas portrait (bug lama). */
 function readOrientation(dataUrl: string): Promise<'portrait' | 'landscape'> {
-  return new Promise(resolve => {
-    const im = new Image()
-    im.onload = () => resolve(im.naturalWidth > im.naturalHeight ? 'landscape' : 'portrait')
-    im.onerror = () => resolve('portrait') // gagal baca → default 4R portrait (perilaku lama)
-    im.src = dataUrl
-  })
+  return readImageSpec(dataUrl).then(s => s.orient)
 }
 
 /** Print ke queue Windows spesifik lewat /api/print (paper size + 2inch cut sudah
@@ -59,15 +112,12 @@ export async function printNative(url: string, copies: number, mode: 'strip2' | 
   }
 }
 
-/** Foto 4R, kertas ikut orientasi foto (portrait 4×6 / landscape 6×4) → landscape ga ke-crop.
+/** Foto 4R, 2R, A4, atau A3; kertas ikut orientasi & ukuran cetak foto.
  *  Print box Chrome boleh muncul — yang haram: print ga keluar. */
-export async function printPhoto(url: string, copies: number): Promise<void> {
+export async function printPhoto(url: string, copies: number, paperSize?: PrintSize): Promise<void> {
   const dataUrl = await toDataUrl(url)
-  const orient = await readOrientation(dataUrl)
-  // Kertas + img sisi panjang ikut orientasi foto. object-fit:cover tetep (strip full-bleed),
-  // tapi rasio kertas ≈ rasio foto → cover ga motong (kecuali foto jauh dari 3:2).
-  const page = orient === 'landscape' ? '6in 4in' : '4in 6in'
-  const imgSize = orient === 'landscape' ? 'width:6in;height:4in' : 'width:4in;height:6in'
+  const spec = await readImageSpec(dataUrl)
+  const { page, imgSize } = resolvePageStyle(spec, paperSize)
   const iframe = getPrintFrame()
   const doc = iframe.contentDocument!
   doc.open()

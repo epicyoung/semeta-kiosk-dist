@@ -17,6 +17,24 @@ export type Rect = { x: number; y: number; w: number; h: number; r?: number }
 export const CANVAS_4R_PORTRAIT = { w: 1200, h: 1800 } // 4×6in portrait
 export const CANVAS_4R_LANDSCAPE = { w: 1800, h: 1200 } // 6×4in landscape
 export const PANEL_2R_STRIP = { w: 600, h: 1800 }   // 2×6in portrait (satu panel)
+export const CANVAS_A4_PORTRAIT = { w: 2480, h: 3508 } // A4 portrait @300dpi (210×297mm)
+export const CANVAS_A4_LANDSCAPE = { w: 3508, h: 2480 } // A4 landscape @300dpi (297×210mm)
+export const CANVAS_A3_PORTRAIT = { w: 3508, h: 4960 } // A3 portrait @300dpi (297×420mm)
+export const CANVAS_A3_LANDSCAPE = { w: 4960, h: 3508 } // A3 landscape @300dpi (420×297mm)
+
+export function canvasForPrintSize(size: PrintSize): { w: number; h: number } {
+  switch (size) {
+    case '4R_LANDSCAPE': return CANVAS_4R_LANDSCAPE
+    case '2R_STRIP': return PANEL_2R_STRIP
+    case 'A4_PORTRAIT': return CANVAS_A4_PORTRAIT
+    case 'A4_LANDSCAPE': return CANVAS_A4_LANDSCAPE
+    case 'A3_PORTRAIT': return CANVAS_A3_PORTRAIT
+    case 'A3_LANDSCAPE': return CANVAS_A3_LANDSCAPE
+    case '4R_PORTRAIT':
+    default:
+      return CANVAS_4R_PORTRAIT
+  }
+}
 
 /** Jumlah slot yang dirender StripComposer buat satu mode. SATU sumber kebenaran: dipakai
  *  buat render, hitung slot kepakai, DAN pas pindah tab. Dulu dua tempat ngitung sendiri-sendiri
@@ -67,7 +85,7 @@ export function layoutSlots(
   ai4rLayout?: Ai4RLayout
 ): { canvas: { w: number; h: number }; slots: Rect[] } {
   if (customLayout?.slots) {
-    return { canvas: size === '4R_LANDSCAPE' ? CANVAS_4R_LANDSCAPE : size === '2R_STRIP' ? PANEL_2R_STRIP : CANVAS_4R_PORTRAIT, slots: customLayout.slots }
+    return { canvas: canvasForPrintSize(size), slots: customLayout.slots }
   }
 
   if (size === '4R_PORTRAIT' && ai4rLayout) {
@@ -165,15 +183,10 @@ export function layoutSlots(
   }
 
   const n = Math.min(4, Math.max(1, Math.trunc(shots) || 1))
-  let canvas = CANVAS_4R_PORTRAIT
-  let gridConfig = GRID_4R_P
-  if (size === '4R_LANDSCAPE') {
-    canvas = CANVAS_4R_LANDSCAPE
-    gridConfig = GRID_4R_L
-  } else if (size === '2R_STRIP') {
-    canvas = PANEL_2R_STRIP
-    gridConfig = GRID_2R_S
-  }
+  const canvas = canvasForPrintSize(size)
+  const isLandscape = size === '4R_LANDSCAPE' || size === 'A4_LANDSCAPE' || size === 'A3_LANDSCAPE'
+  const isStrip = size === '2R_STRIP'
+  const gridConfig = isStrip ? GRID_2R_S : isLandscape ? GRID_4R_L : GRID_4R_P
 
   const [cols, rows] = gridConfig[n]
   return { canvas, slots: grid(cols, rows, canvas.w, canvas.h).slice(0, n) }

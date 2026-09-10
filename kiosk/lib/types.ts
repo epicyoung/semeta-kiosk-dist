@@ -3,8 +3,15 @@ import type { LockReason } from './license'
 export type EngineType = 'faceswap' | 'fullbody' | 'api' | 'comfy' | 'print'
 export type GenderFilter = 'MAN' | 'WOMEN' | 'HIJAB' | 'ALL'
 
-// Photo Print (non-AI). 2R selalu dicetak 2-up di kertas 4R — printer gak pernah ganti media.
-export type PrintSize = '4R_PORTRAIT' | '4R_LANDSCAPE' | '2R_STRIP'
+// Photo Print (non-AI). 2R selalu dicetak 2-up di kertas 4R; A4 dan A3 mendukung portrait & landscape.
+export type PrintSize =
+  | '4R_PORTRAIT'
+  | '4R_LANDSCAPE'
+  | '2R_STRIP'
+  | 'A4_PORTRAIT'
+  | 'A4_LANDSCAPE'
+  | 'A3_PORTRAIT'
+  | 'A3_LANDSCAPE'
 
 export type ComfyModelFamily = 'sd15' | 'sdxl' | 'flux'
 export type ComfyControlnetMode = 'canny' | 'depth' | 'off'

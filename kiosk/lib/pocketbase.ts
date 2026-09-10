@@ -88,7 +88,7 @@ export function mapPbTemplate(pbUrl: string, item: Record<string, unknown>): Tem
     // Engine 'print' only — unset di PB = null (kiosk pakai default 4 shot / 4R).
     // Clamp ≤6 kayak sidecar — PB Admin bisa diedit tangan, typo 40 jangan jadi 40 jepretan.
     shot_count: Number(item.shot_count) > 0 ? Math.min(6, Math.trunc(Number(item.shot_count))) : null,
-    print_size: (['4R_PORTRAIT', '4R_LANDSCAPE', '2R_STRIP'] as const).includes(String(item.print_size) as PrintSize) ? (item.print_size as PrintSize) : null,
+    print_size: (['4R_PORTRAIT', '4R_LANDSCAPE', '2R_STRIP', 'A4_PORTRAIT', 'A4_LANDSCAPE', 'A3_PORTRAIT', 'A3_LANDSCAPE'] as const).includes(String(item.print_size) as PrintSize) ? (item.print_size as PrintSize) : null,
     overlay_url: overlay ? `${pbUrl}/api/files/templates/${String(item.id)}/${overlay}` : null,
     // Engine 'api' — unset di PB = null/[] (template lain gak kesentuh sama sekali).
     api_model: (item.api_model as string) || null,

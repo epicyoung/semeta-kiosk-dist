@@ -177,21 +177,19 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource }: Props) {
 
   const quarter = rotation === 90 || rotation === 270
   const printSize = state.template.print_size || '4R_PORTRAIT'
-  const isLandscapePrint = printSize === '4R_LANDSCAPE'
+  const isLandscapePrint = printSize === '4R_LANDSCAPE' || printSize === 'A4_LANDSCAPE' || printSize === 'A3_LANDSCAPE'
   const isPrint = state.template.engine_type === 'print'
 
-  const { slots } = layoutSlots(printSize, target, state.template.layout_config)
+  const { canvas, slots } = layoutSlots(printSize, target, state.template.layout_config)
   const cellIsLandscape = slots[0] ? slots[0].w >= slots[0].h : true
 
   // During review (done), match full paper aspect ratio.
   // During single shot capture or preview (!done), match individual cell aspect ratio.
-  const boxClass = done
-    ? (isLandscapePrint
-        ? 'aspect-[3/2] w-full max-w-full h-auto max-h-full'
-        : 'aspect-[2/3] w-[500px] max-w-full max-h-full h-auto')
-    : (cellIsLandscape
-        ? 'aspect-[3/2] w-full max-w-full h-auto max-h-full'
-        : 'aspect-[2/3] w-[500px] max-w-full max-h-full h-auto')
+  const activeIsLandscape = done ? isLandscapePrint : cellIsLandscape
+  const boxClass = activeIsLandscape
+    ? 'w-full max-w-full h-auto max-h-full'
+    : 'w-[500px] max-w-full max-h-full h-auto'
+  const activeAspect = done ? `${canvas.w} / ${canvas.h}` : (slots[0] ? `${slots[0].w} / ${slots[0].h}` : (cellIsLandscape ? '3 / 2' : '2 / 3'))
 
   const liveStyle: CSSProperties = {
     display: (done || isReviewingPending) ? 'none' : 'block',
@@ -224,7 +222,7 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource }: Props) {
           <div
             ref={containerRef}
             className={`relative overflow-hidden rounded-2xl shadow-2xl ring-1 ring-white/10 ${boxClass}`}
-            style={{ background: '#000' }}
+            style={{ background: '#000', aspectRatio: activeAspect }}
           >
             {!done && !isReviewingPending && (
               isCanon ? (

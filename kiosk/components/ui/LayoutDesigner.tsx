@@ -3,7 +3,7 @@ import { useState, useEffect, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import Moveable from 'react-moveable'
 import type { Template, PrintSize } from '@/lib/types'
-import { CANVAS_4R_PORTRAIT, CANVAS_4R_LANDSCAPE, PANEL_2R_STRIP, layoutSlots } from '@/lib/print-layout'
+import { CANVAS_4R_PORTRAIT, CANVAS_4R_LANDSCAPE, PANEL_2R_STRIP, layoutSlots, canvasForPrintSize } from '@/lib/print-layout'
 
 type Slot = { x: number; y: number; w: number; h: number; r?: number }
 type Props = {
@@ -25,6 +25,10 @@ const SIZE_LABEL: Record<PrintSize, string> = {
   '4R_PORTRAIT': '4R Portrait',
   '4R_LANDSCAPE': '4R Landscape',
   '2R_STRIP': '2 Stripe',
+  'A4_PORTRAIT': 'A4 Portrait',
+  'A4_LANDSCAPE': 'A4 Landscape',
+  'A3_PORTRAIT': 'A3 Portrait',
+  'A3_LANDSCAPE': 'A3 Landscape',
 }
 
 export function LayoutDesigner({ template, onSave, onClose }: Props) {
@@ -35,15 +39,12 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
   const size: PrintSize = template.print_size || '4R_PORTRAIT'
   const is2Stripe = size === '2R_STRIP'
 
+  const fullCanvas = canvasForPrintSize(size)
   // 2 Stripe: edit on the LEFT panel (600×1800) but DISPLAY the full 4R sheet (1200×1800)
   // with a center dividing line and right side mirrored. Slots saved relative to panel (600w).
-  const editDims = is2Stripe ? PANEL_2R_STRIP :
-                   size === '4R_LANDSCAPE' ? CANVAS_4R_LANDSCAPE :
-                   CANVAS_4R_PORTRAIT
+  const editDims = is2Stripe ? PANEL_2R_STRIP : fullCanvas
   // Display: 2 Stripe shows full 4R sheet
-  const displayDims = is2Stripe ? CANVAS_4R_PORTRAIT :
-                      size === '4R_LANDSCAPE' ? CANVAS_4R_LANDSCAPE :
-                      CANVAS_4R_PORTRAIT
+  const displayDims = is2Stripe ? CANVAS_4R_PORTRAIT : fullCanvas
 
   const [scale, setScale] = useState(500 / displayDims.h)
   const displayW = displayDims.w * scale
@@ -101,8 +102,8 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
   }, [])
 
   const handleAddSlot = () => {
-    if (slots.length >= 6) return
-    const newSlotH = is2Stripe ? 400 : 350
+    if (slots.length >= 8) return
+    const newSlotH = is2Stripe ? 400 : Math.round(editDims.h * 0.22)
     const newSlotY = slots.length > 0
       ? Math.min(editDims.h - newSlotH - 40, Math.max(...slots.map(s => s.y + s.h)) + 20)
       : 50
@@ -203,7 +204,7 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
         padding: '16px 28px',
         display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap',
       }}>
-        <button onClick={handleAddSlot} disabled={slots.length >= 6} style={pillBtn(false, false, slots.length >= 6)}>
+        <button onClick={handleAddSlot} disabled={slots.length >= 8} style={pillBtn(false, false, slots.length >= 8)}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" y1="5" x2="12" y2="19" />
             <line x1="5" y1="12" x2="19" y2="12" />

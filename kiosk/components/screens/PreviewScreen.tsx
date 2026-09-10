@@ -519,12 +519,18 @@ export function PreviewScreen({
       console.warn("[print] composite frame gagal, print foto polos:", err);
     }
     const isStrip = state.screen === "preview" && state.printSize === "2R_STRIP";
+    const isIsoA = state.screen === "preview" && (
+      state.printSize === "A4_PORTRAIT" ||
+      state.printSize === "A4_LANDSCAPE" ||
+      state.printSize === "A3_PORTRAIT" ||
+      state.printSize === "A3_LANDSCAPE"
+    );
 
-    // Jalur 1 — queue DNP khusus (RX1-STRIP paper 2x6 + 2inch Cut). Driver yang duplikat
-    // jadi 2-up dan motong sendiri, jadi kirim SATU panel, bukan sheet 2-up.
-    // ponytail: kalau driver ternyata minta job 4R utuh, pindahin baris ini ke BAWAH blok
-    // to2UpSheet dan set queue-nya ke paper 4x6 + 2inch Cut.
-    if (await printNative(out, copies, isStrip ? "strip2" : "print4r")) return;
+    // Jalur 1 — queue DNP khusus (RX1-STRIP paper 2x6 + 2inch Cut / RX1-4R paper 4x6).
+    // Media A4/A3 bukan media printer roll dye-sub RX1, langsung ke printPhoto (window.print())
+    if (!isIsoA) {
+      if (await printNative(out, copies, isStrip ? "strip2" : "print4r")) return;
+    }
 
     // Jalur 2 (fallback, perilaku lama) — queue belum ke-install / route gagal.
     // 2R: konten digital = satu panel landscape — kertas fisik dibangun 2-up di 4R
@@ -536,7 +542,7 @@ export function PreviewScreen({
         console.warn("[print] 2-up sheet gagal, print panel polos:", err);
       }
     }
-    await printPhoto(out, copies);
+    await printPhoto(out, copies, state.screen === "preview" ? state.printSize : undefined);
   }
 
   // ── Strip 2R dari hasil AI ────────────────────────────────────────────────────
