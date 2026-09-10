@@ -114,8 +114,8 @@ export function PrintLayoutPreview({ template, shots, containerWidth, containerH
                   inset: 0,
                   width: '100%',
                   height: '100%',
-                  // cover, samain sama coverFit di print-layout & composer (#slot-align)
-                  objectFit: 'cover',
+                  // Match the complete overlay in Layout Studio and print output.
+                  objectFit: 'contain',
                   pointerEvents: 'none'
                 }}
               />

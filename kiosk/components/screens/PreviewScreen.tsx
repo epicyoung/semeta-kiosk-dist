@@ -10,14 +10,14 @@ import {
   type OrientedFrame,
   type Orientation,
 } from "@/lib/frames";
-import { printPhoto, printNative } from "@/lib/print";
+import { printPhoto, printNative, preparePrintImage } from "@/lib/print";
 import { compositeFrame } from "@/lib/frame-composite";
 import { burnWatermark } from "@/lib/watermark-canvas";
 import { to2UpSheet, composePrintLayout, compose2UpSheet, type SlotTransform } from "@/lib/print-layout";
 import { buildStripPool, stripSlotCount } from "@/lib/strip-pool";
 import { StripComposer } from "@/components/ui/StripComposer";
 import type { StripSource } from "@/lib/strip-pool";
-import { uploadAsset, blobUrlToDataUrl, uploadLocalFile } from "@/lib/upload";
+import { uploadAsset, blobUrlToDataUrl, uploadLocalFile, resizeDataUrl } from "@/lib/upload";
 import { planMultiUpload } from "@/lib/multi-upload";
 import { swapFace, isFaceServerAlive } from "@/lib/faceswap";
 import { refineResult } from "@/lib/refine-result";
@@ -28,7 +28,7 @@ import { useMagicCatcher } from "@/lib/use-magic-catcher";
 import { useT } from "@/lib/i18n";
 
 // QR yang kepampang terus di atas foto. Kecil aja — ini pintu masuk, ketuk buat gedein.
-const QR_INLINE_SIZE = 85;
+const QR_INLINE_SIZE = 120;
 
 // Original tambahan (_A2.._A4) di luar jepretan pertama. Ceiling-nya ikut microsite, yang
 // cuma nge-render sampai _A4 — naikin ini WAJIB barengan sama loop di microsite/functions/s.
@@ -352,6 +352,23 @@ export function PreviewScreen({
     }
   }, [config.video_provider, config.video_resolution]);
 
+  const printOverlayUrl = isPrintSession
+    ? config.templates.find(template => template.id === state.templateId)?.overlay_url
+    : undefined;
+  const sessionPrintSize = state.screen === "preview" ? state.printSize : undefined;
+  const [printPreview, setPrintPreview] = useState<{ source: string; url: string; w: number; h: number } | null>(null);
+  useEffect(() => {
+    if (!isPrintSession) return;
+    let cancelled = false;
+    preparePrintImage(activeResult.aiUrl, sessionPrintSize, printOverlayUrl, 1200)
+      .then(async result => {
+        const url = await resizeDataUrl(result.dataUrl, 1200);
+        if (!cancelled) setPrintPreview({ source: activeResult.aiUrl, url, w: result.spec.width, h: result.spec.height });
+      }).catch(err => console.error("[print preview]", err));
+    return () => { cancelled = true; };
+  }, [isPrintSession, activeResult.aiUrl, sessionPrintSize, printOverlayUrl]);
+  const readyPrintPreview = isPrintSession && printPreview?.source === activeResult.aiUrl ? printPreview : null;
+
   const origOrientation = origDims
     ? orientationOf(origDims.w, origDims.h)
     : "portrait";
@@ -359,7 +376,7 @@ export function PreviewScreen({
   // Orientasi foto yang LAGI tampil (AI atau Original) → box + frame ikut ini. Ini yang bikin
   // template LANDSCAPE → hasil landscape beneran (dulu native cuma buat Ori-mismatch & print).
   const shownOrientation = showOriginal ? origOrientation : aiOrientation;
-  const shownDims = showOriginal ? origDims : aiDims;
+  const shownDims = readyPrintPreview ?? (showOriginal ? origDims : aiDims);
   // Frame buat orientasi tertentu: portrait → currentFrame (pool picker selalu portrait),
   // landscape → frame landscape pertama. Ga ada frame seorientasi = null (foto polos, uncrop).
   const frameForOrientation = (o: Orientation): OrientedFrame | null =>
@@ -372,7 +389,7 @@ export function PreviewScreen({
     : frameForOrientation(shownOrientation);
   // Box snap ke aspect asli pas foto tampil landscape → zero crop (AI landscape, Ori mismatch, panel print 2R).
   const shownNative =
-    activeTab === "photo" && !!shownDims && shownDims.w > shownDims.h;
+    activeTab === "photo" && !!shownDims && (isPrintSession || shownDims.w > shownDims.h);
 
   const printUrl = showOriginal ? activeResult.originalUrl : activeResult.aiUrl;
 
@@ -542,7 +559,10 @@ export function PreviewScreen({
         console.warn("[print] 2-up sheet gagal, print panel polos:", err);
       }
     }
-    await printPhoto(out, copies, state.screen === "preview" ? state.printSize : undefined);
+    const printTemplate = state.screen === "preview"
+      ? config.templates.find(template => template.id === state.templateId)
+      : undefined;
+    await printPhoto(out, copies, state.screen === "preview" ? state.printSize : undefined, printTemplate?.overlay_url);
   }
 
   // ── Strip 2R dari hasil AI ────────────────────────────────────────────────────
@@ -645,7 +665,8 @@ export function PreviewScreen({
     }
   }
 
-  function handlePrintBtn() {
+  async function handlePrintBtn() {
+    if (printing) return;
     if (qty === null) {
       setQty(1);
       return;
@@ -653,12 +674,17 @@ export function PreviewScreen({
     setPrinting(true);
     setQty(null);
     onAction?.("printed");
-    doPrint(printUrl, visibleFrame?.url ?? null, qty ?? 1);
+    try {
+      await doPrint(printUrl, visibleFrame?.url ?? null, qty ?? 1);
+    } catch (err) {
+      console.error("[print] failed:", err);
+      window.alert("Print gagal dibuka. Silakan coba lagi.");
+    } finally {
+      // Print templates do not always render the animated photo layer.
+      // Release controls after print returns, including cancel and failure.
+      setPrinting(false);
+    }
   }
-  function onPrintAnimEnd() {
-    setPrinting(false);
-  }
-
   function handleEmailBtn() {
     setEmailMode(true);
     setTimeout(() => inputRef.current?.focus(), 50);
@@ -818,7 +844,8 @@ export function PreviewScreen({
         if (isPrintSession) {
           // Classic Print: Hanya upload _B (strip foto yang sudah di-frame).
           // Skip _A (foto mentah) supaya microsite tidak menampilkan tab ASLI.
-          const framedB = await compositeFrame(rawAi, currentFrame?.url ?? null, 1200);
+          const prepared = await preparePrintImage(rawAi, sessionPrintSize, printOverlayUrl, 1200);
+          const framedB = await resizeDataUrl(prepared.dataUrl, 1200);
           resB = await uploadAsset(framedB, "B", base, { ...meta, mCount: 0 });
         } else {
           const [framedA, framedB] = await Promise.all([
@@ -1217,7 +1244,6 @@ export function PreviewScreen({
                     : undefined,
                 }}
                 onClick={zoomIndex !== null ? exitZoom : undefined}
-                onAnimationEnd={onPrintAnimEnd}
               >
                 {isGridView ? (
                   <div className="absolute inset-0 grid grid-cols-2 gap-0.5 bg-[#111]">
@@ -1250,7 +1276,7 @@ export function PreviewScreen({
                         Frame tetep render (di bawah) biar bentuk sigil kepilih keliatan. */}
                     {!isChoose && displayResult.aiUrl ? (
                       <img
-                        src={displayResult.aiUrl}
+                        src={readyPrintPreview?.url ?? displayResult.aiUrl}
                         alt="AI result"
                         className="absolute inset-0 w-full h-full object-cover"
                       />

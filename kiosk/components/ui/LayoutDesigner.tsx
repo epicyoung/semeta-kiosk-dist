@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, type CSSProperties } from 'react'
+import { useState, useEffect, useRef, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import Moveable from 'react-moveable'
 import type { Template, PrintSize } from '@/lib/types'
@@ -35,6 +35,9 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
   const [slots, setSlots] = useState<Slot[]>(template.layout_config?.slots || [])
   const [selectedSlotIndex, setSelectedSlotIndex] = useState<number | null>(null)
   const [target, setTarget] = useState<HTMLElement | null>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
+  const moveableRef = useRef<Moveable>(null)
+  const [shotRatio, setShotRatio] = useState(3 / 2)
 
   const size: PrintSize = template.print_size || '4R_PORTRAIT'
   const is2Stripe = size === '2R_STRIP'
@@ -53,16 +56,21 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
   const panelW = is2Stripe ? editDims.w * scale : displayW
 
   useEffect(() => {
-    // Fit the paper to the viewport, leaving room for header + toolbar chrome.
+    const stage = stageRef.current
+    if (!stage) return
+    // Measure the actual remaining space, including wrapped toolbars and browser zoom.
     const calculateScale = () => {
-      const availableHeight = window.innerHeight - 260
-      const availableWidth = window.innerWidth - 120
+      const availableHeight = Math.max(1, stage.clientHeight - 64)
+      const availableWidth = Math.max(1, stage.clientWidth - 64)
       setScale(Math.min(availableHeight / displayDims.h, availableWidth / displayDims.w))
     }
     calculateScale()
-    window.addEventListener('resize', calculateScale)
-    return () => window.removeEventListener('resize', calculateScale)
+    const observer = new ResizeObserver(calculateScale)
+    observer.observe(stage)
+    return () => observer.disconnect()
   }, [displayDims.w, displayDims.h])
+
+  useEffect(() => { moveableRef.current?.updateRect() }, [scale, slots])
 
   const generateDefaultSlots = (): Slot[] => {
     const n = template.shot_count || 4
@@ -97,17 +105,30 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
   }, [template.overlay_url])
 
   useEffect(() => {
-    if (slots.length === 0) setSlots(generateDefaultSlots())
+    if (slots.length === 0) setSlots(generateDefaultSlots().map(slot => fitShotRatio(slot, shotRatio)))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const fitShotRatio = (slot: Slot, ratio: number): Slot => {
+    const w = Math.min(slot.w, editDims.w, editDims.h * ratio)
+    const h = w / ratio
+    return { ...slot, w, h,
+      x: Math.max(0, Math.min(slot.x, editDims.w - w)),
+      y: Math.max(0, Math.min(slot.y, editDims.h - h)),
+    }
+  }
+
+  const chooseShotRatio = (ratio: number) => {
+    setShotRatio(ratio)
+    setSlots(current => current.map((slot, i) =>
+      selectedSlotIndex === null || i === selectedSlotIndex ? fitShotRatio(slot, ratio) : slot))
+  }
+
   const handleAddSlot = () => {
     if (slots.length >= 8) return
-    const newSlotH = is2Stripe ? 400 : Math.round(editDims.h * 0.22)
-    const newSlotY = slots.length > 0
-      ? Math.min(editDims.h - newSlotH - 40, Math.max(...slots.map(s => s.y + s.h)) + 20)
-      : 50
-    setSlots([...slots, { x: 40, y: newSlotY, w: editDims.w - 80, h: newSlotH, r: 0 }])
+    const w = Math.min(editDims.w * 0.6, editDims.h * 0.4 * shotRatio)
+    const slot = fitShotRatio({ x: (editDims.w - w) / 2, y: 40, w, h: w / shotRatio, r: 0 }, shotRatio)
+    setSlots([...slots, slot])
   }
 
   const handleDeleteSlot = () => {
@@ -118,7 +139,7 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
   }
 
   const handleReset = () => {
-    setSlots(generateDefaultSlots())
+    setSlots(generateDefaultSlots().map(slot => fitShotRatio(slot, shotRatio)))
     setSelectedSlotIndex(null)
     setTarget(null)
   }
@@ -224,6 +245,12 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
           Reset
         </button>
 
+        <button onClick={() => chooseShotRatio(3 / 2)} aria-pressed={shotRatio === 3 / 2} style={pillBtn(shotRatio === 3 / 2)}>
+          3:2 Landscape
+        </button>
+        <button onClick={() => chooseShotRatio(2 / 3)} aria-pressed={shotRatio === 2 / 3} style={pillBtn(shotRatio === 2 / 3)}>
+          2:3 Portrait
+        </button>
         <span style={{ width: 1, height: 28, background: GLASS_LINE, margin: '0 4px' }} />
 
         {/* Live paper spec — the real print dimensions, always visible */}
@@ -243,7 +270,7 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
       </div>
 
       {/* Canvas stage */}
-      <div style={{ position: 'relative', zIndex: 1, flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: 24 }}>
+      <div ref={stageRef} style={{ position: 'relative', zIndex: 1, flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', padding: 24 }}>
         <div style={{ position: 'relative' }}>
           {/* Paper — the full display sheet */}
           <div
@@ -255,7 +282,7 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
               boxShadow: '0 40px 80px -24px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.08)',
               outline: `1px solid ${GLASS_LINE}`,
               outlineOffset: 8,
-              overflow: 'hidden',
+              overflow: 'visible',
             }}
             onClick={(e) => { if (e.target === e.currentTarget) clearSelection() }}
           >
@@ -280,13 +307,8 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
                 left: 0, top: 0,
                 width: is2Stripe ? panelW : displayW, height: displayH,
                 backgroundImage: `url(${template.overlay_url})`,
-                // WAJIB cover, BUKAN contain. Cetakan asli nempatin overlay pakai coverFit
-                // (print-layout.ts composePrintLayout) dan composer pakai object-cover — kalau
-                // designer nampilin 'contain', overlay yang rasionya beda dikit dari kanvas
-                // tampil MENGECIL di sini. Slot digambar relatif ke kanvas penuh, jadi yang
-                // keliatan pas di designer meleset pas dipakai: foto nabrak bingkai, nutupin
-                // logo. Tiga tempat ini harus sepakat satu cara skala.
-                backgroundSize: is2Stripe ? `${panelW}px ${displayH}px` : 'cover',
+                // Keep the complete overlay visible; match preview and print composition.
+                backgroundSize: is2Stripe ? `${panelW}px ${displayH}px` : 'contain',
                 backgroundRepeat: 'no-repeat',
                 backgroundPosition: 'center',
                 pointerEvents: 'none', zIndex: 5,
@@ -317,6 +339,7 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
                   className={`slot-target-${i}`}
                   onClick={() => {
                     setSelectedSlotIndex(i)
+                    updateSlot(i, fitShotRatio(slot, shotRatio))
                     setTarget(document.querySelector(`.slot-target-${i}`) as HTMLElement)
                   }}
                   style={{
@@ -422,8 +445,9 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
 
             {target && selectedSlotIndex !== null && (
               <Moveable
+                ref={moveableRef}
                 target={target}
-                draggable resizable keepRatio rotatable snappable
+                draggable resizable keepRatio={true} rotatable snappable
                 bounds={{ left: 0, top: 0, right: is2Stripe ? panelW : displayW, bottom: displayH }}
                 onDrag={e => { e.target.style.transform = e.transform }}
                 onDragEnd={e => {

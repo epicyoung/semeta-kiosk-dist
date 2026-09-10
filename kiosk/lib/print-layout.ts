@@ -484,7 +484,12 @@ export async function composePrintLayout(
       const halfW = overlay.naturalWidth / 2
       ctx.drawImage(overlay, 0, 0, halfW, overlay.naturalHeight, 0, 0, dims.w, dims.h)
     } else {
-      const f = coverFit(overlay.naturalWidth, overlay.naturalHeight, dims.w, dims.h)
+      const overlayScale = size === '2R_STRIP'
+        ? Math.max(dims.w / overlay.naturalWidth, dims.h / overlay.naturalHeight)
+        : Math.min(dims.w / overlay.naturalWidth, dims.h / overlay.naturalHeight)
+      const dw = overlay.naturalWidth * overlayScale
+      const dh = overlay.naturalHeight * overlayScale
+      const f = { dx: (dims.w - dw) / 2, dy: (dims.h - dh) / 2, dw, dh }
       ctx.drawImage(overlay, f.dx, f.dy, f.dw, f.dh)
     }
   }

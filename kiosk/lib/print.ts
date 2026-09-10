@@ -114,10 +114,42 @@ export async function printNative(url: string, copies: number, mode: 'strip2' | 
 
 /** Foto 4R, 2R, A4, atau A3; kertas ikut orientasi & ukuran cetak foto.
  *  Print box Chrome boleh muncul — yang haram: print ga keluar. */
-export async function printPhoto(url: string, copies: number, paperSize?: PrintSize): Promise<void> {
-  const dataUrl = await toDataUrl(url)
-  const spec = await readImageSpec(dataUrl)
-  const { page, imgSize } = resolvePageStyle(spec, paperSize)
+export async function preparePrintImage(url: string, paperSize?: PrintSize, overlayUrl?: string | null, maxEdge?: number) {
+  let dataUrl = await toDataUrl(url)
+  let spec = await readImageSpec(dataUrl)
+  // ISO templates may have a portrait overlay centered on an older landscape canvas.
+  // Print the overlay's actual region in its orientation, preserving slot alignment.
+  if (overlayUrl && (paperSize?.startsWith('A3_') || paperSize?.startsWith('A4_'))) {
+    const overlaySpec = await readImageSpec(await toDataUrl(overlayUrl))
+    if (overlaySpec.orient !== spec.orient) {
+      const fit = Math.min(spec.width / overlaySpec.width, spec.height / overlaySpec.height)
+      const width = overlaySpec.width * fit
+      const height = overlaySpec.height * fit
+      const source = new Image()
+      await new Promise<void>((resolve, reject) => {
+        source.onload = () => resolve()
+        source.onerror = () => reject(new Error('Print image could not be loaded'))
+        source.src = dataUrl
+      })
+      const canvas = document.createElement('canvas')
+      const outputScale = maxEdge ? Math.min(1, maxEdge / Math.max(width, height)) : 1
+      canvas.width = Math.round(width * outputScale)
+      canvas.height = Math.round(height * outputScale)
+      canvas.getContext('2d')!.drawImage(source,
+        (spec.width - width) / 2, (spec.height - height) / 2, width, height,
+        0, 0, canvas.width, canvas.height)
+      dataUrl = canvas.toDataURL('image/jpeg', maxEdge ? 0.88 : 0.95)
+      spec = { orient: overlaySpec.orient, width: canvas.width, height: canvas.height }
+      paperSize = `${paperSize.startsWith('A3_') ? 'A3' : 'A4'}_${spec.orient === 'portrait' ? 'PORTRAIT' : 'LANDSCAPE'}` as PrintSize
+    }
+  }
+  return { dataUrl, spec, paperSize }
+}
+
+export async function printPhoto(url: string, copies: number, paperSize?: PrintSize, overlayUrl?: string | null): Promise<void> {
+  const prepared = await preparePrintImage(url, paperSize, overlayUrl)
+  const { dataUrl, spec } = prepared
+  const { page, imgSize } = resolvePageStyle(spec, prepared.paperSize)
   const iframe = getPrintFrame()
   const doc = iframe.contentDocument!
   doc.open()

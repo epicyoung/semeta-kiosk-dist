@@ -553,7 +553,7 @@ export function StripComposer({
                     <img
                       src={overlay4rUrl}
                       alt="Overlay 4R"
-                      className="absolute inset-0 z-20 h-full w-full object-cover pointer-events-none"
+                      className="absolute inset-0 z-20 h-full w-full object-contain pointer-events-none"
                     />
                   )}
 
