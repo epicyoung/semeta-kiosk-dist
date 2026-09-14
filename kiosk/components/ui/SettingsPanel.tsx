@@ -229,6 +229,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   const [locale,          setLocale]          = useState<Locale>(config.locale ?? 'myth-en')
   const [eventName,       setEventName]       = useState(config.event_name || 'Semeta Event')
   const [outputDir,       setOutputDir]       = useState(config.output_dir || 'C:/semeta')
+  const [dccPath,         setDccPath]         = useState(config.dcc_path || '')
   const [templateSource,  setTemplateSource]  = useState<TemplateSource>(config.template_source ?? 'pocketbase')
   const [pbUrl,           setPbUrl]           = useState(config.pocketbase_url ?? 'http://localhost:8090')
   const [pbStatus,        setPbStatus]        = useState<PbStatus>('idle')
@@ -832,6 +833,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         template_source:   templateSource,
         pocketbase_url:    pbUrl,
         output_dir:        outputDir,
+        dcc_path:          dccPath.trim(),
         locale,
         comfy_model_family: comfyFamily,
         comfy_checkpoint:   comfyCheckpoint,
@@ -889,6 +891,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         template_source:   templateSource,
         pocketbase_url:    pbUrl,
         output_dir:        outputDir,
+        dcc_path:          dccPath.trim(),
         locale,
         comfy_model_family: comfyFamily,
         comfy_checkpoint:   comfyCheckpoint,
@@ -1880,6 +1883,23 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                   <Sel value={camera} options={CAMERA_OPTS} onChange={setCamera} />
                 </div>
               </Row>
+
+              {/* Path exe digiCamControl — cuma relevan buat Canon. Kiosk pakai ini
+                  buat NYALAIN dCC sendiri kalau belum jalan, dan relaunch sesudah
+                  force quit pas dia nge-hang (kejadian kalau dipakai seharian). */}
+              {camera === 'canon' && (
+                <RowHint
+                  label="Lokasi digiCamControl"
+                  hint="Kosongkan kalau instal di lokasi standar. Kiosk otomatis menjalankan ulang bila digiCamControl macet."
+                >
+                  <TextInput
+                    value={dccPath}
+                    onChange={setDccPath}
+                    placeholder="C:/Program Files (x86)/digiCamControl/CameraControl.exe"
+                    mono
+                  />
+                </RowHint>
+              )}
 
               {/* Hitung mundur sebelum jepret. Mati = operator pegang kendali penuh,
                   jepret langsung pas tombol ditekan (flash tetap ada). */}

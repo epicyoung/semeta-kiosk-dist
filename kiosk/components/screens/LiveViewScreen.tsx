@@ -98,7 +98,11 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures, count
     if (isCanon) {
       setCameraReady(true)
       fetch('/api/canon-live', { method: 'POST' }).catch(() => { /* freeze-detect jaring kedua */ })
-      return
+      // Keluar layar ⇒ matiin LV. Sensor Canon nyala terus bikin bodi panas &
+      // batre kekuras padahal ga ada yang difoto. Mount berikutnya nyalain lagi.
+      return () => {
+        fetch('/api/canon-live?off=1', { method: 'POST' }).catch(() => { /* best-effort */ })
+      }
     }
     const el = videoRef.current
     if (!el) return

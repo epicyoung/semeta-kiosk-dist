@@ -177,6 +177,10 @@ export type KioskConfig = {
   // undefined ⇒ 4 (kelakuan lama sebelum dropdown ini ada).
   image_variants?: number
   template_local?: string
+  // Path exe digiCamControl. Dipakai buat NYALAIN dCC sendiri kalau belum jalan,
+  // dan buat relaunch sesudah force quit pas dia nge-hang. Kosong ⇒ lokasi
+  // instal standar. Cuma relevan buat camera_source 'canon'.
+  dcc_path?: string
   template_source?: TemplateSource
   pocketbase_url?: string
   output_dir?: string

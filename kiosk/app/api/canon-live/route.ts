@@ -1,4 +1,9 @@
 import { NextResponse } from 'next/server'
+import { spawn, execFile } from 'child_process'
+import { promisify } from 'util'
+import fs from 'fs'
+import path from 'path'
+import { nextAction, isValidDccPath, DCC_DEFAULT_PATH } from '@/lib/dcc-supervisor'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -36,6 +41,109 @@ async function startLiveView(): Promise<void> {
   }
 }
 
+// ── Supervisor dCC ────────────────────────────────────────────────────────
+// Keputusannya di lib/dcc-supervisor.ts (pure, dites). Di sini eksekusinya.
+
+const EXEC = promisify(execFile)
+
+/** Proses CameraControl.exe lagi jalan? Dipakai buat mutusin launch vs show. */
+async function isDccRunning(): Promise<boolean> {
+  try {
+    const { stdout } = await EXEC('tasklist', ['/FI', 'IMAGENAME eq CameraControl.exe', '/NH'], {
+      windowsHide: true, timeout: 5_000,
+    })
+    return /CameraControl\.exe/i.test(stdout)
+  } catch {
+    // tasklist gagal ⇒ jangan ngaku-ngaku mati; mati palsu bikin spawn dobel.
+    return true
+  }
+}
+
+/** Jalankan dCC, lepas dari proses kiosk (detached) biar ga ikut mati. */
+async function launchDcc(exePath: string): Promise<boolean> {
+  if (!isValidDccPath(exePath)) {
+    console.error('[canon-live] path dCC ga sah, ga dijalankan:', exePath)
+    return false
+  }
+  try {
+    const child = spawn(exePath, [], { detached: true, stdio: 'ignore', windowsHide: false })
+    child.unref()
+    return true
+  } catch (err) {
+    console.error('[canon-live] gagal jalanin dCC:', err)
+    return false
+  }
+}
+
+/** Force quit dCC yang nge-hang. /F wajib — proses hang ga respon permintaan halus. */
+async function killDcc(): Promise<void> {
+  try {
+    await EXEC('taskkill', ['/F', '/IM', 'CameraControl.exe', '/T'], {
+      windowsHide: true, timeout: 8_000,
+    })
+  } catch {
+    // exit code non-nol wajar kalau prosesnya emang udah ga ada.
+  }
+}
+
+let showAttempts = 0
+let lastKillAt = 0
+let supervising = false
+
+/**
+ * Satu putaran supervisi. Dipanggil pas GET nemu masalah (frame ga ada / beku).
+ * Guard `supervising` nahan tumpang-tindih: poll jalan tiap 200ms, tanpa ini
+ * bisa ada lima kill barengan.
+ */
+async function superviseOnce(frameOk: boolean, frozenMs: number): Promise<void> {
+  if (supervising) return
+  supervising = true
+  try {
+    const dccAlive = await isDccRunning()
+    const action = nextAction({
+      dccAlive, frameOk, frozenMs, showAttempts, lastKillAt, now: Date.now(),
+    })
+
+    switch (action) {
+      case 'show':
+        showAttempts += 1
+        await startLiveView()
+        break
+      case 'kill':
+        console.warn('[canon-live] dCC ga pulih sesudah', showAttempts, 'x show — force quit')
+        lastKillAt = Date.now()
+        showAttempts = 0
+        await killDcc()
+        break
+      case 'launch': {
+        const exe = process.env.DCC_PATH?.trim() || readDccPathFromConfig() || DCC_DEFAULT_PATH
+        console.warn('[canon-live] dCC ga jalan — menjalankan:', exe)
+        if (await launchDcc(exe)) {
+          // dCC butuh waktu sebelum HTTP-nya siap; LV di-Show pas poll berikutnya.
+          await new Promise(r => setTimeout(r, 2_500))
+          showAttempts = 0
+        }
+        break
+      }
+      default:
+        break // 'none' / 'cooldown' — sengaja diem
+    }
+  } finally {
+    supervising = false
+  }
+}
+
+/** Path exe dCC dari semeta.config.json (diisi operator di Settings). */
+function readDccPathFromConfig(): string | null {
+  try {
+    const raw = fs.readFileSync(path.join(process.cwd(), 'semeta.config.json'), 'utf8')
+    const p = JSON.parse(raw)?.dcc_path
+    return typeof p === 'string' && p.trim() ? p.trim() : null
+  } catch {
+    return null
+  }
+}
+
 async function fetchFrame(): Promise<Response | null> {
   for (const p of FRAME_PATHS) {
     try {
@@ -51,14 +159,45 @@ async function fetchFrame(): Promise<Response | null> {
 // Restart PAKSA live view — tombol refresh di layar live. Buat kasus "ngadat" yang self-healing
 // ga bisa liat: frame NGEFREEZE tapi HTTP tetep 200 (self-healing cuma ke-trigger pas fetch
 // GAGAL). Hide → jeda → Show ulang = dCC re-init sensor LV.
-export async function POST() {
+export async function POST(req: Request) {
   liveOn = false
   prevFrame = null
   lastChangeAt = 0
+
+  // ?off=1 — matiin LV pas keluar dari layar capture. Sensor Canon nyala terus
+  // itu bikin bodi panas & batre kekuras padahal ga ada yang difoto.
+  const off = new URL(req.url).searchParams.get('off') === '1'
+  if (off) {
+    try { await fetch(`${DCC}/?CMD=LiveViewWnd_Hide`, { cache: 'no-store' }) } catch { /* best-effort */ }
+    return NextResponse.json({ ok: true, liveView: 'off' })
+  }
+
+  // Tombol R. Kalau dCC-nya sendiri yang hang, Hide→Show ga akan mempan —
+  // supervisor yang mutusin perlu force quit / launch atau enggak.
+  const dccAlive = await isDccRunning()
+  if (!dccAlive) {
+    const exe = process.env.DCC_PATH?.trim() || readDccPathFromConfig() || DCC_DEFAULT_PATH
+    const ok = await launchDcc(exe)
+    if (ok) await new Promise(r => setTimeout(r, 2_500))
+    await startLiveView()
+    return NextResponse.json({ ok, action: 'launch', exe })
+  }
+
   try { await fetch(`${DCC}/?CMD=LiveViewWnd_Hide`, { cache: 'no-store' }) } catch { /* best-effort */ }
   await new Promise(r => setTimeout(r, 400))
   await startLiveView()
-  return NextResponse.json({ ok: true })
+
+  // Beri kesempatan LV bangun; kalau frame tetap ga muncul, naikin ke force quit.
+  await new Promise(r => setTimeout(r, 1_200))
+  const probe = await fetchFrame()
+  if (!probe) {
+    showAttempts = Number.MAX_SAFE_INTEGER // lewati jatah show, langsung eskalasi
+    await superviseOnce(false, 0)
+    return NextResponse.json({ ok: true, action: 'escalated' })
+  }
+
+  showAttempts = 0
+  return NextResponse.json({ ok: true, action: 'show' })
 }
 
 export async function GET() {
@@ -72,6 +211,9 @@ export async function GET() {
   }
   if (!frame) {
     liveOn = false // gagal → GET berikutnya nembak LiveViewWnd_Show lagi
+    // Frame ga ada = kemungkinan dCC belum jalan / nge-hang. Supervisor yang
+    // mutusin: jalanin dCC, Show ulang, atau force quit kalau Show ga mempan.
+    void superviseOnce(false, 0)
     return NextResponse.json(
       { error: 'liveview frame ga ada. Cek digiCamControl konek + kamera ON + CANON_LIVE_PATH.' },
       { status: 502 },
@@ -83,14 +225,19 @@ export async function GET() {
   // Frame basi tetep dibalikin (biar layar ga item); poll berikutnya udah dapet yang seger.
   const now = Date.now()
   if (prevFrame && prevFrame.equals(buf)) {
-    if (lastChangeAt && now - lastChangeAt > FREEZE_MS) {
+    const frozenMs = lastChangeAt ? now - lastChangeAt : 0
+    if (frozenMs > FREEZE_MS) {
       liveOn = false
-      await startLiveView()
-      lastChangeAt = now // jangan spam Show tiap poll 200ms — kick lagi paling cepat FREEZE_MS
+      // Dulu langsung startLiveView() terus-terusan. Kalau dCC-nya sendiri yang
+      // hang, Show ga akan pernah mempan dan layar beku selamanya sampai
+      // operator kill manual. Sekarang supervisor yang naik level ke force quit.
+      void superviseOnce(true, frozenMs)
+      lastChangeAt = now // jangan spam tiap poll 200ms — kick lagi paling cepat FREEZE_MS
     }
   } else {
     prevFrame = buf
     lastChangeAt = now
+    showAttempts = 0 // frame seger = apa pun yang barusan dilakuin, berhasil
   }
   return new NextResponse(buf, {
     headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store' },

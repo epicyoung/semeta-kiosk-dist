@@ -67,7 +67,10 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
     if (isCanon) {
       setCameraReady(true)
       fetch('/api/canon-live', { method: 'POST' }).catch(() => {})
-      return
+      // Keluar layar ⇒ matiin LV (hemat batre + bodi ga panas). Sama kayak LiveViewScreen.
+      return () => {
+        fetch('/api/canon-live?off=1', { method: 'POST' }).catch(() => {})
+      }
     }
     const el = videoRef.current
     if (!el) return
