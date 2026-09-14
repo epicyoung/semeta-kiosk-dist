@@ -37,7 +37,8 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
   const [target, setTarget] = useState<HTMLElement | null>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const moveableRef = useRef<Moveable>(null)
-  const [shotRatio, setShotRatio] = useState(3 / 2)
+  const selectedSlot = selectedSlotIndex === null ? null : slots[selectedSlotIndex]
+  const shotRatio = selectedSlot ? selectedSlot.w / selectedSlot.h : null
 
   const size: PrintSize = template.print_size || '4R_PORTRAIT'
   const is2Stripe = size === '2R_STRIP'
@@ -105,7 +106,7 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
   }, [template.overlay_url])
 
   useEffect(() => {
-    if (slots.length === 0) setSlots(generateDefaultSlots().map(slot => fitShotRatio(slot, shotRatio)))
+    if (slots.length === 0) setSlots(generateDefaultSlots())
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -119,15 +120,16 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
   }
 
   const chooseShotRatio = (ratio: number) => {
-    setShotRatio(ratio)
+    if (selectedSlotIndex === null) return
     setSlots(current => current.map((slot, i) =>
-      selectedSlotIndex === null || i === selectedSlotIndex ? fitShotRatio(slot, ratio) : slot))
+      i === selectedSlotIndex ? fitShotRatio(slot, ratio) : slot))
   }
 
   const handleAddSlot = () => {
     if (slots.length >= 8) return
-    const w = Math.min(editDims.w * 0.6, editDims.h * 0.4 * shotRatio)
-    const slot = fitShotRatio({ x: (editDims.w - w) / 2, y: 40, w, h: w / shotRatio, r: 0 }, shotRatio)
+    const ratio = 3 / 2
+    const w = Math.min(editDims.w * 0.6, editDims.h * 0.4 * ratio)
+    const slot = fitShotRatio({ x: (editDims.w - w) / 2, y: 40, w, h: w / ratio, r: 0 }, ratio)
     setSlots([...slots, slot])
   }
 
@@ -139,7 +141,7 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
   }
 
   const handleReset = () => {
-    setSlots(generateDefaultSlots().map(slot => fitShotRatio(slot, shotRatio)))
+    setSlots(generateDefaultSlots())
     setSelectedSlotIndex(null)
     setTarget(null)
   }
@@ -210,7 +212,7 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
         </div>
         <div style={{ display: 'flex', gap: 12 }}>
           <button onClick={onClose} style={pillBtn(false)}>Cancel</button>
-          <button onClick={() => onSave({ slots })} style={pillBtn(true)}>
+          <button disabled={slots.length === 0} onClick={() => onSave({ slots })} style={pillBtn(true, false, slots.length === 0)}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="20 6 9 17 4 12" />
             </svg>
@@ -245,11 +247,11 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
           Reset
         </button>
 
-        <button onClick={() => chooseShotRatio(3 / 2)} aria-pressed={shotRatio === 3 / 2} style={pillBtn(shotRatio === 3 / 2)}>
-          3:2 Landscape
+        <button disabled={selectedSlotIndex === null} onClick={() => chooseShotRatio(3 / 2)} aria-pressed={shotRatio === 3 / 2} style={pillBtn(shotRatio === 3 / 2, false, selectedSlotIndex === null)}>
+          Slot 3:2 Landscape
         </button>
-        <button onClick={() => chooseShotRatio(2 / 3)} aria-pressed={shotRatio === 2 / 3} style={pillBtn(shotRatio === 2 / 3)}>
-          2:3 Portrait
+        <button disabled={selectedSlotIndex === null} onClick={() => chooseShotRatio(2 / 3)} aria-pressed={shotRatio === 2 / 3} style={pillBtn(shotRatio === 2 / 3, false, selectedSlotIndex === null)}>
+          Slot 2:3 Portrait
         </button>
         <span style={{ width: 1, height: 28, background: GLASS_LINE, margin: '0 4px' }} />
 
@@ -339,7 +341,6 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
                   className={`slot-target-${i}`}
                   onClick={() => {
                     setSelectedSlotIndex(i)
-                    updateSlot(i, fitShotRatio(slot, shotRatio))
                     setTarget(document.querySelector(`.slot-target-${i}`) as HTMLElement)
                   }}
                   style={{
@@ -447,7 +448,7 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
               <Moveable
                 ref={moveableRef}
                 target={target}
-                draggable resizable keepRatio={true} rotatable snappable
+                draggable resizable keepRatio={false} rotatable snappable
                 bounds={{ left: 0, top: 0, right: is2Stripe ? panelW : displayW, bottom: displayH }}
                 onDrag={e => { e.target.style.transform = e.transform }}
                 onDragEnd={e => {

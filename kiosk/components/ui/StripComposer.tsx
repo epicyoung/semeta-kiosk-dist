@@ -23,6 +23,7 @@ type Props = {
   ai4rLayout?: Ai4RLayout
   ai4rOrientation?: Ai4ROrientation
   require4rOverlay?: boolean
+  enable4r?: boolean
   onCancel: () => void
   onConfirm: (
     picked: { source: StripSource; transform: SlotTransform }[],
@@ -43,6 +44,7 @@ export function StripComposer({
   ai4rLayout = 'GRID_4',
   ai4rOrientation = 'LANDSCAPE',
   require4rOverlay = false,
+  enable4r = true,
   onCancel,
   onConfirm,
 }: Props) {
@@ -145,7 +147,7 @@ export function StripComposer({
 
   const handleModeSwitch = (nextMode: PrintLayoutMode) => {
     if (printing || nextMode === mode) return
-    if (nextMode === '4R_LANDSCAPE' && fourRLocked) return
+    if (nextMode === '4R_LANDSCAPE' && (fourRLocked || !enable4r)) return
     setMode(nextMode)
     // Array-nya dipanjangin ke MAX dua mode, ga dipotong ke mode tujuan. Pindah ke layout
     // yang slotnya lebih sedikit cuma NYEMBUNYIIN kelebihannya (semua pembaca udah slice ke
@@ -467,7 +469,8 @@ export function StripComposer({
             {` · ${layoutName}`}
           </p>
 
-          <div className="mt-4 flex items-center justify-center">
+          {/* 4R mati ⇒ switcher ilang total. Tab tunggal bukan pilihan, cuma bikin bingung. */}
+          {enable4r && <div className="mt-4 flex items-center justify-center">
             <div style={{ display: 'flex', background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(12px)', borderRadius: 10, padding: 3, gap: 3 }}>
               {([
                 { key: '2R_STRIP', label: 'Layout', locked: false },
@@ -497,8 +500,8 @@ export function StripComposer({
                 </button>
               ))}
             </div>
-          </div>
-          {fourRLocked && (
+          </div>}
+          {enable4r && fourRLocked && (
             <p style={{ fontSize: 'var(--text-2xs)', color: '#ffcc66', marginTop: 8 }}>
               {t('strip_locked_4r') as string}
             </p>

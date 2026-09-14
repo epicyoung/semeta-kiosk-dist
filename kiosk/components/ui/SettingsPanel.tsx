@@ -16,6 +16,7 @@ import { GalleryPanel } from './GalleryPanel'
 import { LocalTemplateManager } from './LocalTemplateManager'
 import { VideoPromptManager } from './VideoPromptManager'
 import { LayoutDesigner } from './LayoutDesigner'
+import { DccConnectionTest } from './DccConnectionTest'
 
 const ENGINE_OPTS: { value: EngineKey; label: string; soon?: boolean }[] = [
   { value: 'faceswap_local', label: 'Faceswap (LOCAL)' },
@@ -164,7 +165,9 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 function RowHint({ label, hint, children }: { label: string; hint: string; children: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', gap: 16 }}>
-      <div style={{ minWidth: 0 }}>
+      {/* maxWidth biar hint wrap sebelum nyentuh kontrol di kanan — teksnya utuh,
+          cuma pecah barisnya lebih awal. Tanpa ini dia manjang sampe mepet dropdown. */}
+      <div style={{ minWidth: 0, maxWidth: '58%' }}>
         <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{label}</span>
         <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0', lineHeight: 1.4 }}>{hint}</p>
       </div>
@@ -205,7 +208,9 @@ function TextInput({ value, onChange, placeholder, mono }: { value: string; onCh
         background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.13)',
         borderRadius: 'var(--radius-glass)', color: '#fff', fontSize: mono ? 'var(--text-xs)' : 'var(--text-sm)', padding: '7px 12px',
         fontFamily: 'var(--font-ui)',
-        outline: 'none', width: 220, textAlign: 'right',
+        // maxWidth, BUKAN width tetap — samain sama Sel biar input & dropdown
+        // sejajar lebarnya. width:220 dulu bikin input selalu penuh walau isinya pendek.
+        outline: 'none', width: '100%', maxWidth: 220, boxSizing: 'border-box', textAlign: 'right',
       }}
     />
   )
@@ -252,6 +257,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   const [aiStripSlots,    setAiStripSlots]    = useState(config.ai_strip_slots ?? 0)
   const [aiStripOverlay,  setAiStripOverlay]  = useState(config.ai_strip_overlay_url ?? '')
   const [aiStripCustomSlots, setAiStripCustomSlots] = useState<{ slots: { x: number; y: number; w: number; h: number; r?: number }[] } | null>(config.ai_strip_custom_slots || null)
+  const [enable4r,        setEnable4r]        = useState(config.enable_4r ?? true)
   const [ai4rOrientation, setAi4rOrientation] = useState<Ai4ROrientation>(config.ai_4r_orientation ?? 'LANDSCAPE')
   const [ai4rOverlay,     setAi4rOverlay]     = useState(config.ai_4r_overlay_url ?? '')
   const [ai4rLayout,      setAi4rLayout]      = useState<Ai4RLayout>(config.ai_4r_layout ?? 'GRID_4')
@@ -581,7 +587,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   useEffect(() => {
     if (!open) return
     setFramesLoading(true)
-    fetch(`${pbUrl}/api/collections/frames/records?sort=sort_order&perPage=10`, { cache: 'no-store' })
+    fetch(`${pbUrl}/api/collections/frames/records?filter=is_active%3Dtrue&sort=sort_order&perPage=10`, { cache: 'no-store' })
       .then(r => r.ok ? r.json() : { items: [] })
       .then(data => {
         const items = (data.items ?? []) as Record<string, unknown>[]
@@ -595,6 +601,12 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
       .finally(() => setFramesLoading(false))
   }, [open, pbUrl])
 
+  // PB mutations persist immediately; update the running booth as well.
+  const publishFrames = (next: typeof frames) => {
+    setFrames(next)
+    onConfigSaved?.({ frames: next.map(f => ({ ...f, name: f.name ?? '' })) })
+  }
+
   const handleFrameUpload = async (file: File) => {
     if (frames.length >= 10) return
     setFrameUploading(true)
@@ -607,20 +619,25 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
       const res = await fetch(`${pbUrl}/api/collections/frames/records`, { method: 'POST', body: fd })
       if (res.ok) {
         const r = await res.json() as Record<string, unknown>
-        setFrames(prev => [...prev, {
+        publishFrames([...frames, {
           id: String(r.id),
           name: r.name ? String(r.name) : undefined,
           url: `${pbUrl}/api/files/frames/${r.id}/${r.image}`,
         }])
-      }
+      } else throw new Error('Frame upload failed')
+    } catch {
+      setError(t('set_save_error') as string)
     } finally {
       setFrameUploading(false)
     }
   }
 
   const handleFrameDelete = async (id: string) => {
-    await fetch(`${pbUrl}/api/collections/frames/records/${id}`, { method: 'DELETE' })
-    setFrames(prev => prev.filter(f => f.id !== id))
+    try {
+      const res = await fetch(`${pbUrl}/api/collections/frames/records/${id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Frame delete failed')
+      publishFrames(frames.filter(f => f.id !== id))
+    } catch { setError(t('set_save_error') as string) }
   }
 
   const dragIndex = useRef<number | null>(null)
@@ -650,6 +667,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
           }).then(r => { if (!r.ok) throw new Error('patch failed') })
         )
       )
+      publishFrames(order)
     } catch {
       setFrames(snapshot)
     }
@@ -850,6 +868,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         ai_strip_slots:      aiStripSlots,
         ai_strip_overlay_url: aiStripOverlay.trim(),
         ai_strip_custom_slots: aiStripCustomSlots,
+        enable_4r:            enable4r,
         ai_4r_orientation:    ai4rOrientation,
         ai_4r_overlay_url:    ai4rOverlay.trim(),
         ai_4r_layout:         ai4rLayout,
@@ -908,6 +927,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         ai_strip_slots:      aiStripSlots,
         ai_strip_overlay_url: aiStripOverlay.trim(),
         ai_strip_custom_slots: aiStripCustomSlots,
+        enable_4r:            enable4r,
         ai_4r_orientation:    ai4rOrientation,
         ai_4r_overlay_url:    ai4rOverlay.trim(),
         ai_4r_layout:         ai4rLayout,
@@ -1053,33 +1073,21 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                 )}
               </div>
 
-              {/* Frame Overlays */}
-              <div style={{ padding: '12px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <div>
+              {/* AI digital overlays are separate from Photo Print templates. */}
+              {engine !== 'print_local' && <div style={{ padding: '12px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                {/* Counter nempel di label (bukan ngambang di kanan), dan tombol tambah
+                    jadi slot di dalam grid thumbnail — satu kontrol, bukan dua. */}
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                     <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{t('set_frames') as string}</span>
-                    <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0' }}>{t('set_frames_hint') as string}</p>
+                    <span style={{ fontSize: 'var(--text-2xs)', fontFamily: 'var(--font-ui)', color: 'rgba(255,255,255,0.3)', fontVariantNumeric: 'tabular-nums' }}>{frames.length}/10</span>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 'var(--text-xs)', fontFamily: 'var(--font-ui)', color: 'rgba(255,255,255,0.3)' }}>{frames.length}/10</span>
-                    {frames.length < 10 && (
-                      <label style={{ cursor: frameUploading ? 'default' : 'pointer' }}>
-                        <input type="file" accept="image/png,image/webp" style={{ display: 'none' }}
-                          disabled={frameUploading}
-                          onChange={e => { const f = e.target.files?.[0]; if (f) { handleFrameUpload(f); e.target.value = '' } }} />
-                        <span style={{ fontSize: 'var(--text-xs)', padding: '6px 14px', borderRadius: 'var(--radius-glass)', border: '1px solid var(--border-dialog)', background: frameUploading ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.07)', color: frameUploading ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.8)', fontFamily: 'var(--font-ui)' }}>
-                          {frameUploading ? '⟳' : `+ ${t('set_upload') as string}`}
-                        </span>
-                      </label>
-                    )}
-                  </div>
+                  <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0', lineHeight: 1.4 }}>{t('set_frames_hint') as string}</p>
                 </div>
                 {framesLoading ? (
                   <p style={{ fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.25)', margin: 0 }}>{t('set_frames_loading') as string}</p>
-                ) : frames.length === 0 ? (
-                  <p style={{ fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.2)', margin: 0 }}>{t('set_frames_empty') as string}</p>
                 ) : (
-                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-start' }}>
                     {frames.map((f, i) => (
                       <div
                         key={f.id}
@@ -1102,9 +1110,34 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                         >✕</button>
                       </div>
                     ))}
+                    {/* Slot tambah — ukuran & rasio sama persis kayak thumbnail biar
+                        grid-nya rata. Penuh (10) = slot ilang, counter yang jelasin. */}
+                    {frames.length < 10 && (
+                      <label
+                        title={t('set_upload') as string}
+                        style={{
+                          width: 52, height: 78, flexShrink: 0,
+                          borderRadius: 'var(--radius-chip)',
+                          border: '1px dashed rgba(255,255,255,0.18)',
+                          background: frameUploading ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.04)',
+                          color: frameUploading ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.45)',
+                          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
+                          cursor: frameUploading ? 'default' : 'pointer',
+                          transition: 'border-color 150ms ease, color 150ms ease',
+                        }}
+                      >
+                        <input type="file" accept="image/png,image/webp" style={{ display: 'none' }}
+                          disabled={frameUploading}
+                          onChange={e => { const f = e.target.files?.[0]; if (f) { handleFrameUpload(f); e.target.value = '' } }} />
+                        <span style={{ fontSize: 18, lineHeight: 1 }}>{frameUploading ? '⟳' : '+'}</span>
+                        {frames.length === 0 && !frameUploading && (
+                          <span style={{ fontSize: 9, fontFamily: 'var(--font-ui)', letterSpacing: '0.03em' }}>{t('set_upload') as string}</span>
+                        )}
+                      </label>
+                    )}
                   </div>
                 )}
-              </div>
+              </div>}
 
               {/* Background Effects toggle */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 0', borderBottom: hideBg ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
@@ -1130,15 +1163,6 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
 
             {/* ── GROUP 3: AI ENGINE & TEMPLATES ────────────────────────── */}
             <AccordionGroup id="engine" icon="🧠" title={t('set_group_engine') as string} open={openGroup === 'engine'} onToggle={toggleGroup}>
-              <Row label={t('set_token_balance') as string}>
-                <span style={{
-                  fontFamily: 'var(--font-ui)', fontSize: 'var(--text-sm)', fontWeight: 600, letterSpacing: '0.02em',
-                  color: tokenBalance == null ? 'rgba(255,255,255,0.25)' : tokenBalance > 50 ? '#a3be8c' : tokenBalance > 0 ? '#f0c040' : '#ff6b6b',
-                  background: 'rgba(0,0,0,0.2)', padding: '4px 10px', borderRadius: 'var(--radius-glass)', border: '1px solid rgba(255,255,255,0.05)'
-                }}>
-                  {tokenBalance == null ? '—' : `${tokenBalance.toLocaleString('id-ID')} ${t('set_token_unit') as string}`}
-                </span>
-              </Row>
               {/* Engine Mode */}
               <Row label={t('set_mode') as string}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -1313,36 +1337,33 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
               {/* Strip 2R & 4R Postcard dari hasil AI — tamu nyusun sendiri pas Cetak */}
               {engine !== 'print_local' && (
                 <div style={{ padding: '12px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{t('set_ai_strip') as string}</span>
-                    <Sel
-                      value={String(aiStripSlots)}
-                      options={[
-                        { value: '0', label: t('set_ai_strip_off') as string },
-                        { value: '1', label: '1 (1 Foto Full Strip)' },
-                        { value: '2', label: '2 (2 Foto Atas-Bawah)' },
-                        { value: '3', label: '3 (3 Foto Vertikal)' },
-                        { value: '4', label: '4 (4 Foto Grid)' },
-                      ]}
-                      onChange={v => setAiStripSlots(Number(v))}
-                    />
+                  {/* Saklar dulu, opsi belakangan. Dropdown cuma ngurus JUMLAH — 'Off' dulu
+                      nyampur di daftar yang sama, jadi satu dropdown ngerjain dua hal. */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                    <div style={{ minWidth: 0, maxWidth: '58%' }}>
+                      <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{t('set_ai_strip') as string}</span>
+                      <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0', lineHeight: 1.4 }}>
+                        {t('set_ai_strip_hint') as string}
+                      </p>
+                    </div>
+                    <Toggle on={aiStripSlots > 0} onToggle={() => setAiStripSlots(aiStripSlots > 0 ? 0 : 4)} />
                   </div>
-                  <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '6px 0 0' }}>
-                    {t('set_ai_strip_hint') as string}
-                  </p>
 
                   {/* ── BAGIAN 1: OVERLAY 2-STRIP (CUT 2×6) ── */}
                   {aiStripSlots > 0 && (
                     <div style={{ marginTop: 14, padding: 12, background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.08)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                        <span style={{ fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.85)', fontWeight: 600 }}>Format Frame 2-Strip</span>
+                        <span style={{ fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.85)', fontWeight: 600 }}>{t('set_strip_card_title') as string}</span>
+                        <span style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.6)' }}>
+                          {(t('set_strip_slots_from_editor') as string).replace('{n}', String(aiStripCustomSlots?.slots.length || aiStripSlots))}
+                        </span>
                       </div>
 
                       {/* 1200x1800 Full Sheet Overlay */}
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                           <span style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.75)' }}>
-                            Overlay PNG 2-Strip Full Sheet (1200×1800 Langsung Canva/Photoshop)
+                            {t('set_strip_overlay_label') as string}
                           </span>
                           <input
                             type="file"
@@ -1381,7 +1402,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                               cursor: 'pointer',
                             }}
                           >
-                            {stripOverlayUploading ? '⟳ Memuat...' : '📁 Unggah PNG 1200×1800'}
+                            {stripOverlayUploading ? `⟳ ${t('set_uploading') as string}` : `📁 ${t('set_strip_overlay_upload') as string}`}
                           </button>
                         </div>
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -1400,7 +1421,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                           )}
                         </div>
                         <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.4)', margin: '6px 0 0', lineHeight: 1.4 }}>
-                          Sisi kiri (0..600) & sisi kanan (600..1200) otomatis dibakar berdampingan di kertas 4R portrait.
+                          {t('set_strip_overlay_note') as string}
                         </p>
                       </div>
 
@@ -1412,16 +1433,16 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                           </div>
                           <div>
                             <p style={{ margin: 0, fontSize: 'var(--text-xs)', fontWeight: 600, color: '#a3be8c' }}>
-                              ✓ Overlay 2-Strip Terpasang (Full Sheet 1200×1800)
+                              ✓ {t('set_strip_overlay_ok') as string}
                             </p>
                             <p style={{ margin: '2px 0 0', fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.5)' }}>
-                              Foto slot 1..{aiStripSlots} akan otomatis dibakar rapi pada cetakan 2-Strip.
+                              {(t('set_strip_overlay_ok_hint') as string).replace('{n}', String(aiStripSlots))}
                             </p>
                           </div>
                         </div>
                       ) : (
                         <p style={{ fontSize: 'var(--text-2xs)', color: '#f0c040', margin: '8px 0 0', lineHeight: 1.4 }}>
-                          ⚠ Belum ada overlay strip. Klik tombol Unggah PNG di atas agar hasil cetak 2-Strip punya frame/branding.
+                          ⚠ {t('set_strip_overlay_warn') as string}
                         </p>
                       )}
 
@@ -1429,10 +1450,12 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                       <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.3)', borderRadius: 8 }}>
                         <div>
                           <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: '#d9c9ff' }}>
-                            {aiStripCustomSlots ? `✓ Custom Layout (${aiStripCustomSlots.slots.length} Slot)` : 'Layout Slot Standar'}
+                            {aiStripCustomSlots
+                              ? `✓ ${(t('set_layout_custom') as string).replace('{n}', String(aiStripCustomSlots.slots.length))}`
+                              : t('set_layout_default_strip') as string}
                           </span>
                           <p style={{ margin: '2px 0 0', fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.5)' }}>
-                            {aiStripCustomSlots ? 'Slot diatur bebas secara visual di atas overlay.' : 'Menggunakan susunan grid matematika default.'}
+                            {aiStripCustomSlots ? t('set_layout_custom_hint') as string : t('set_layout_default_strip_hint') as string}
                           </p>
                         </div>
                         <div style={{ display: 'flex', gap: 6 }}>
@@ -1442,7 +1465,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                               onClick={() => setAiStripCustomSlots(null)}
                               style={{ padding: '5px 10px', borderRadius: 6, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: '#ff8a8a', fontSize: 'var(--text-2xs)', cursor: 'pointer' }}
                             >
-                              Reset Default
+                              {t('set_layout_reset') as string}
                             </button>
                           )}
                           <button
@@ -1450,7 +1473,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                             onClick={() => setShowStripDesigner(true)}
                             style={{ padding: '5px 12px', borderRadius: 6, background: 'var(--brand)', border: 'none', color: '#fff', fontSize: 'var(--text-2xs)', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
                           >
-                            <span>🎨</span> Atur Slot Visual
+                            <span>🎨</span> {t('set_layout_designer_btn') as string}
                           </button>
                         </div>
                       </div>
@@ -1458,9 +1481,21 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                   )}
 
                   {/* ── BAGIAN 2: 4R POSTCARD (ROTATE / ORIENTASI & LAYOUT) ── */}
-                  <div style={{ marginTop: 16, padding: 12, background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.08)' }}>
+                  {/* Dulu 4R selalu nongol tanpa saklar — sekarang sejajar sama 2-Strip:
+                      toggle dulu, opsi nyusul. Mati ⇒ tab 4R di StripComposer ilang juga. */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginTop: 16, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ minWidth: 0, maxWidth: '58%' }}>
+                      <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{t('set_ai_4r') as string}</span>
+                      <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0', lineHeight: 1.4 }}>
+                        {t('set_ai_4r_hint') as string}
+                      </p>
+                    </div>
+                    <Toggle on={enable4r} onToggle={() => setEnable4r(v => !v)} />
+                  </div>
+
+                  {enable4r && <div style={{ marginTop: 12, padding: 12, background: 'rgba(255,255,255,0.03)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.08)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                      <span style={{ fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.85)', fontWeight: 600 }}>4R Postcard Full Sheet</span>
+                      <span style={{ fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.85)', fontWeight: 600 }}>{t('set_4r_paper_orientation') as string}</span>
                       {/* Orientasi Switcher */}
                       <div style={{ display: 'flex', background: 'rgba(0,0,0,0.4)', borderRadius: 6, padding: 2, gap: 2 }}>
                         <button
@@ -1477,7 +1512,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                             color: ai4rOrientation === 'LANDSCAPE' ? '#fff' : 'rgba(255,255,255,0.5)',
                           }}
                         >
-                          ↔ Landscape (1800×1200)
+                          ↔ {t('set_4r_orientation_landscape') as string}
                         </button>
                         <button
                           type="button"
@@ -1493,42 +1528,20 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                             color: ai4rOrientation === 'PORTRAIT' ? '#fff' : 'rgba(255,255,255,0.5)',
                           }}
                         >
-                          ↕ Portrait (1200×1800)
+                          ↕ {t('set_4r_orientation_portrait') as string}
                         </button>
                       </div>
                     </div>
 
-                    {/* Layout Preset Dropdown */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                      <span style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.75)' }}>Layout Grid 4R</span>
-                      <Sel
-                        value={ai4rLayout}
-                        options={
-                          ai4rOrientation === 'PORTRAIT'
-                            ? [
-                                { value: 'GRID_4', label: '4-Grid 2×2 (4 Foto 600×900)' },
-                                { value: 'TRIO_3', label: '1+2 Trio (1 Atas Tidur + 2 Bawah Berdiri)' },
-                                { value: 'GRID_3', label: '3-Horizontal Stack (3 Foto Tidur)' },
-                                { value: 'SPLIT_2', label: '2-Horizontal Split (2 Foto Tidur)' },
-                                { value: 'SINGLE_1', label: '1-Photo Full Bleed (1 Foto Portrait)' },
-                              ]
-                            : [
-                                { value: 'GRID_4', label: '4-Grid 2×2 (4 Foto 900×600)' },
-                                { value: 'TRIO_3', label: '1+2 Trio (1 Kiri Berdiri + 2 Kanan Tidur)' },
-                                { value: 'GRID_3', label: '3-Vertical Columns (3 Foto Berdiri)' },
-                                { value: 'SPLIT_2', label: '2-Vertical Split (2 Foto Berdiri)' },
-                                { value: 'SINGLE_1', label: '1-Photo Full Bleed (1 Foto Landscape)' },
-                              ]
-                        }
-                        onChange={v => setAi4rLayout(v as Ai4RLayout)}
-                      />
-                    </div>
+                    <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.6)', marginBottom: 12 }}>
+                      {t('set_4r_slots_note') as string}
+                    </p>
 
                     {/* Upload PNG 4R */}
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                         <span style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.65)' }}>
-                          Overlay PNG 4R ({ai4rOrientation === 'PORTRAIT' ? '1200×1800 Portrait' : '1800×1200 Landscape'})
+                          {(t('set_4r_overlay_label') as string).replace('{o}', ai4rOrientation === 'PORTRAIT' ? '1200×1800 Portrait' : '1800×1200 Landscape')}
                         </span>
                         <input
                           type="file"
@@ -1567,7 +1580,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                             cursor: 'pointer',
                           }}
                         >
-                          {ai4rOverlayUploading ? '⟳ Memuat...' : '📁 Unggah PNG 4R'}
+                          {ai4rOverlayUploading ? `⟳ ${t('set_uploading') as string}` : `📁 ${t('set_4r_overlay_upload') as string}`}
                         </button>
                       </div>
 
@@ -1595,14 +1608,14 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                           </div>
                           <div>
                             <p style={{ margin: 0, fontSize: 'var(--text-xs)', fontWeight: 600, color: '#a3be8c' }}>
-                              ✓ Overlay 4R Postcard Terpasang ({ai4rOrientation === 'PORTRAIT' ? 'Portrait 1200×1800' : 'Landscape 1800×1200'})
+                              ✓ {(t('set_4r_overlay_ok') as string).replace('{o}', ai4rOrientation === 'PORTRAIT' ? 'Portrait 1200×1800' : 'Landscape 1800×1200')}
                             </p>
-                            <p style={{ margin: '2px 0 0', fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.5)' }}>Frame akan otomatis dibakar pada cetakan 4R Postcard.</p>
+                            <p style={{ margin: '2px 0 0', fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.5)' }}>{t('set_4r_overlay_ok_hint') as string}</p>
                           </div>
                         </div>
                       ) : (
                         <p style={{ fontSize: 'var(--text-2xs)', color: '#f0c040', margin: '8px 0 0', lineHeight: 1.4 }}>
-                          ⚠ Belum ada Overlay 4R. Jika Wajib Overlay aktif, Tab 4R Postcard tidak akan bisa dipilih.
+                          ⚠ {t('set_4r_overlay_warn') as string}
                         </p>
                       )}
 
@@ -1616,7 +1629,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                           style={{ cursor: 'pointer', width: 16, height: 16 }}
                         />
                         <label htmlFor="require4rOverlayChk" style={{ fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.8)', cursor: 'pointer' }}>
-                          <b>Bulletproof Mode:</b> Wajibkan Overlay 4R (Tab 4R terkunci jika Overlay 4R belum diisi)
+                          {t('set_4r_bulletproof') as string}
                         </label>
                       </div>
 
@@ -1624,10 +1637,12 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                       <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'rgba(124,58,237,0.1)', border: '1px solid rgba(124,58,237,0.3)', borderRadius: 8 }}>
                         <div>
                           <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: '#d9c9ff' }}>
-                            {ai4rCustomSlots ? `✓ Custom Layout (${ai4rCustomSlots.slots.length} Slot)` : 'Layout Preset 4R'}
+                            {ai4rCustomSlots
+                              ? `✓ ${(t('set_layout_custom') as string).replace('{n}', String(ai4rCustomSlots.slots.length))}`
+                              : t('set_layout_default_4r') as string}
                           </span>
                           <p style={{ margin: '2px 0 0', fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.5)' }}>
-                            {ai4rCustomSlots ? 'Slot diatur bebas secara visual di atas overlay 4R.' : 'Menggunakan preset layout grid terpilih.'}
+                            {ai4rCustomSlots ? t('set_layout_custom_hint') as string : t('set_layout_default_4r_hint') as string}
                           </p>
                         </div>
                         <div style={{ display: 'flex', gap: 6 }}>
@@ -1637,7 +1652,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                               onClick={() => setAi4rCustomSlots(null)}
                               style={{ padding: '5px 10px', borderRadius: 6, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: '#ff8a8a', fontSize: 'var(--text-2xs)', cursor: 'pointer' }}
                             >
-                              Reset Default
+                              {t('set_layout_reset') as string}
                             </button>
                           )}
                           <button
@@ -1645,12 +1660,12 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                             onClick={() => setShow4rDesigner(true)}
                             style={{ padding: '5px 12px', borderRadius: 6, background: 'var(--brand)', border: 'none', color: '#fff', fontSize: 'var(--text-2xs)', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
                           >
-                            <span>🎨</span> Atur Slot Visual
+                            <span>🎨</span> {t('set_layout_designer_btn') as string}
                           </button>
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </div>}
                 </div>
               )}
 
@@ -1659,7 +1674,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                   langsung (POST /comfy/start|stop) — bukan config yang nunggu Save, karena
                   ini side-effect proses OS beneran. Restart PC TETAP mati sampai operator
                   nyalain manual lagi — sengaja, biar VRAM gak kepakai diam-diam. */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', gap: 16 }}>
+              {engine === 'fullbody_local' && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', gap: 16 }}>
                 <div style={{ minWidth: 0 }}>
                   <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>
                     {t('set_fullbody_engine') as string}
@@ -1676,7 +1691,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                 <div style={{ flexShrink: 0 }}>
                   <Toggle on={fullbodyEngine} disabled={fullbodyBusy} onToggle={() => toggleFullbody(!fullbodyEngine)} />
                 </div>
-              </div>
+              </div>}
 
               {/* Video engine (img2vid) — img output terakhir jadi seed ke provider video via
                   Worker. API key hidup di Worker (FAL), gak pernah ke browser. Default OFF.
@@ -1690,7 +1705,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                 const videoLocked = !hasRental || !isVideoUnlocked(config)
                 return (<>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', gap: 16 }}>
-                <div style={{ minWidth: 0 }}>
+                <div style={{ minWidth: 0, maxWidth: '58%' }}>
                   <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>
                     {t('set_video_engine') as string}
                     {videoLocked && (
@@ -1874,7 +1889,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
               )}
             </AccordionGroup>
 
-            {/* ── GROUP 4: HARDWARE & SYSTEM ────────────────────────────── */}
+            {/* ── GROUP 4: CAMERA & HARDWARE ────────────────────────────── */}
             <AccordionGroup id="hardware" icon="⚙️" title={t('set_group_hardware') as string} open={openGroup === 'hardware'} onToggle={toggleGroup}>
               {/* Camera */}
               <Row label={t('set_source') as string}>
@@ -1888,17 +1903,23 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                   buat NYALAIN dCC sendiri kalau belum jalan, dan relaunch sesudah
                   force quit pas dia nge-hang (kejadian kalau dipakai seharian). */}
               {camera === 'canon' && (
-                <RowHint
-                  label="Lokasi digiCamControl"
-                  hint="Kosongkan kalau instal di lokasi standar. Kiosk otomatis menjalankan ulang bila digiCamControl macet."
-                >
-                  <TextInput
-                    value={dccPath}
-                    onChange={setDccPath}
-                    placeholder="C:/Program Files (x86)/digiCamControl/CameraControl.exe"
-                    mono
-                  />
-                </RowHint>
+                <>
+                  <RowHint
+                    label="Lokasi digiCamControl"
+                    hint="Kosongkan kalau instal di lokasi standar. Kiosk otomatis menjalankan ulang bila digiCamControl macet."
+                  >
+                    <TextInput
+                      value={dccPath}
+                      onChange={setDccPath}
+                      placeholder="C:/Program Files (x86)/digiCamControl/CameraControl.exe"
+                      mono
+                    />
+                  </RowHint>
+                  {/* Panel tes berdiri sendiri, BUKAN di kolom kanan RowHint: isinya
+                      (tombol + preview 240px + keterangan) jauh lebih lebar dari slot
+                      kontrol, dan flexShrink:0 di sana bakal ngeremuk label kiri. */}
+                  <DccConnectionTest exe={dccPath} />
+                </>
               )}
 
               {/* Hitung mundur sebelum jepret. Mati = operator pegang kendali penuh,
@@ -1916,6 +1937,53 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
               </Row>
 
 
+              {/* Magic Catcher — reaction cam toggle. Recording gated by IdleScreen disclaimer. */}
+              <div style={{ padding: '13px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ maxWidth: 380 }}>
+                    <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{t('set_magic_catcher') as string}</span>
+                    <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0' }}>
+                      {t('set_magic_catcher_hint') as string}
+                      <br />
+                      <span style={{ color: '#f0c040', marginTop: 2, display: 'inline-block' }}>{t('set_magic_catcher_webcam_only') as string}</span>
+                    </p>
+                  </div>
+                  <Toggle on={magicCatcher} onToggle={() => setMagicCatcher(v => !v)} />
+                </div>
+                {/* Pilih kamera perekam — rig Canon punya webcam terpisah (mis. Logitech di
+                    monitor); tanpa ini getUserMedia pasrah ke default yang bisa salah device. */}
+                {magicCatcher && (
+                  <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {/* Kamera perekam */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.5)' }}>{t('set_magic_camera') as string}</span>
+                      <Sel
+                        value={magicCatcherCam}
+                        options={[{ value: '', label: 'Default' }, ...camList.filter(c => c.value)]}
+                        onChange={setMagicCatcherCam}
+                      />
+                    </div>
+                    {/* Durasi max rekam */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.5)' }}>{t('set_magic_duration') as string}</span>
+                      <Sel
+                        value={magicCatcherDur}
+                        options={MAGIC_DURATIONS.map(s => ({ value: String(s), label: s >= 60 ? `${s / 60} mnt` : `${s} dtk` }))}
+                        onChange={setMagicCatcherDur}
+                      />
+                    </div>
+                    {/* Audio — consent WAJIB lewat disclaimer idle. */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.5)' }}>{t('set_magic_audio') as string}</span>
+                      <Toggle on={magicCatcherAudio} onToggle={() => setMagicCatcherAudio(v => !v)} />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+            </AccordionGroup>
+
+            <AccordionGroup id="license" icon="🔑" title="License" open={openGroup === 'license'} onToggle={toggleGroup}>
               {/* License / Secret */}
               <div style={{ padding: '12px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -2182,133 +2250,90 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                 ))}
               </div>
 
-              {/* Magic Catcher — reaction cam toggle. Recording gated by IdleScreen disclaimer. */}
-              <div style={{ padding: '13px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ maxWidth: 380 }}>
-                    <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{t('set_magic_catcher') as string}</span>
-                    <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0' }}>
-                      {t('set_magic_catcher_hint') as string}
-                      <br />
-                      <span style={{ color: '#f0c040', marginTop: 2, display: 'inline-block' }}>{t('set_magic_catcher_webcam_only') as string}</span>
-                    </p>
-                  </div>
-                  <Toggle on={magicCatcher} onToggle={() => setMagicCatcher(v => !v)} />
-                </div>
-                {/* Pilih kamera perekam — rig Canon punya webcam terpisah (mis. Logitech di
-                    monitor); tanpa ini getUserMedia pasrah ke default yang bisa salah device. */}
-                {magicCatcher && (
-                  <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {/* Kamera perekam */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.5)' }}>{t('set_magic_camera') as string}</span>
-                      <Sel
-                        value={magicCatcherCam}
-                        options={[{ value: '', label: 'Default' }, ...camList.filter(c => c.value)]}
-                        onChange={setMagicCatcherCam}
-                      />
-                    </div>
-                    {/* Durasi max rekam */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.5)' }}>{t('set_magic_duration') as string}</span>
-                      <Sel
-                        value={magicCatcherDur}
-                        options={MAGIC_DURATIONS.map(s => ({ value: String(s), label: s >= 60 ? `${s / 60} mnt` : `${s} dtk` }))}
-                        onChange={setMagicCatcherDur}
-                      />
-                    </div>
-                    {/* Audio — consent WAJIB lewat disclaimer idle. */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.5)' }}>{t('set_magic_audio') as string}</span>
-                      <Toggle on={magicCatcherAudio} onToggle={() => setMagicCatcherAudio(v => !v)} />
-                    </div>
-                  </div>
-                )}
-              </div>
+            </AccordionGroup>
 
-              {/* System / Update */}
-              <div style={{ padding: '12px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div>
-                    <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{t('set_version_label') as string}</span>
-                    <p style={{ fontSize: 'var(--text-2xs)', fontFamily: 'var(--font-ui)', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0' }}>
-                      {version.label ?? version.current ?? '—'}
-                      {version.label && version.current && (
-                        <span style={{ color: 'rgba(255,255,255,0.18)', marginLeft: 6 }}>({version.current})</span>
-                      )}
-                    </p>
-                  </div>
-                  {version.isGit ? (
-                    updateState === 'available' || updateState === 'ok' || updateState === 'pulling' ? (
-                      <button
-                        onClick={handlePullUpdate}
-                        disabled={updateState === 'pulling' || updateState === 'ok'}
-                        style={{
-                          padding: '6px 16px', borderRadius: 'var(--radius-glass)', border: 'none',
-                          background: updateState === 'ok' ? 'rgba(163,190,140,0.25)' : 'var(--brand)',
-                          color: updateState === 'ok' ? '#a3be8c' : '#fff', fontSize: 'var(--text-sm)', fontWeight: 600,
-                          fontFamily: 'var(--font-ui)', cursor: updateState === 'pulling' || updateState === 'ok' ? 'default' : 'pointer', whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {updateState === 'pulling' ? t('set_update_pulling') as string
-                          : updateState === 'ok' ? t('set_update_ok') as string
-                          : t('set_update_available') as string}
-                      </button>
-                    ) : (
-                      <button
-                        onClick={handleCheckUpdate}
-                        disabled={updateState === 'checking'}
-                        style={{
-                          padding: '6px 16px', borderRadius: 'var(--radius-glass)', border: '1px solid rgba(255,255,255,0.15)',
-                          background: updateState === 'uptodate' ? 'rgba(163,190,140,0.15)' : updateState === 'err' ? 'rgba(255,107,107,0.15)' : 'rgba(255,255,255,0.07)',
-                          color: updateState === 'uptodate' ? '#a3be8c' : updateState === 'err' ? '#ff6b6b' : 'rgba(255,255,255,0.8)',
-                          fontSize: 'var(--text-sm)', fontFamily: 'var(--font-ui)', cursor: updateState === 'checking' ? 'default' : 'pointer', whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {updateState === 'checking' ? t('set_update_checking') as string
-                          : updateState === 'uptodate' ? t('set_update_uptodate') as string
-                          : updateState === 'err' ? t('set_update_failed') as string
-                          : t('set_update_check') as string}
-                      </button>
-                    )
-                  ) : (
-                    <span style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', maxWidth: 200, textAlign: 'right' }}>
-                      {t('set_update_disabled_note') as string}
-                    </span>
-                  )}
+            {/* Sistem — sengaja DI LUAR accordion & paling bawah: dua aksi mesin
+                (update + restart) yang gak nyangkut ke setting mana pun, dan harus
+                kejangkau tanpa buka-tutup grup. Restart cuma ada di git install. */}
+            <div style={{ display: 'flex', gap: 10, marginTop: 20, paddingTop: 18, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' }}>
+                <div style={{ minWidth: 0 }}>
+                  <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{t('set_version_label') as string}</span>
+                  <p style={{ fontSize: 'var(--text-2xs)', fontFamily: 'var(--font-ui)', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0' }}>
+                    {version.label ?? version.current ?? '—'}
+                    {version.label && version.current && (
+                      <span style={{ color: 'rgba(255,255,255,0.18)', marginLeft: 6 }}>({version.current})</span>
+                    )}
+                  </p>
                 </div>
+                {version.isGit ? (
+                  updateState === 'available' || updateState === 'ok' || updateState === 'pulling' ? (
+                    <button
+                      onClick={handlePullUpdate}
+                      disabled={updateState === 'pulling' || updateState === 'ok'}
+                      style={{
+                        padding: '6px 16px', borderRadius: 'var(--radius-glass)', border: 'none',
+                        background: updateState === 'ok' ? 'rgba(163,190,140,0.25)' : 'var(--brand)',
+                        color: updateState === 'ok' ? '#a3be8c' : '#fff', fontSize: 'var(--text-sm)', fontWeight: 600,
+                        fontFamily: 'var(--font-ui)', cursor: updateState === 'pulling' || updateState === 'ok' ? 'default' : 'pointer', whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {updateState === 'pulling' ? t('set_update_pulling') as string
+                        : updateState === 'ok' ? t('set_update_ok') as string
+                        : t('set_update_available') as string}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleCheckUpdate}
+                      disabled={updateState === 'checking'}
+                      style={{
+                        padding: '6px 16px', borderRadius: 'var(--radius-glass)', border: '1px solid rgba(255,255,255,0.15)',
+                        background: updateState === 'uptodate' ? 'rgba(163,190,140,0.15)' : updateState === 'err' ? 'rgba(255,107,107,0.15)' : 'rgba(255,255,255,0.07)',
+                        color: updateState === 'uptodate' ? '#a3be8c' : updateState === 'err' ? '#ff6b6b' : 'rgba(255,255,255,0.8)',
+                        fontSize: 'var(--text-sm)', fontFamily: 'var(--font-ui)', cursor: updateState === 'checking' ? 'default' : 'pointer', whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {updateState === 'checking' ? t('set_update_checking') as string
+                        : updateState === 'uptodate' ? t('set_update_uptodate') as string
+                        : updateState === 'err' ? t('set_update_failed') as string
+                        : t('set_update_check') as string}
+                    </button>
+                  )
+                ) : (
+                  <span style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)' }}>
+                    {t('set_update_disabled_note') as string}
+                  </span>
+                )}
                 {updateState === 'ok' && (
-                  <p style={{ fontSize: 'var(--text-2xs)', color: '#a3be8c', margin: '8px 0 0' }}>
+                  <p style={{ fontSize: 'var(--text-2xs)', color: '#a3be8c', margin: 0 }}>
                     {t('set_update_restart_note') as string}
                   </p>
                 )}
-                {/* Restart Booth — kill semua + LAUNCHER lagi otomatis. Operator ga usah nge-bat
-                    manual. Muncul cuma kalau git install (sama kayak Update); ZIP install ga ada
-                    restart.bat-nya konsisten. */}
-                {version.isGit && (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 14, paddingTop: 14, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                    <div>
-                      <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{t('set_restart_booth_label') as string}</span>
-                      <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0' }}>
-                        {t('set_restart_booth_hint') as string}
-                      </p>
-                    </div>
-                    <button
-                      onClick={handleRestartBooth}
-                      disabled={restarting}
-                      style={{
-                        padding: '6px 16px', borderRadius: 'var(--radius-glass)', border: '1px solid rgba(255,107,107,0.4)',
-                        background: restarting ? 'rgba(255,107,107,0.25)' : 'rgba(255,107,107,0.12)',
-                        color: '#ff8080', fontSize: 'var(--text-sm)', fontWeight: 600,
-                        fontFamily: 'var(--font-ui)', cursor: restarting ? 'default' : 'pointer', whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {restarting ? t('set_restart_booth_running') as string : t('set_restart_booth_btn') as string}
-                    </button>
-                  </div>
-                )}
               </div>
-            </AccordionGroup>
+
+              {version.isGit && (
+                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{t('set_restart_booth_label') as string}</span>
+                    <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0', lineHeight: 1.4 }}>
+                      {t('set_restart_booth_hint') as string}
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleRestartBooth}
+                    disabled={restarting}
+                    style={{
+                      padding: '6px 16px', borderRadius: 'var(--radius-glass)', border: '1px solid rgba(255,107,107,0.4)',
+                      background: restarting ? 'rgba(255,107,107,0.25)' : 'rgba(255,107,107,0.12)',
+                      color: '#ff8080', fontSize: 'var(--text-sm)', fontWeight: 600,
+                      fontFamily: 'var(--font-ui)', cursor: restarting ? 'default' : 'pointer', whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {restarting ? t('set_restart_booth_running') as string : t('set_restart_booth_btn') as string}
+                  </button>
+                </div>
+              )}
+            </div>
 
           </div>
         </div>

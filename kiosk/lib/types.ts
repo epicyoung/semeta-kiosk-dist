@@ -138,6 +138,9 @@ export type KioskConfig = {
   ai_strip_overlay_url?: string   // overlay PNG 2R strip kiri / default (600×1800) — dibakar di sheet.
   ai_strip_overlay_right_url?: string // overlay PNG 2R strip kanan (600×1800) jika desain kanan beda dari kiri.
   ai_strip_custom_slots?: { slots: { x: number; y: number; w: number; h: number; r?: number }[] } | null // Custom slots dari LayoutDesigner
+  // 4R Postcard: saklarnya sendiri. 2-Strip ga butuh field kayak gini — ai_strip_slots:0
+  // udah jadi saklar de-facto. undefined ⇒ true biar booth lama ga ilang fitur pas update.
+  enable_4r?: boolean
   ai_4r_orientation?: Ai4ROrientation // orientasi 4R ('LANDSCAPE' = 1800×1200, 'PORTRAIT' = 1200×1800). Default 'LANDSCAPE'.
   ai_4r_overlay_url?: string      // overlay PNG 4R (1800×1200 Landscape atau 1200×1800 Portrait) — dibakar SEKALI di sheet 4R.
   ai_4r_layout?: Ai4RLayout       // Layout preset 4R (GRID_4, TRIO_3, GRID_3, SPLIT_2, SINGLE_1).

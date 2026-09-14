@@ -1,6 +1,5 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { TouchButton } from './TouchButton'
 import { LayoutDesigner } from './LayoutDesigner'
 import { PrintLayoutPreview } from './PrintLayoutPreview'
 import type { Template, PrintSize } from '@/lib/types'
@@ -24,12 +23,27 @@ function getStyleLabel(style: PrintStyle, t: (k: any) => any): string {
   return style
 }
 
-function getStyleDesc(style: PrintStyle, t: (k: any) => any): string {
-  if (style === '4R') return (t('ltm_style_4r_desc') as string) || 'Standard 4×6" photo print — portrait or landscape'
-  if (style === '2_STRIPE') return (t('ltm_style_2stripe_desc') as string) || 'Two identical 2×6" strips on one 4R sheet'
-  if (style === 'A4') return 'Standard A4 (210×297mm) — portrait or landscape'
-  if (style === 'A3') return 'Large A3 (297×420mm) — portrait or landscape'
-  return ''
+// Dropdown + baris label — gaya disamain sama Sel/Row di SettingsPanel biar
+// satu bahasa visual. Sel di sana lokal (gak di-export), jadi diulang di sini.
+function Sel({ value, options, onChange }: { value: string; options: { value: string; label: string }[]; onChange: (v: string) => void }) {
+  return (
+    <select value={value} onChange={e => onChange(e.target.value)} style={{
+      background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.13)',
+      borderRadius: 'var(--radius-glass)', color: '#fff', fontSize: 'var(--text-sm)', padding: '6px 10px',
+      fontFamily: 'var(--font-ui)', cursor: 'pointer', outline: 'none', maxWidth: 220,
+    }}>
+      {options.map(o => <option key={o.value} value={o.value} style={{ background: 'var(--bg)', color: '#fff' }}>{o.label}</option>)}
+    </select>
+  )
+}
+
+function SelRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+      <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{label}</span>
+      {children}
+    </div>
+  )
 }
 
 // Derive PrintSize from style + orientation
@@ -275,103 +289,48 @@ export function LocalTemplateManager({ onRefreshTemplates }: Props) {
                 </div>
 
                 {/* ── STEP 1: Print Style ──────────────────────────── */}
-                <div>
-                  <span style={{ fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', fontWeight: 700, display: 'block', marginBottom: 8 }}>
-                    {t('ltm_step1') as string}
-                  </span>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-                    {(['4R', '2_STRIPE', 'A4', 'A3'] as PrintStyle[]).map(style => {
-                      const active = currentStyle === style
-                      return (
-                        <button
-                          key={style}
-                          onClick={() => {
-                            const newSize = derivePrintSize(style, currentOrientation)
-                            updateTemplate(tmpl.id, { print_size: newSize, layout_config: null })
-                          }}
-                          style={{
-                            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-                            padding: '14px 8px', borderRadius: 10,
-                            background: active ? 'rgba(124,58,237,0.18)' : 'rgba(255,255,255,0.04)',
-                            border: active ? '1.5px solid rgba(124,58,237,0.6)' : '1.5px solid rgba(255,255,255,0.08)',
-                            color: '#fff', cursor: 'pointer',
-                            transition: 'all 150ms ease',
-                          }}
-                        >
-                          <span style={{ fontSize: 22 }}>{STYLE_ICON[style]}</span>
-                          <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600 }}>{getStyleLabel(style, t)}</span>
-                          <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', textAlign: 'center', lineHeight: 1.3 }}>{getStyleDesc(style, t)}</span>
-                        </button>
-                      )
+                <SelRow label={t('ltm_step1') as string}>
+                  <Sel
+                    value={currentStyle}
+                    options={(['4R', '2_STRIPE', 'A4', 'A3'] as PrintStyle[]).map(style => ({
+                      value: style,
+                      label: `${STYLE_ICON[style]} ${getStyleLabel(style, t)}`,
+                    }))}
+                    onChange={v => updateTemplate(tmpl.id, {
+                      print_size: derivePrintSize(v as PrintStyle, currentOrientation),
+                      layout_config: null,
                     })}
-                  </div>
-                </div>
+                  />
+                </SelRow>
 
-                {/* ── Orientation toggle (4R, A4, A3) ─────────────────────── */}
+                {/* ── Orientation (4R, A4, A3) ─────────────────────── */}
                 {currentStyle !== '2_STRIPE' && (
-                  <div>
-                    <span style={{ fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', fontWeight: 700, display: 'block', marginBottom: 8 }}>
-                      {t('ltm_orientation') as string}
-                    </span>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      {(['portrait', 'landscape'] as const).map(ori => {
-                        const active = currentOrientation === ori
-                        return (
-                          <button
-                            key={ori}
-                            onClick={() => {
-                              updateTemplate(tmpl.id, { print_size: derivePrintSize(currentStyle, ori), layout_config: null })
-                            }}
-                            style={{
-                              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                              padding: '10px 0', borderRadius: 8,
-                              background: active ? 'rgba(124,58,237,0.15)' : 'rgba(255,255,255,0.04)',
-                              border: active ? '1.5px solid rgba(124,58,237,0.5)' : '1.5px solid rgba(255,255,255,0.08)',
-                              color: '#fff', cursor: 'pointer', transition: 'all 150ms ease',
-                            }}
-                          >
-                            {/* Mini artboard icon */}
-                            <div style={{
-                              width: ori === 'landscape' ? 28 : 18,
-                              height: ori === 'landscape' ? 18 : 28,
-                              borderRadius: 3,
-                              border: active ? '2px solid rgba(124,58,237,0.8)' : '2px solid rgba(255,255,255,0.25)',
-                              transition: 'border-color 150ms ease',
-                            }} />
-                            <span style={{ fontSize: 'var(--text-xs)', fontWeight: 500, textTransform: 'capitalize' }}>{ori}</span>
-                          </button>
-                        )
+                  <SelRow label={t('ltm_orientation') as string}>
+                    <Sel
+                      value={currentOrientation}
+                      options={[
+                        { value: 'portrait', label: 'Portrait' },
+                        { value: 'landscape', label: 'Landscape' },
+                      ]}
+                      onChange={v => updateTemplate(tmpl.id, {
+                        print_size: derivePrintSize(currentStyle, v as 'portrait' | 'landscape'),
+                        layout_config: null,
                       })}
-                    </div>
-                  </div>
+                    />
+                  </SelRow>
                 )}
 
                 {/* ── STEP 2: Shot Count ───────────────────────────── */}
-                <div>
-                  <span style={{ fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', fontWeight: 700, display: 'block', marginBottom: 8 }}>
-                    {t('ltm_step2') as string}
-                  </span>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    {[1, 2, 3, 4].map(n => {
-                      const active = (tmpl.shot_count ?? 4) === n
-                      return (
-                        <button
-                          key={n}
-                          onClick={() => updateTemplate(tmpl.id, { shot_count: n, layout_config: null })}
-                          style={{
-                            flex: 1, padding: '10px 0', borderRadius: 8,
-                            background: active ? 'rgba(124,58,237,0.15)' : 'rgba(255,255,255,0.04)',
-                            border: active ? '1.5px solid rgba(124,58,237,0.5)' : '1.5px solid rgba(255,255,255,0.08)',
-                            color: '#fff', cursor: 'pointer', fontSize: 'var(--text-xs)', fontWeight: 600,
-                            transition: 'all 150ms ease',
-                          }}
-                        >
-                          {n} {t('ltm_shots_suffix') as string}{n > 1 ? 's' : ''}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
+                <SelRow label={t('ltm_step2') as string}>
+                  <Sel
+                    value={String(tmpl.shot_count ?? 4)}
+                    options={[1, 2, 3, 4].map(n => ({
+                      value: String(n),
+                      label: `${n} ${t('ltm_shots_suffix') as string}${n > 1 ? 's' : ''}`,
+                    }))}
+                    onChange={v => updateTemplate(tmpl.id, { shot_count: Number(v), layout_config: null })}
+                  />
+                </SelRow>
 
                 {/* ── Canvas spec badge ─────────────────────────────── */}
                 <div style={{
@@ -391,14 +350,15 @@ export function LocalTemplateManager({ onRefreshTemplates }: Props) {
                 </div>
 
                 {/* ── Step 3: Layout Studio + Actions ─────────────── */}
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {/* Gaya samain sama tombol sekunder di SettingsPanel (Check for updates). */}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'flex-end' }}>
                   <button
                     onClick={() => setActiveDesignerTemplate(tmpl)}
                     style={{
-                      flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                      background: 'var(--brand)', color: '#fff', border: 'none', borderRadius: 999,
-                      padding: '10px 18px', fontSize: 'var(--text-xs)', cursor: 'pointer', fontWeight: 600,
-                      boxShadow: '0 6px 16px -6px var(--brand)',
+                      display: 'inline-flex', alignItems: 'center', gap: 8,
+                      padding: '6px 16px', borderRadius: 'var(--radius-glass)', border: '1px solid rgba(255,255,255,0.15)',
+                      background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.8)',
+                      fontSize: 'var(--text-sm)', fontFamily: 'var(--font-ui)', cursor: 'pointer', whiteSpace: 'nowrap',
                     }}
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -409,9 +369,9 @@ export function LocalTemplateManager({ onRefreshTemplates }: Props) {
                   <button
                     onClick={() => handleDelete(tmpl.id)}
                     style={{
-                      background: 'transparent', color: 'rgba(255,145,145,0.85)', border: '1px solid rgba(255,145,145,0.2)',
-                      borderRadius: 999, padding: '10px 18px', fontSize: 'var(--text-xs)',
-                      cursor: 'pointer', fontWeight: 500,
+                      padding: '6px 16px', borderRadius: 'var(--radius-glass)', border: '1px solid rgba(255,107,107,0.3)',
+                      background: 'rgba(255,107,107,0.12)', color: '#ff6b6b',
+                      fontSize: 'var(--text-sm)', fontFamily: 'var(--font-ui)', cursor: 'pointer', whiteSpace: 'nowrap',
                     }}
                   >
                     {t('ltm_delete') as string}

@@ -69,6 +69,7 @@ type Props = {
     | "ai_4r_layout"
     | "ai_4r_custom_slots"
     | "require_4r_overlay"
+    | "enable_4r"
   >;
   licensed: boolean;
   eventName: string;
@@ -2576,6 +2577,7 @@ export function PreviewScreen({
           ai4rLayout={config.ai_4r_layout}
           ai4rOrientation={config.ai_4r_orientation}
           require4rOverlay={config.require_4r_overlay ?? true}
+          enable4r={config.enable_4r ?? true}
           onCancel={() => setStripOpen(false)}
           onConfirm={doStripPrint}
         />

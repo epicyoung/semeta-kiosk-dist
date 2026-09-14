@@ -42,6 +42,8 @@ export interface Translations {
   liveview_error_retry: string
   // aria-label for rotate button
   liveview_rotate_aria: string
+  liveview_autofocus_aria: string
+  liveview_autofocus_hint: string
 
   // ── MultiCaptureScreen (Photo Print) ────────────────────────────────────────
   multicapture_title: string
@@ -281,6 +283,37 @@ export interface Translations {
   set_ai_strip: string
   set_ai_strip_off: string
   set_ai_strip_hint: string
+  set_ai_4r: string
+  set_ai_4r_hint: string
+  // Kartu 2-Strip & 4R — dulu hardcoded Indonesia di SettingsPanel.
+  set_strip_card_title: string
+  set_strip_slots_from_editor: string // "{n}" = jumlah slot
+  set_strip_overlay_label: string
+  set_strip_overlay_upload: string
+  set_strip_overlay_note: string
+  set_strip_overlay_ok: string
+  set_strip_overlay_ok_hint: string   // "{n}" = slot terakhir
+  set_strip_overlay_warn: string
+  set_4r_card_title: string
+  set_4r_orientation_landscape: string
+  set_4r_orientation_portrait: string
+  set_4r_paper_orientation: string
+  set_4r_slots_note: string
+  set_4r_overlay_label: string        // "{o}" = orientasi
+  set_4r_overlay_upload: string
+  set_4r_overlay_ok: string           // "{o}" = orientasi
+  set_4r_overlay_ok_hint: string
+  set_4r_overlay_warn: string
+  set_4r_bulletproof: string
+  set_uploading: string
+  set_layout_custom: string           // "{n}" = jumlah slot
+  set_layout_custom_hint: string
+  set_layout_default_strip: string
+  set_layout_default_strip_hint: string
+  set_layout_default_4r: string
+  set_layout_default_4r_hint: string
+  set_layout_reset: string
+  set_layout_designer_btn: string
   set_ai_strip_overlay_hint: string
   set_magic_catcher: string
   set_magic_catcher_hint: string

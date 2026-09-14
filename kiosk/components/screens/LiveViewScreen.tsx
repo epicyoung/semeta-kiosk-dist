@@ -1,5 +1,8 @@
 'use client'
 import { useEffect, useRef, useState, useCallback, type Dispatch, type CSSProperties } from 'react'
+import { useCanonLive } from '@/lib/use-canon-live'
+import { CameraAutofocus, AUTOFOCUS_ENABLED } from '@/components/ui/CameraAutofocus'
+import { CameraIndicator } from '@/components/ui/CameraIndicator'
 import { TouchButton } from '@/components/ui/TouchButton'
 import { stopCamera, triggerCanonCapture, rotateDataUrl } from '@/lib/camera'
 import type { KioskAction, KioskState } from '@/lib/types'
@@ -21,12 +24,6 @@ export function rotatedSize(vw: number, vh: number, rotation: number) {
 }
 
 const ROT_KEY = 'semeta.cameraRotation'
-// Live preview lewat backend proxy (same-origin, no CORS) — /api/canon-live auto-start liveview
-// + proxy 1 JPEG frame dari digiCamControl. <img> re-fetch tiap CANON_LIVE_MS jadi live-ish.
-// (Dulu nunjuk 5514/live langsung → ERR_CONNECTION_REFUSED + CORS.)
-export const CANON_LIVE = '/api/canon-live'
-export const CANON_LIVE_MS = 200
-
 export function LiveViewScreen({ dispatch, cameraSource, originalCaptures, countdownSeconds }: Props) {
   const t = useT()
   const isCanon = cameraSource === 'canon'
@@ -34,7 +31,7 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures, count
   const containerRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
 
-  const [cameraReady, setCameraReady] = useState(false)
+  const [webcamReady, setCameraReady] = useState(false)
   const [cameraError, setCameraError] = useState(false)
   const [retry, setRetry] = useState(0) // bump = re-mount kamera (tombol "Coba Lagi")
   const [countdown, setCountdown] = useState<number | null>(null)
@@ -78,32 +75,13 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures, count
     return () => observer.disconnect()
   }, [])
 
-  // Canon live-ish: bump tiap CANON_LIVE_MS → <img> src ganti (cache-bust) → re-fetch frame proxy.
-  // Berhenti pas captured (ga perlu live pas review foto). Webcam ga kena (pakai <video> stream).
-  // capturing: polling SETOP selama shutter jalan — capture route sengaja nge-Hide LV, dan
-  // polling yang jalan terus bakal nge-Show LV lagi DI TENGAH shutter (race → kamera hang).
   const [capturing, setCapturing] = useState(false)
-  const [liveTick, setLiveTick] = useState(0)
-  useEffect(() => {
-    if (!isCanon || captured || capturing) return
-    const id = setInterval(() => setLiveTick(t => t + 1), CANON_LIVE_MS)
-    return () => clearInterval(id)
-  }, [isCanon, captured, capturing])
+  const canon = useCanonLive(isCanon && !captured, capturing)
+  const cameraReady = isCanon ? canon.ready : webcamReady
 
   useEffect(() => {
-    // Canon: capture lewat backend (DSLR bukan webcam). Enable tombol; preview = proxy frame.
-    // Restart LV paksa TIAP mount — abis capture LV sengaja di-Hide, dan dCC nyajiin frame
-    // basi (HTTP 200) ke sesi berikutnya → tamu kedua dapet layar beku, operator klik manual.
-    // Restart di sini = tiap sesi mulai dari LV seger, nol intervensi. Retry bump ikut kena.
-    if (isCanon) {
-      setCameraReady(true)
-      fetch('/api/canon-live', { method: 'POST' }).catch(() => { /* freeze-detect jaring kedua */ })
-      // Keluar layar ⇒ matiin LV. Sensor Canon nyala terus bikin bodi panas &
-      // batre kekuras padahal ga ada yang difoto. Mount berikutnya nyalain lagi.
-      return () => {
-        fetch('/api/canon-live?off=1', { method: 'POST' }).catch(() => { /* best-effort */ })
-      }
-    }
+    // Canon lifecycle and readiness are managed by useCanonLive.
+    if (isCanon) return
     const el = videoRef.current
     if (!el) return
     let cancelled = false
@@ -130,8 +108,7 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures, count
 
   // Tombol R = "live view-nya ngaco, bangunin". Ada di SEMUA sumber kamera, tapi
   // caranya beda karena penyebab freeze-nya beda:
-  //   Canon  → POST /api/canon-live: restart paksa LV digiCamControl. Frame beku
-  //            tetep HTTP 200, jadi self-healing ga ke-trigger.
+  //   Canon  → restart LV through the shared controller, with a fresh retry budget.
   //   Webcam → re-init getUserMedia (retryCamera). Stream MediaStream bisa mati
   //            diem-diem (USB nyantol, driver hiccup) tanpa ngelempar error,
   //            jadi operator ga punya jalan lain selain restart booth.
@@ -140,7 +117,8 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures, count
     setLvResetting(true)
     try {
       if (isCanon) {
-        await fetch('/api/canon-live', { method: 'POST' })
+        canon.reset()
+        setCameraError(false)
       } else {
         // Lepas stream lama dulu — kalau enggak, getUserMedia baru numpuk di atas
         // yang macet dan kameranya bisa kekunci.
@@ -149,7 +127,7 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures, count
       }
     } catch { /* polling / effect getUserMedia nyambung sendiri */ }
     finally { setTimeout(() => setLvResetting(false), 800) }
-  }, [isCanon, retryCamera])
+  }, [isCanon, retryCamera, canon.reset])
 
   const handleCapture = useCallback(async () => {
     // Mati (0) ⇒ ticks kosong, langsung jepret. Flash tetap jalan di semua mode —
@@ -167,7 +145,7 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures, count
       // DSLR full-res dari backend, lalu rotate ikut tombol (sama kayak webcam) — DSLR ga bisa
       // diputer fisik, jadi rotasi di canvas. deg 0 = passthrough.
       setCapturing(true)
-      try { url = await rotateDataUrl(await triggerCanonCapture(), rotation) }
+      try { url = await rotateDataUrl(await triggerCanonCapture(canon.owner()), rotation) }
       catch { setCameraError(true) }
       finally { setCapturing(false) }
     } else {
@@ -192,7 +170,7 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures, count
       setCaptured(url)
       setShots(prev => [...prev, url!])
     }
-  }, [rotation, isCanon, countdownSeconds])
+  }, [rotation, isCanon, countdownSeconds, canon.owner])
 
   const handleBrowse = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -268,7 +246,7 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures, count
               Canon: MJPEG <img> dari digiCamControl. Webcam: getUserMedia <video>. */}
           {isCanon ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={`${CANON_LIVE}?t=${liveTick}`} alt="" className="absolute top-1/2 left-1/2 max-w-none max-h-none" style={liveStyle} onLoad={() => setCameraReady(true)} onError={() => {/* frame gagal = best-effort, tombol tetep enable */}} />
+            <img src={canon.src} alt="" className="absolute top-1/2 left-1/2 max-w-none max-h-none" style={liveStyle} />
           ) : (
             <video
               ref={videoRef}
@@ -281,7 +259,7 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures, count
           {/* Box udah nge-snap ke orientasi foto → object-cover ngisi penuh (frame look), crop minimal, ga ada bar */}
           {captured && <img src={captured} alt="captured" className="absolute inset-0 w-full h-full object-cover" />}
 
-          {!cameraReady && !cameraError && !captured && !countdown && (
+          {!cameraReady && !canon.focusing && !cameraError && !captured && !countdown && (
             <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ background: '#000' }}>
               <div style={{ width: 36, height: 36, border: '2px solid rgba(255,255,255,0.15)', borderTopColor: 'var(--fg)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
               <p style={{ fontSize: 'var(--text-xs)', letterSpacing: '0.2em', color: 'var(--fg-muted)', marginTop: 16, textTransform: 'uppercase' }}>{t('liveview_loading_camera') as string}</p>
@@ -296,7 +274,7 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures, count
                 <path d="M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3m3-3h6l2 3h4a2 2 0 0 1 2 2v9.34m-7.72-2.06a4 4 0 1 1-5.56-5.56" />
               </svg>
               <p style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-muted)', lineHeight: 1.5 }}>{t('liveview_error_body') as string}</p>
-              <button onClick={retryCamera} style={{ padding: '10px 20px', borderRadius: 10, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', cursor: 'pointer', fontSize: 'var(--text-sm)' }}>
+              <button onClick={isCanon ? resetLiveView : retryCamera} style={{ padding: '10px 20px', borderRadius: 10, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', cursor: 'pointer', fontSize: 'var(--text-sm)' }}>
                 {t('liveview_error_retry') as string}
               </button>
             </div>
@@ -311,12 +289,15 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures, count
             </div>
           )}
 
+          {AUTOFOCUS_ENABLED && isCanon && !captured && <CameraAutofocus disabled={!cameraReady || capturing || countdown !== null || lvResetting} focusing={canon.focusing} message={canon.focusMessage} onFocus={canon.autofocus} />}
+          {isCanon && !captured && <CameraIndicator status={capturing ? { phase: 'capturing', message: 'Mengambil foto…' } : canon.status} />}
+
           {flash && <div className="absolute inset-0 bg-white z-20" />}
 
           {/* Tombol ROTATE (+ refresh LV khusus Canon) — cuma pas kamera live, mati pas countdown */}
-          {cameraReady && !captured && (
-            <div className="absolute inset-0 flex items-start justify-end p-4" style={{ zIndex: 30 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {(cameraReady || isCanon) && !captured && (
+            <div className="absolute inset-0 flex items-start justify-end p-4" style={{ zIndex: 30, pointerEvents: 'none' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, pointerEvents: 'auto' }}>
                 <button
                   onClick={rotate}
                   disabled={countdown !== null}
@@ -338,7 +319,7 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures, count
                     Webcam: re-init getUserMedia. Dua-duanya bisa freeze di lapangan. */}
                 <button
                   onClick={resetLiveView}
-                  disabled={countdown !== null || lvResetting}
+                  disabled={capturing || canon.focusing || countdown !== null || lvResetting}
                   aria-label="Refresh live view"
                   title="Live view macet? Tekan untuk menyegarkan"
                   style={{
@@ -359,7 +340,7 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures, count
             </div>
           )}
 
-          {captured && cameraReady && (
+          {captured && (
             <div className="absolute inset-0 flex items-end justify-end p-4" style={{ zIndex: 30 }}>
               <button
                 onClick={handleRetakeLast}

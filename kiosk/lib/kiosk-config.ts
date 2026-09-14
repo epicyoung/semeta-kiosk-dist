@@ -103,9 +103,11 @@ export async function fetchKioskConfig(): Promise<KioskConfig> {
   const pbUrl = (localSettings.pocketbase_url as string) ?? 'http://localhost:8090'
 
   // Try PocketBase first (local, offline-capable after network boot)
-  const [pbTemplates, pbFrames] = templateSource === 'pocketbase'
-    ? await Promise.all([fetchPocketBaseTemplates(pbUrl), fetchPocketBaseFrames(pbUrl)])
-    : [[], []]
+  // Digital frames are managed in PB even when AI templates use local JSON.
+  const [pbTemplates, pbFrames] = await Promise.all([
+    templateSource === 'pocketbase' ? fetchPocketBaseTemplates(pbUrl) : Promise.resolve([]),
+    fetchPocketBaseFrames(pbUrl),
+  ])
   let templates = pbTemplates
 
   // JSON cache fallback

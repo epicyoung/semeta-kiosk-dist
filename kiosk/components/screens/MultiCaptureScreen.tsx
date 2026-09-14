@@ -1,9 +1,12 @@
 'use client'
 import { useEffect, useRef, useState, useCallback, type Dispatch, type CSSProperties } from 'react'
+import { useCanonLive } from '@/lib/use-canon-live'
+import { CameraAutofocus, AUTOFOCUS_ENABLED } from '@/components/ui/CameraAutofocus'
+import { CameraIndicator } from '@/components/ui/CameraIndicator'
 import { TouchButton } from '@/components/ui/TouchButton'
 import { PrintLayoutPreview } from '@/components/ui/PrintLayoutPreview'
 import { stopCamera, triggerCanonCapture, rotateDataUrl } from '@/lib/camera'
-import { rotatedSize, CANON_LIVE, CANON_LIVE_MS } from '@/components/screens/LiveViewScreen'
+import { rotatedSize } from '@/components/screens/LiveViewScreen'
 import { layoutSlots } from '@/lib/print-layout'
 import type { KioskAction, KioskState } from '@/lib/types'
 import { useT } from '@/lib/i18n'
@@ -24,7 +27,7 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
   const containerRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
 
-  const [cameraReady, setCameraReady] = useState(false)
+  const [webcamReady, setCameraReady] = useState(false)
   const [cameraError, setCameraError] = useState(false)
   const [retry, setRetry] = useState(0)
   const [countdown, setCountdown] = useState<number | null>(null)
@@ -37,6 +40,10 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
   const confirmedCount = state.shots.length
   const done = confirmedCount >= target && pendingShot === null
   const isReviewingPending = pendingShot !== null
+
+  const [capturing, setCapturing] = useState(false)
+  const canon = useCanonLive(isCanon && !done && !isReviewingPending, capturing)
+  const cameraReady = isCanon ? canon.ready : webcamReady
 
   useEffect(() => {
     try {
@@ -64,14 +71,7 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
   }, [])
 
   useEffect(() => {
-    if (isCanon) {
-      setCameraReady(true)
-      fetch('/api/canon-live', { method: 'POST' }).catch(() => {})
-      // Keluar layar ⇒ matiin LV (hemat batre + bodi ga panas). Sama kayak LiveViewScreen.
-      return () => {
-        fetch('/api/canon-live?off=1', { method: 'POST' }).catch(() => {})
-      }
-    }
+    if (isCanon) return
     const el = videoRef.current
     if (!el) return
     let cancelled = false
@@ -100,14 +100,15 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
     setLvResetting(true)
     try {
       if (isCanon) {
-        await fetch('/api/canon-live', { method: 'POST' })
+        canon.reset()
+        setCameraError(false)
       } else {
         if (videoRef.current) stopCamera(videoRef.current)
         retryCamera()
       }
     } catch { /* polling / effect getUserMedia nyambung sendiri */ }
     finally { setTimeout(() => setLvResetting(false), 800) }
-  }, [isCanon, retryCamera])
+  }, [isCanon, retryCamera, canon.reset])
 
   const handleBrowse = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -120,14 +121,6 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
     reader.readAsDataURL(file)
     e.target.value = ''
   }
-
-  const [capturing, setCapturing] = useState(false)
-  const [liveTick, setLiveTick] = useState(0)
-  useEffect(() => {
-    if (!isCanon || done || capturing || isReviewingPending) return
-    const id = setInterval(() => setLiveTick(t => t + 1), CANON_LIVE_MS)
-    return () => clearInterval(id)
-  }, [isCanon, done, capturing, isReviewingPending])
 
   const captureShot = useCallback(async (): Promise<string | null> => {
     // Mati (0) ⇒ ticks kosong, langsung jepret. Flash tetap jalan di semua mode.
@@ -142,7 +135,7 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
 
     if (isCanon) {
       setCapturing(true)
-      try { return await rotateDataUrl(await triggerCanonCapture(), rotation) }
+      try { return await rotateDataUrl(await triggerCanonCapture(canon.owner()), rotation) }
       catch { setCameraError(true); return null }
       finally { setCapturing(false) }
     }
@@ -160,7 +153,7 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
     ctx.rotate((rotation * Math.PI) / 180)
     ctx.drawImage(video, -vw / 2, -vh / 2)
     return canvas.toDataURL('image/jpeg', 0.92)
-  }, [rotation, isCanon, countdownSeconds])
+  }, [rotation, isCanon, countdownSeconds, canon.owner])
 
   const handleTriggerCapture = useCallback(async () => {
     if (capturing || countdown !== null || !cameraReady || done || isReviewingPending) return
@@ -249,7 +242,7 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
             {!done && !isReviewingPending && (
               isCanon ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={`${CANON_LIVE}?t=${liveTick}`} alt="" className="absolute top-1/2 left-1/2 max-w-none max-h-none" style={liveStyle} />
+                <img src={canon.src} alt="" className="absolute top-1/2 left-1/2 max-w-none max-h-none" style={liveStyle} />
               ) : (
                 <video
                   ref={videoRef}
@@ -277,7 +270,7 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
               </div>
             )}
 
-            {!cameraReady && !cameraError && !done && !isReviewingPending && (
+            {!cameraReady && !canon.focusing && !cameraError && !done && !isReviewingPending && (
               <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ background: '#000' }}>
                 <div style={{ width: 36, height: 36, border: '2px solid rgba(255,255,255,0.15)', borderTopColor: 'var(--fg)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
                 <p style={{ fontSize: 'var(--text-xs)', letterSpacing: '0.2em', color: 'var(--fg-muted)', marginTop: 16, textTransform: 'uppercase' }}>{t('liveview_loading_camera') as string}</p>
@@ -287,7 +280,7 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
             {cameraError && !done && !isReviewingPending && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-6 text-center" style={{ background: '#000' }}>
                 <p style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-muted)', lineHeight: 1.5 }}>{t('liveview_error_body') as string}</p>
-                <button onClick={retryCamera} style={{ padding: '10px 20px', borderRadius: 10, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', cursor: 'pointer', fontSize: 'var(--text-sm)' }}>
+                <button onClick={isCanon ? resetLiveView : retryCamera} style={{ padding: '10px 20px', borderRadius: 10, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', cursor: 'pointer', fontSize: 'var(--text-sm)' }}>
                   {t('liveview_error_retry') as string}
                 </button>
               </div>
@@ -302,11 +295,14 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
               </div>
             )}
 
+          {AUTOFOCUS_ENABLED && isCanon && !done && !isReviewingPending && <CameraAutofocus disabled={!cameraReady || capturing || countdown !== null || lvResetting} focusing={canon.focusing} message={canon.focusMessage} onFocus={canon.autofocus} />}
+          {isCanon && !done && !isReviewingPending && <CameraIndicator status={capturing ? { phase: 'capturing', message: 'Mengambil foto…' } : canon.status} />}
+
             {flash && <div className="absolute inset-0 bg-white z-20" />}
 
-            {cameraReady && !done && !isReviewingPending && countdown === null && (
-              <div className="absolute inset-0 flex items-start justify-end p-4" style={{ zIndex: 30 }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {(cameraReady || isCanon) && !done && !isReviewingPending && countdown === null && (
+              <div className="absolute inset-0 flex items-start justify-end p-4" style={{ zIndex: 30, pointerEvents: 'none' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, pointerEvents: 'auto' }}>
                   <button
                     onClick={rotate}
                     aria-label={t('liveview_rotate_aria') as string}
@@ -327,7 +323,7 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
                       sesi N-shot yang udah jalan bakal keulang dari nol. */}
                   <button
                     onClick={resetLiveView}
-                    disabled={lvResetting}
+                    disabled={capturing || canon.focusing || lvResetting}
                     aria-label="Refresh live view"
                     title="Live view macet? Tekan untuk menyegarkan"
                     style={{

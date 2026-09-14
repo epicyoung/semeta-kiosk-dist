@@ -14,8 +14,8 @@ export function stopCamera(el: HTMLVideoElement): void {
 // Canon DSLR: jepret full-res lewat backend /api/canon-capture. Backend yang ngomong ke
 // digiCamControl 5513 (bebas CORS) + baca file kamera → balikin dataURL JPEG full-res.
 // Dipake pas camera_source === 'canon' (LiveView + MultiCapture), gantiin canvas-dari-webcam.
-export async function triggerCanonCapture(): Promise<string> {
-  const res = await fetch('/api/canon-capture', { method: 'POST' })
+export async function triggerCanonCapture(owner: string): Promise<string> {
+  const res = await fetch('/api/canon-capture', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ owner }) })
   if (!res.ok) {
     const { error } = await res.json().catch(() => ({ error: `capture ${res.status}` }))
     throw new Error(error ?? `capture ${res.status}`)
