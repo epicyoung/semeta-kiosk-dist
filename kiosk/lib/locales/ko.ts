@@ -264,6 +264,8 @@ const ko: Translations = {
   set_pb_data: 'Epicyoung PB 데이터',
   set_pb_data_note: '읽기 전용 — Epicyoung PB에서 관리됨',
   set_source: '소스',
+  set_countdown: '카운트다운',
+  set_countdown_off: '끄기 (즉시)',
   set_pb_url: 'Epicyoung PB URL',
   set_status: '상태',
   set_open_folder: '📁 폴더 열기',

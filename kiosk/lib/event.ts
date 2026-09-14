@@ -80,15 +80,26 @@ export function nextSeq(eventFolder: string): number {
   const eventDir = eventDirPath(eventFolder)
   const seqFile = path.join(eventDir, 'seq.json')
 
+  let content: string
   try {
-    const content = fs.readFileSync(seqFile, 'utf8')
-    const data = JSON.parse(content)
-    const next = data.seq + 1
-    fs.writeFileSync(seqFile, JSON.stringify({ seq: next }, null, 2))
-    return next
-  } catch {
+    content = fs.readFileSync(seqFile, 'utf8')
+  } catch (err) {
+    // Cuma file-belum-ada yang sah mulai dari 1. Error lain (file kekunci, disk
+    // error) JANGAN di-reset — insiden 2026-09-12: seq balik ke 001 di tengah
+    // event, tiap QR nunjuk foto -001 dan file R2 ketimpa foto tamu sebelumnya.
+    if ((err as NodeJS.ErrnoException)?.code !== 'ENOENT') throw err
     fs.mkdirSync(eventDir, { recursive: true })
     fs.writeFileSync(seqFile, JSON.stringify({ seq: 1 }, null, 2))
     return 1
   }
+
+  // File ada tapi isinya ngaco = jangan tebak. Mundur ke 1 bikin data hilang.
+  const data = JSON.parse(content)
+  if (!Number.isInteger(data?.seq) || data.seq < 1) {
+    throw new Error(`seq.json rusak di ${seqFile}: seq=${JSON.stringify(data?.seq)}`)
+  }
+
+  const next = data.seq + 1
+  fs.writeFileSync(seqFile, JSON.stringify({ seq: next }, null, 2))
+  return next
 }

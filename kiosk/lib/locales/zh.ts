@@ -264,6 +264,8 @@ const zh: Translations = {
   set_pb_data: 'Epicyoung PB 数据',
   set_pb_data_note: '只读 — 由 Epicyoung PB 管理',
   set_source: '来源',
+  set_countdown: '倒计时',
+  set_countdown_off: '关闭（立即拍摄）',
   set_pb_url: 'Epicyoung PB 网址',
   set_status: '状态',
   set_open_folder: '📁 打开文件夹',

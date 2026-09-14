@@ -264,6 +264,8 @@ const en: Translations = {
   set_pb_data: 'Epicyoung PB Data',
   set_pb_data_note: 'Read-only — managed by Epicyoung PB',
   set_source: 'Source',
+  set_countdown: 'Countdown',
+  set_countdown_off: 'Off (instant)',
   set_pb_url: 'Epicyoung PB URL',
   set_status: 'Status',
   set_open_folder: '📁 Open Folder',

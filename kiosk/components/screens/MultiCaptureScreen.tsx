@@ -7,16 +7,18 @@ import { rotatedSize, CANON_LIVE, CANON_LIVE_MS } from '@/components/screens/Liv
 import { layoutSlots } from '@/lib/print-layout'
 import type { KioskAction, KioskState } from '@/lib/types'
 import { useT } from '@/lib/i18n'
+import { countdownTicks, COUNTDOWN_TICK_MS } from '@/lib/countdown'
 
 type Props = {
   state: Extract<KioskState, { screen: 'multicapture' }>
   dispatch: Dispatch<KioskAction>
   cameraSource?: string
+  countdownSeconds?: number
 }
 
 const ROT_KEY = 'semeta.cameraRotation'
 
-export function MultiCaptureScreen({ state, dispatch, cameraSource }: Props) {
+export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSeconds }: Props) {
   const t = useT()
   const isCanon = cameraSource === 'canon'
   const containerRef = useRef<HTMLDivElement>(null)
@@ -109,9 +111,10 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource }: Props) {
   }, [isCanon, done, capturing, isReviewingPending])
 
   const captureShot = useCallback(async (): Promise<string | null> => {
-    for (const n of [3, 2, 1]) {
+    // Mati (0) ⇒ ticks kosong, langsung jepret. Flash tetap jalan di semua mode.
+    for (const n of countdownTicks(countdownSeconds ?? 3)) {
       setCountdown(n)
-      await new Promise(r => setTimeout(r, 800))
+      await new Promise(r => setTimeout(r, COUNTDOWN_TICK_MS))
     }
     setCountdown(null)
     setFlash(true)
@@ -138,7 +141,7 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource }: Props) {
     ctx.rotate((rotation * Math.PI) / 180)
     ctx.drawImage(video, -vw / 2, -vh / 2)
     return canvas.toDataURL('image/jpeg', 0.92)
-  }, [rotation, isCanon])
+  }, [rotation, isCanon, countdownSeconds])
 
   const handleTriggerCapture = useCallback(async () => {
     if (capturing || countdown !== null || !cameraReady || done || isReviewingPending) return

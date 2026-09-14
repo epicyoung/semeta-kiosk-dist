@@ -259,7 +259,7 @@ export function KioskApp({ config: initialConfig }: { config: KioskConfig }) {
     switch (state.screen) {
       case 'idle':        return <IdleScreen dispatch={wrappedDispatch} isPaused={isPaused} />
       case 'consent':     return <ConsentScreen dispatch={wrappedDispatch} />
-      case 'liveview':    return <LiveViewScreen state={state} dispatch={wrappedDispatch} cameraSource={config.camera_source} originalCaptures={config.original_captures} />
+      case 'liveview':    return <LiveViewScreen state={state} dispatch={wrappedDispatch} cameraSource={config.camera_source} originalCaptures={config.original_captures} countdownSeconds={config.countdown_seconds} />
       case 'category':    return <CategoryScreen state={state} dispatch={wrappedDispatch} templates={templates} eventName={config.event_name} licensed={config.licensed ?? false} />
       // Multi-template = engine LOKAL doang (faceswap & fullbody/comfy): dua-duanya sequential
       // di GPU sendiri, nol token per variasi, jadi jumlahnya boleh jadi dial operator.
@@ -267,7 +267,7 @@ export function KioskApp({ config: initialConfig }: { config: KioskConfig }) {
       // num_images di payload_json Supabase (row yang sama yang nagih), bukan kiosk.
       case 'template':    return <TemplateScreen state={state} dispatch={wrappedDispatch} templates={templates} maxTemplates={config.engine_mode === 'faceswap_local' || config.engine_mode === 'fullbody_local' ? (config.max_templates ?? 1) : 1} engineMode={config.engine_mode} />
       case 'faceassign':  return <FaceAssignScreen state={state} dispatch={wrappedDispatch} />
-      case 'multicapture': return <MultiCaptureScreen state={state} dispatch={wrappedDispatch} cameraSource={config.camera_source} />
+      case 'multicapture': return <MultiCaptureScreen state={state} dispatch={wrappedDispatch} cameraSource={config.camera_source} countdownSeconds={config.countdown_seconds} />
       // Engine 'api' + input_label — teks tamu masuk prompt berbayar, jadi harus fix sebelum processing.
       case 'nameinput':   return <NameInputScreen template={state.templates[0]} dispatch={wrappedDispatch} />
       case 'processing':  return <ProcessingScreen state={state} dispatch={wrappedDispatch} generationSource={config.generation_source} eventName={config.event_name} licensed={config.licensed ?? false} videoUnlocked={isVideoUnlocked(config)} comfy={comfyCfg} enableVideoEngine={config.enable_video_engine ?? false} videoProvider={config.video_provider ?? 'PIXVERSE'} videoResolution={config.video_resolution ?? '720p'} imageEngine={engineKeyFor(config.image_model ?? '', config.image_resolution ?? '') ?? ''} imageVariants={config.image_variants ?? 4} onUploadFailed={(meta) => log('UPLOAD_FAILED', meta)} />

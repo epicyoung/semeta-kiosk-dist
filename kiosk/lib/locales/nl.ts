@@ -264,6 +264,8 @@ const nl: Translations = {
   set_pb_data: 'Epicyoung PB-gegevens',
   set_pb_data_note: 'Alleen-lezen — beheerd door Epicyoung PB',
   set_source: 'Bron',
+  set_countdown: 'Aftellen',
+  set_countdown_off: 'Uit (direct)',
   set_pb_url: 'Epicyoung PB-URL',
   set_status: 'Status',
   set_open_folder: '📁 Map openen',

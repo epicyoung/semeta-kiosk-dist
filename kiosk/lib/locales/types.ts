@@ -254,6 +254,8 @@ export interface Translations {
   set_pb_data_note: string             // "Read-only — managed by PocketBase"
   // Templates
   set_source: string
+  set_countdown: string
+  set_countdown_off: string
   set_pb_url: string
   set_status: string
   set_open_folder: string              // "📁 Open Folder"

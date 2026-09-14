@@ -264,6 +264,8 @@ const ar: Translations = {
   set_pb_data: 'بيانات Epicyoung PB',
   set_pb_data_note: 'للقراءة فقط — تُدار بواسطة Epicyoung PB',
   set_source: 'المصدر',
+  set_countdown: 'العد التنازلي',
+  set_countdown_off: 'إيقاف (فوري)',
   set_pb_url: 'رابط Epicyoung PB',
   set_status: 'الحالة',
   set_open_folder: '📁 فتح المجلد',

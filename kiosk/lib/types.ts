@@ -128,6 +128,8 @@ export type KioskConfig = {
   engine_mode?: string
   camera_source?: string
   api_model?: string
+  countdown_seconds?: number      // Hitung mundur sebelum jepret: 0 (langsung) | 3 | 5. undefined ⇒ 3.
+
   max_templates?: number          // VIP multi-template: 1 (default) — 4. undefined ⇒ 1.
   original_captures?: number      // Jumlah foto asli per tamu (1–4). undefined/1 ⇒ 1. Foto #1 diproses AI, sisanya masuk ke 2-Strip pool.
   // Strip 2R dari hasil AI: tamu nyusun sendiri hasil AI + Ori jadi strip pas tombol Cetak 2-Strip.

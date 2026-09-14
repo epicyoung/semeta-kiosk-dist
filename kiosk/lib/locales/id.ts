@@ -266,6 +266,8 @@ const id: Translations = {
   set_pb_data: 'Data Epicyoung PB',
   set_pb_data_note: 'Read-only — dikelola oleh Epicyoung PB',
   set_source: 'Sumber',
+  set_countdown: 'Hitung Mundur',
+  set_countdown_off: 'Mati (langsung)',
   set_pb_url: 'URL Epicyoung PB',
   set_status: 'Status',
   set_open_folder: '📁 Buka Folder',

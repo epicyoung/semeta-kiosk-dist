@@ -19,6 +19,7 @@ import { StripComposer } from "@/components/ui/StripComposer";
 import type { StripSource } from "@/lib/strip-pool";
 import { uploadAsset, blobUrlToDataUrl, uploadLocalFile, resizeDataUrl } from "@/lib/upload";
 import { planMultiUpload } from "@/lib/multi-upload";
+import { seqFromBase } from "@/lib/gallery";
 import { swapFace, isFaceServerAlive } from "@/lib/faceswap";
 import { refineResult } from "@/lib/refine-result";
 import { FaceRemapPanel } from "@/components/ui/FaceRemapPanel";
@@ -45,6 +46,7 @@ type Props = {
     | "enable_email"
     | "enable_print"
     | "enable_video"
+    | "enable_gallery"
     | "enable_video_engine"
     | "video_provider"
     | "video_resolution"
@@ -535,6 +537,9 @@ export function PreviewScreen({
     } catch (err) {
       console.warn("[print] composite frame gagal, print foto polos:", err);
     }
+    // Rekam persis apa yang bakal dicetak — sebelum transform khusus kertas (2-up sheet)
+    // yang cuma relevan buat printer, bukan buat arsip cetak-ulang.
+    saveForReprint(out);
     const isStrip = state.screen === "preview" && state.printSize === "2R_STRIP";
     const isIsoA = state.screen === "preview" && (
       state.printSize === "A4_PORTRAIT" ||
@@ -563,6 +568,21 @@ export function PreviewScreen({
       ? config.templates.find(template => template.id === state.templateId)
       : undefined;
     await printPhoto(out, copies, state.screen === "preview" ? state.printSize : undefined, printTemplate?.overlay_url);
+  }
+
+  // Simpan hasil komposit yang UDAH JADI buat cetak-ulang dari Gallery. Bukan komposit
+  // ulang: pipeline-nya kompleks (layout/overlay/orientasi), ngejalanin ulang bikin
+  // cetakan kedua bisa beda dari yang pertama kalau operator ganti setting di tengah event.
+  // Fire-and-forget — gallery itu fitur sekunder, kegagalannya JANGAN nyentuh alur cetak.
+  function saveForReprint(composited: string) {
+    if (!config.enable_gallery) return;
+    const seq = seqFromBase(state.base);
+    if (!seq) return;
+    void fetch("/api/gallery", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event_name: eventName, seq, image_base64: composited }),
+    }).catch(err => console.warn("[gallery] simpan file cetak gagal:", err));
   }
 
   // ── Strip 2R dari hasil AI ────────────────────────────────────────────────────
@@ -898,6 +918,18 @@ export function PreviewScreen({
             `https://semeta-microsite.pages.dev/s?b=${encodeURIComponent(resB.key)}${mCount > 0 ? `&m=${mCount}` : ""}${aCount > 0 ? `&a=${aCount}` : ""}`,
           );
           setQrStatus("idle");
+          // Catat r2_key ke sidecar → foto ini dapet QR pas dibuka lagi dari Gallery.
+          // Overwrite penuh di sisi route; urutan upload vs print ga bikin entry ilang.
+          if (config.enable_gallery) {
+            const gSeq = seqFromBase(base);
+            if (gSeq) {
+              void fetch("/api/gallery", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ event_name: eventName, seq: gSeq, r2_key_b: resB.key, m: mCount }),
+              }).catch(err => console.warn("[gallery] catat r2_key gagal:", err));
+            }
+          }
         }
         // _M dan _A2+ uploads paralel — AWAIT beneran, bukan forEach fire-and-forget.
         // Promise.allSettled: 1 gagal ga crash sisanya. Fail-safe: microsite <img onerror> retry.

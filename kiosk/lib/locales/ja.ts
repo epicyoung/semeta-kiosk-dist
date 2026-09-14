@@ -264,6 +264,8 @@ const ja: Translations = {
   set_pb_data: 'Epicyoung PB データ',
   set_pb_data_note: '読み取り専用 — Epicyoung PB により管理',
   set_source: 'ソース',
+  set_countdown: 'カウントダウン',
+  set_countdown_off: 'オフ（即時）',
   set_pb_url: 'Epicyoung PB URL',
   set_status: 'ステータス',
   set_open_folder: '📁 フォルダを開く',

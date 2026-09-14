@@ -3,6 +3,7 @@ import { localDb } from './local-db'
 import { fetchPocketBaseFrames, fetchPocketBaseTemplates } from './pocketbase'
 import { fetchSpindonesiaTemplates } from './spindonesia'
 import { reasonForStatus, withinGrace, offlineLicensedFresh, type LockReason } from './license'
+import { COUNTDOWN_DEFAULT } from './countdown'
 
 export type LicenseGate =
   | { ok: true; remaining_sec: number; licensed: boolean; bypassed?: boolean; video_unlocked?: boolean; kiosk_name?: string; kiosk_no?: number; pause_quota_sec?: number; pause_used_sec?: number }
@@ -79,6 +80,7 @@ const FALLBACK: KioskConfig = {
   // handshake (video_unlocked, di-overwrite page.tsx) atau godmode.
   enable_video: false,
   enable_gallery: false,
+  countdown_seconds: COUNTDOWN_DEFAULT,
   template_source: 'pocketbase',
   pocketbase_url: 'http://localhost:8090',
   comfy_model_family: 'sd15',

@@ -6,11 +6,13 @@ import { fetchPocketBaseTemplates } from '@/lib/pocketbase'
 import { isVideoUnlocked } from '@/lib/video'
 import { enabledModels, costFor, reconcileSelection, totalCostFor, clampVariants, VARIANT_CHOICES } from '@/lib/image-engines'
 import { useT } from '@/lib/i18n'
+import { COUNTDOWN_DEFAULT } from '@/lib/countdown'
 import type { Translations } from '@/lib/locales/types'
 
 type TFn = (key: keyof Translations) => Translations[keyof Translations]
 type EngineKey = 'faceswap_local' | 'fullbody_local' | 'print_local' | 'faceswap_api' | 'fullbody_api'
 
+import { GalleryPanel } from './GalleryPanel'
 import { LocalTemplateManager } from './LocalTemplateManager'
 import { VideoPromptManager } from './VideoPromptManager'
 import { LayoutDesigner } from './LayoutDesigner'
@@ -232,6 +234,8 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   const [pbStatus,        setPbStatus]        = useState<PbStatus>('idle')
   const [engine,          setEngine]          = useState<EngineKey>((config.engine_mode as EngineKey) || 'faceswap_local')
   const [camera,          setCamera]          = useState(config.camera_source || 'webcam')
+  const [countdownSec,    setCountdownSec]    = useState(config.countdown_seconds ?? COUNTDOWN_DEFAULT)
+  const [galleryOpen,     setGalleryOpen]     = useState(false)
   const [comfyFamily,     setComfyFamily]     = useState<ComfyModelFamily>(config.comfy_model_family ?? 'sd15')
   const [comfyCheckpoint, setComfyCheckpoint] = useState(config.comfy_checkpoint ?? 'epicrealism_pureEvolutionV5.safetensors')
   const [comfyControlnet, setComfyControlnet] = useState<ComfyControlnetMode>(config.comfy_controlnet ?? 'canny')
@@ -824,6 +828,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         engine_mode:       engine,
         generation_source: engine.endsWith('_local') ? 'LOCAL' : 'fal',
         camera_source:     camera,
+        countdown_seconds: countdownSec,
         template_source:   templateSource,
         pocketbase_url:    pbUrl,
         output_dir:        outputDir,
@@ -880,6 +885,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
         engine_mode:       engine,
         generation_source: engine.endsWith('_local') ? 'LOCAL' : 'fal',
         camera_source:     camera,
+        countdown_seconds: countdownSec,
         template_source:   templateSource,
         pocketbase_url:    pbUrl,
         output_dir:        outputDir,
@@ -1769,6 +1775,23 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                 <TextInput value={outputDir} onChange={setOutputDir} placeholder="C:/semeta" mono />
               </Row>
 
+              {/* Galeri cetak-ulang. Sengaja cuma di Settings: tamu ga boleh bisa
+                  buka-buka foto tamu lain. Nyantol ke enable_gallery dari handshake. */}
+              {config.enable_gallery && (
+                <Row label="Galeri Cetak Ulang">
+                  <button
+                    onClick={() => setGalleryOpen(true)}
+                    style={{
+                      background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.15)',
+                      borderRadius: 'var(--radius-glass)', color: 'rgba(255,255,255,0.8)',
+                      cursor: 'pointer', fontSize: 'var(--text-xs)', padding: '7px 14px',
+                    }}
+                  >
+                    🖼 Buka Galeri
+                  </button>
+                </Row>
+              )}
+
 
 
               <div style={{ padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
@@ -1856,6 +1879,20 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                   {camera === 'canon' && <StatusBadge status={cameraStatus} t={t} />}
                   <Sel value={camera} options={CAMERA_OPTS} onChange={setCamera} />
                 </div>
+              </Row>
+
+              {/* Hitung mundur sebelum jepret. Mati = operator pegang kendali penuh,
+                  jepret langsung pas tombol ditekan (flash tetap ada). */}
+              <Row label={t('set_countdown') as string}>
+                <Sel
+                  value={String(countdownSec)}
+                  options={[
+                    { value: '0', label: t('set_countdown_off') as string },
+                    { value: '3', label: '3s' },
+                    { value: '5', label: '5s' },
+                  ]}
+                  onChange={v => setCountdownSec(Number(v))}
+                />
               </Row>
 
 
@@ -2332,6 +2369,10 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
           }}
           onClose={() => setShow4rDesigner(false)}
         />
+      )}
+
+      {galleryOpen && (
+        <GalleryPanel eventName={eventName} onClose={() => setGalleryOpen(false)} />
       )}
     </>
   )

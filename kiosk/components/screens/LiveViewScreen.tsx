@@ -4,12 +4,14 @@ import { TouchButton } from '@/components/ui/TouchButton'
 import { stopCamera, triggerCanonCapture, rotateDataUrl } from '@/lib/camera'
 import type { KioskAction, KioskState } from '@/lib/types'
 import { useT } from '@/lib/i18n'
+import { countdownTicks, COUNTDOWN_TICK_MS } from '@/lib/countdown'
 
 type Props = {
   state: Extract<KioskState, { screen: 'liveview' }>
   dispatch: Dispatch<KioskAction>
   cameraSource?: string
   originalCaptures?: number
+  countdownSeconds?: number
 }
 
 // pure: source dims + rotasi → ukuran canvas output. Quarter-turn (90/270) tuker w/h.
@@ -25,7 +27,7 @@ const ROT_KEY = 'semeta.cameraRotation'
 export const CANON_LIVE = '/api/canon-live'
 export const CANON_LIVE_MS = 200
 
-export function LiveViewScreen({ dispatch, cameraSource, originalCaptures }: Props) {
+export function LiveViewScreen({ dispatch, cameraSource, originalCaptures, countdownSeconds }: Props) {
   const t = useT()
   const isCanon = cameraSource === 'canon'
   const maxShots = originalCaptures ?? 1
@@ -132,9 +134,11 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures }: Pro
   }, [])
 
   const handleCapture = useCallback(async () => {
-    for (const n of [3, 2, 1]) {
+    // Mati (0) ⇒ ticks kosong, langsung jepret. Flash tetap jalan di semua mode —
+    // sinyal visual kalau foto udah keambil.
+    for (const n of countdownTicks(countdownSeconds ?? 3)) {
       setCountdown(n)
-      await new Promise(r => setTimeout(r, 800))
+      await new Promise(r => setTimeout(r, COUNTDOWN_TICK_MS))
     }
     setCountdown(null)
     setFlash(true)
@@ -170,7 +174,7 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures }: Pro
       setCaptured(url)
       setShots(prev => [...prev, url!])
     }
-  }, [rotation, isCanon])
+  }, [rotation, isCanon, countdownSeconds])
 
   const handleBrowse = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
