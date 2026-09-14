@@ -90,6 +90,22 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
     setRetry(n => n + 1)
   }, [])
 
+  // Tombol R — bangunin live view yang beku. Perilaku sama persis dgn
+  // LiveViewScreen: Canon restart LV digiCamControl, webcam re-init getUserMedia.
+  const [lvResetting, setLvResetting] = useState(false)
+  const resetLiveView = useCallback(async () => {
+    setLvResetting(true)
+    try {
+      if (isCanon) {
+        await fetch('/api/canon-live', { method: 'POST' })
+      } else {
+        if (videoRef.current) stopCamera(videoRef.current)
+        retryCamera()
+      }
+    } catch { /* polling / effect getUserMedia nyambung sendiri */ }
+    finally { setTimeout(() => setLvResetting(false), 800) }
+  }, [isCanon, retryCamera])
+
   const handleBrowse = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -287,21 +303,45 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
 
             {cameraReady && !done && !isReviewingPending && countdown === null && (
               <div className="absolute inset-0 flex items-start justify-end p-4" style={{ zIndex: 30 }}>
-                <button
-                  onClick={rotate}
-                  aria-label={t('liveview_rotate_aria') as string}
-                  style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    width: 44, height: 44, borderRadius: 12,
-                    background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.3)',
-                    color: '#fff', cursor: 'pointer', backdropFilter: 'blur(8px)',
-                  }}
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="23 4 23 10 17 10" />
-                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-                  </svg>
-                </button>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <button
+                    onClick={rotate}
+                    aria-label={t('liveview_rotate_aria') as string}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      width: 44, height: 44, borderRadius: 12,
+                      background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.3)',
+                      color: '#fff', cursor: 'pointer', backdropFilter: 'blur(8px)',
+                    }}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="23 4 23 10 17 10" />
+                      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+                    </svg>
+                  </button>
+                  {/* Refresh LV — sama kayak LiveViewScreen. Photo Print juga kena
+                      freeze, dan di sini operator makin ga boleh restart booth:
+                      sesi N-shot yang udah jalan bakal keulang dari nol. */}
+                  <button
+                    onClick={resetLiveView}
+                    disabled={lvResetting}
+                    aria-label="Refresh live view"
+                    title="Live view macet? Tekan untuk menyegarkan"
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      width: 44, height: 44, borderRadius: 12,
+                      background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.3)',
+                      color: '#fff', cursor: 'pointer', backdropFilter: 'blur(8px)',
+                      opacity: lvResetting ? 0.4 : 1,
+                    }}
+                  >
+                    <span style={{
+                      fontFamily: 'var(--font-ui)', fontSize: 18, fontWeight: 700, lineHeight: 1,
+                      display: 'inline-block',
+                      animation: lvResetting ? 'spin 0.8s linear infinite' : undefined,
+                    }}>R</span>
+                  </button>
+                </div>
               </div>
             )}
           </div>

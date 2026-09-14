@@ -124,14 +124,28 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures, count
     setRetry(n => n + 1)
   }, [])
 
-  // Restart paksa LV dCC (POST /api/canon-live) — buat frame NGEFREEZE (HTTP masih 200 →
-  // self-healing ga ke-trigger). Fire-and-forget; polling 200ms nyambung sendiri abis LV bangun.
+  // Tombol R = "live view-nya ngaco, bangunin". Ada di SEMUA sumber kamera, tapi
+  // caranya beda karena penyebab freeze-nya beda:
+  //   Canon  → POST /api/canon-live: restart paksa LV digiCamControl. Frame beku
+  //            tetep HTTP 200, jadi self-healing ga ke-trigger.
+  //   Webcam → re-init getUserMedia (retryCamera). Stream MediaStream bisa mati
+  //            diem-diem (USB nyantol, driver hiccup) tanpa ngelempar error,
+  //            jadi operator ga punya jalan lain selain restart booth.
   const [lvResetting, setLvResetting] = useState(false)
   const resetLiveView = useCallback(async () => {
     setLvResetting(true)
-    try { await fetch('/api/canon-live', { method: 'POST' }) } catch { /* polling recover sendiri */ }
+    try {
+      if (isCanon) {
+        await fetch('/api/canon-live', { method: 'POST' })
+      } else {
+        // Lepas stream lama dulu — kalau enggak, getUserMedia baru numpuk di atas
+        // yang macet dan kameranya bisa kekunci.
+        if (videoRef.current) stopCamera(videoRef.current)
+        retryCamera()
+      }
+    } catch { /* polling / effect getUserMedia nyambung sendiri */ }
     finally { setTimeout(() => setLvResetting(false), 800) }
-  }, [])
+  }, [isCanon, retryCamera])
 
   const handleCapture = useCallback(async () => {
     // Mati (0) ⇒ ticks kosong, langsung jepret. Flash tetap jalan di semua mode —
@@ -316,27 +330,27 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures, count
                     <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
                   </svg>
                 </button>
-                {/* Refresh LV — restart live view dCC pas frame ngefreeze. Canon only. */}
-                {isCanon && (
-                  <button
-                    onClick={resetLiveView}
-                    disabled={countdown !== null || lvResetting}
-                    aria-label="Refresh live view"
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      width: 44, height: 44, borderRadius: 12,
-                      background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.3)',
-                      color: '#fff', cursor: 'pointer', backdropFilter: 'blur(8px)',
-                      opacity: countdown !== null || lvResetting ? 0.4 : 1,
-                    }}
-                  >
-                    <span style={{
-                      fontFamily: 'var(--font-ui)', fontSize: 18, fontWeight: 700, lineHeight: 1,
-                      display: 'inline-block',
-                      animation: lvResetting ? 'spin 0.8s linear infinite' : undefined,
-                    }}>R</span>
-                  </button>
-                )}
+                {/* Refresh LV — SEMUA sumber kamera. Canon: restart LV dCC.
+                    Webcam: re-init getUserMedia. Dua-duanya bisa freeze di lapangan. */}
+                <button
+                  onClick={resetLiveView}
+                  disabled={countdown !== null || lvResetting}
+                  aria-label="Refresh live view"
+                  title="Live view macet? Tekan untuk menyegarkan"
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    width: 44, height: 44, borderRadius: 12,
+                    background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.3)',
+                    color: '#fff', cursor: 'pointer', backdropFilter: 'blur(8px)',
+                    opacity: countdown !== null || lvResetting ? 0.4 : 1,
+                  }}
+                >
+                  <span style={{
+                    fontFamily: 'var(--font-ui)', fontSize: 18, fontWeight: 700, lineHeight: 1,
+                    display: 'inline-block',
+                    animation: lvResetting ? 'spin 0.8s linear infinite' : undefined,
+                  }}>R</span>
+                </button>
               </div>
             </div>
           )}
