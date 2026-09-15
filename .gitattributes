@@ -1,0 +1,8 @@
+# Shell script WAJIB LF. Kalau ke-checkout CRLF di Mac/Linux, shebang jadi
+# "#!/bin/bash\r" dan shell nolak: "bad interpreter: No such file or directory".
+# Gejalanya nyesatin — filenya jelas-jelas ada.
+*.sh      text eol=lf
+*.command text eol=lf
+
+# .bat kebalikannya: cmd.exe Windows butuh CRLF.
+*.bat     text eol=crlf
