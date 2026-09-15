@@ -57,6 +57,7 @@ function readSidecar(imagePath: string): TemplateSidecar | null {
 // file referensi tanpa nyentuh apa pun yang lain tetep kudu naik ulang.
 function effectiveMtime(fp: string, sidecar: TemplateSidecar | null): number {
   const stamps = [statMtime(fp)]
+  if (sidecar?.print_frame) stamps.push(statMtime(path.join(path.dirname(fp), sidecar.print_frame)))
   const jsonPath = fp.replace(/\.[^.]+$/, '.json')
   if (fs.existsSync(jsonPath)) stamps.push(statMtime(jsonPath))
   for (const ref of sidecar?.reference_images ?? []) {
@@ -173,6 +174,7 @@ function scanFolder(inbox: string): FolderFile[] {
   // pilihan tamu. Buang berdasarkan yang beneran dirujuk sidecar, bukan tebak-tebakan nama file.
   const referenced = new Set<string>()
   for (const f of result) {
+    if (f.sidecar?.print_frame) referenced.add(path.resolve(path.dirname(f.fp), f.sidecar.print_frame))
     for (const ref of f.sidecar?.reference_images ?? []) {
       referenced.add(path.resolve(path.dirname(f.fp), ref))
     }
@@ -293,6 +295,12 @@ async function uploadTemplate(token: string, f: FolderFile, buf: Buffer, mime: s
       path.basename(refName, path.extname(refName)) + '.jpg')
   }
   fd.append('is_active', 'true')
+  if (f.sidecar?.print_frame && f.sidecar.print_layout) {
+    const printFrame = path.join(path.dirname(f.fp), f.sidecar.print_frame)
+    const raw = fs.readFileSync(printFrame)
+    fd.append('print_overlay', new Blob([new Uint8Array(raw)], { type: 'image/png' }), f.sidecar.print_frame)
+    fd.append('print_layout', JSON.stringify(f.sidecar.print_layout))
+  }
   // ponytail: isi selalu JPEG (normalizeJpeg) → paksa ekstensi .jpg biar filename ga bohong (input .png)
   const jpgName = path.basename(f.fp, path.extname(f.fp)) + '.jpg'
   fd.append('thumbnail', new Blob([new Uint8Array(buf)], { type: mime }), jpgName)

@@ -49,6 +49,8 @@ export type Template = {
   print_size?: PrintSize | null // null ⇒ '4R_PORTRAIT'
   overlay_url?: string | null  // PNG transparan (alpha utuh) dibakar di atas slot foto
   overlay_right_url?: string | null // PNG transparan untuk sisi kanan 2R_STRIP
+  print_overlay_url?: string | null
+  print_layout?: import('./template-print').TemplatePrintLayout | null
   layout_config?: { slots: { x: number; y: number; w: number; h: number; r?: number }[] } | null
   // Engine 'api' only (Nano Banana Pro) — semua null/undefined buat engine lain
   // CATATAN: sejak model jadi milik server, field ini TIDAK ikut ke /api/generate. Yang

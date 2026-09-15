@@ -36,6 +36,116 @@ export function canvasForPrintSize(size: PrintSize): { w: number; h: number } {
   }
 }
 
+export const PRINT_DPI = 300
+
+/** mm → px @300dpi. Desainer ngomong mm, kanvas ngomong px; konversi ditaruh di satu tempat
+ *  biar angka ajaib kayak 638 ga bertebaran di kode. */
+export function mmToPx(mm: number): number {
+  return Math.round((mm / 25.4) * PRINT_DPI)
+}
+
+/** Kartu nama 54×85mm — ukuran baku kartu event. 54/85 = 0.635, BUKAN 2:3 (0.667): output AI
+ *  2:3 ga akan pernah pas persis di sini, selalu ada ~5% yang kepotong. Itu disengaja dan
+ *  justru yang bikin slider komposisi ada gunanya — lihat CARD_2UP_NOTE di bawah. */
+export const CARD_MM = { w: 54, h: 85 }
+
+/** Luberan 3mm ke LUAR kertas di sisi yang mepet tepi (mode 'corner').
+ *
+ *  Kenapa perlu padahal kartunya udah mentok x=0/y=0: feed printer dye-sub meleset
+ *  ±0.5–1mm tiap lembar. Foto yang berhenti persis di tepi kanvas bakal nyisain pita
+ *  putih tipis pas feed-nya geser ke dalam — dan itu kejadian di sisi yang justru GA
+ *  dipotong, jadi ga bisa diselamatin. Dengan luber keluar, tepinya dijamin penuh tinta.
+ *  Yang di luar kanvas dibuang sendiri sama clip di composePrintLayout — ga ada efek lain. */
+export const CARD_OVERSCAN_MM = 3
+
+/** Mode penempatan dua kartu di kertas.
+ *   'corner' = mepet pojok kiri-atas, dua kartu nempel. Cuma butuh 3 potongan lurus
+ *              (kanan, bawah, tengah) karena kiri & atas udah jadi tepi kertas.
+ *              WAJIB printer borderless — kalau printer nyisain margin putih, sisi kiri
+ *              & atas bakal putih dan ga bisa dipotong.
+ *   'center' = dua kartu di tengah kertas, ada gutter. Butuh 4+ potongan, tapi aman di
+ *              printer apa pun. */
+export type CardAnchor = 'corner' | 'center'
+
+/** Dua kartu 54×85mm berdampingan di 4R landscape (1800×1200): satu Original, satu AI.
+ *
+ *  Pure — dites di __tests__/print-layout.test.ts. Hasilnya dipakai sebagai `layout_config.slots`,
+ *  jadi jalur render/compose-nya persis sama kayak slot custom dari LayoutDesigner; ga ada
+ *  cabang kode baru di composePrintLayout.
+ *
+ *  Di mode 'corner' kotak yang dibalikin sengaja MELUBER keluar kanvas (x/y negatif) di sisi
+ *  kiri & atas — lihat CARD_OVERSCAN_MM. Garis potongnya tetep di 54×85 persis; pakai
+ *  cardTrimBoxes() buat dapet itu.
+ *
+ *  CARD_2UP_NOTE — kenapa hasilnya perlu di-nudge: foto 2:3 di-`cover` ke slot kartu
+ *  ke-scale by height, jadi lebarnya lewat dan kepotong kiri-kanan, sementara vertikalnya
+ *  PAS. Artinya di scale=1 ga ada ruang gerak naik-turun sama sekali; operator yang mau
+ *  geser komposisi vertikal harus zoom dikit dulu (scale > 1) — StripComposer udah nyediain
+ *  pinch/wheel buat itu. Ini bukan bug, ini konsekuensi 54×85 ≠ 2:3. */
+export function cardTwoUpSlots(
+  canvas: { w: number; h: number } = CANVAS_4R_LANDSCAPE,
+  anchor: CardAnchor = 'corner',
+  gutterMm = 5,
+): Rect[] {
+  const trims = cardTrimBoxes(canvas, anchor, gutterMm)
+  if (anchor === 'center') return trims
+  // corner: luberin cuma ke sisi yang nempel tepi kertas. Kartu kiri luber ke kiri+atas,
+  // kartu kanan cuma ke atas — sisi dalemnya ketemu kartu sebelah, bukan tepi kertas.
+  const over = mmToPx(CARD_OVERSCAN_MM)
+  return trims.map((t, i) => ({
+    x: i === 0 ? t.x - over : t.x,
+    y: t.y - over,
+    w: i === 0 ? t.w + over : t.w,
+    h: t.h + over,
+  }))
+}
+
+/** Garis potong = ukuran kartu JADI (54×85mm), pasangannya cardTwoUpSlots dengan argumen
+ *  yang sama. Dipakai buat gambar garis bantu potong dan buat ngecek posisi lubang di
+ *  overlay PNG. Sengaja dipisah dari kotak foto biar "mana yang kepotong" ga pernah jadi
+ *  tebak-tebakan. */
+export function cardTrimBoxes(
+  canvas: { w: number; h: number } = CANVAS_4R_LANDSCAPE,
+  anchor: CardAnchor = 'corner',
+  gutterMm = 5,
+): Rect[] {
+  const w = mmToPx(CARD_MM.w)
+  const h = mmToPx(CARD_MM.h)
+  const gutter = anchor === 'corner' ? 0 : mmToPx(gutterMm)
+  const x0 = anchor === 'corner' ? 0 : Math.round((canvas.w - (w * 2 + gutter)) / 2)
+  const y0 = anchor === 'corner' ? 0 : Math.round((canvas.h - h) / 2)
+  return [
+    { x: x0, y: y0, w, h },
+    { x: x0 + w + gutter, y: y0, w, h },
+  ]
+}
+
+/** Jalur pisau buat mode 'corner': 3 garis lurus. Dibalikin sebagai garis penuh
+ *  (x1,y1)-(x2,y2) supaya pemotongnya bisa naruh penggaris lurus dari tepi ke tepi —
+ *  garis sepanjang kartu doang bikin operator nebak terusannya. */
+export function cardCutLines(
+  canvas: { w: number; h: number } = CANVAS_4R_LANDSCAPE,
+  anchor: CardAnchor = 'corner',
+  gutterMm = 5,
+): { x1: number; y1: number; x2: number; y2: number }[] {
+  const [left, right] = cardTrimBoxes(canvas, anchor, gutterMm)
+  const lines = [
+    // tengah: pisahin dua kartu
+    { x1: left.x + left.w, y1: 0, x2: left.x + left.w, y2: canvas.h },
+    // bawah: buang sisa bawah
+    { x1: 0, y1: left.y + left.h, x2: canvas.w, y2: left.y + left.h },
+    // kanan: buang sisa kanan
+    { x1: right.x + right.w, y1: 0, x2: right.x + right.w, y2: canvas.h },
+  ]
+  if (anchor === 'corner') return lines
+  // center: dua sisi lagi (kiri & atas) yang di mode corner udah jadi tepi kertas
+  return [
+    ...lines,
+    { x1: left.x, y1: 0, x2: left.x, y2: canvas.h },
+    { x1: 0, y1: left.y, x2: canvas.w, y2: left.y },
+  ]
+}
+
 /** Jumlah slot yang dirender StripComposer buat satu mode. SATU sumber kebenaran: dipakai
  *  buat render, hitung slot kepakai, DAN pas pindah tab. Dulu dua tempat ngitung sendiri-sendiri
  *  dan beda pas ai4rLayout bukan 4-slot (SINGLE_1/SPLIT_2/TRIO_3) — foto ke-2 nyangkut di
@@ -420,12 +530,17 @@ export function fitAxis(srcW: number, srcH: number, boxW: number, boxH: number, 
 
 /** N shot + overlay PNG → panel JPEG dataURL (full-res): 4R = 1200×1800 (langsung siap print),
  *  2R = 1050×750 (konten digital; kertas print dibangun via to2UpSheet pas tombol print).
- *  Tiap foto cover-fit + clip ke slot-nya; overlay digambar full-canvas di atasnya. */
+ *  Tiap foto cover-fit + clip ke slot-nya; overlay digambar full-canvas di atasnya.
+ *
+ *  `cutLines` opsional (mis. dari cardCutLines()) — garis bantu potong, digambar paling
+ *  akhir. Cuma buat lembar CETAK; jangan dikirim ke output digital/QR, tamu ga butuh
+ *  liat jalur pisau di foto mereka. */
 export async function composePrintLayout(
   shots: string[],
   template: Pick<Template, 'print_size' | 'overlay_url' | 'layout_config'>,
   transforms?: SlotTransform[],
   ai4rLayout?: Ai4RLayout,
+  cutLines?: { x1: number; y1: number; x2: number; y2: number }[],
 ): Promise<string> {
   const size = template.print_size || '4R_PORTRAIT'
   const overlayUrl = template.overlay_url || null
@@ -493,5 +608,27 @@ export async function composePrintLayout(
       ctx.drawImage(overlay, f.dx, f.dy, f.dw, f.dh)
     }
   }
+  // Garis potong DI ATAS overlay: gunanya buat manusia yang megang pisau, jadi dia harus
+  // keliatan walau overlay-nya full-bleed. Digambar terakhir dengan alasan yang sama.
+  if (cutLines?.length) drawCutGuides(ctx, cutLines)
   return toJpegDataUrl(panel)
+}
+
+/** Garis bantu potong putus-putus. Abu-abu tipis: kebaca operator, tapi kalau kepotongnya
+ *  meleset dikit ga bikin garis hitam tebal nempel di kartu tamu. */
+export function drawCutGuides(
+  ctx: CanvasRenderingContext2D,
+  lines: { x1: number; y1: number; x2: number; y2: number }[],
+): void {
+  ctx.save()
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)'
+  ctx.setLineDash([12, 12])
+  ctx.lineWidth = 2
+  for (const l of lines) {
+    ctx.beginPath()
+    ctx.moveTo(l.x1, l.y1)
+    ctx.lineTo(l.x2, l.y2)
+    ctx.stroke()
+  }
+  ctx.restore()
 }

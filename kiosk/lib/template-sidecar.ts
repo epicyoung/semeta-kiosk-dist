@@ -10,6 +10,8 @@
 //     "reference_images": ["Tosari-ref.jpg"], "input_field": { "label": "Nama kamu" },
 //     "aspect_ratio": "2:3", "positive_prompt": "... \"TOSARI {input}\" ..." }
 
+import { parseTemplatePrintLayout, type TemplatePrintLayout } from './template-print'
+
 export type SidecarInputField = { label: string }
 
 export type TemplateSidecar = {
@@ -32,6 +34,8 @@ export type TemplateSidecar = {
   // framechooser di-skip, salah pasangan judul-divisi ga mungkin kejadian.
   // Kosong = perilaku lama: tamu milih frame di framechooser.
   frame?: string
+  print_frame?: string
+  print_layout?: TemplatePrintLayout
   // UUID row `templates` di SUPABASE yang dipakai buat nagih token. Wajib buat engine 'api':
   // RPC deduct_token nerima `p_template_id uuid`, sedangkan id record PocketBase itu string
   // 15-char — dikirim apa adanya bikin RPC balas 400 dan generate mati sebelum mulai.
@@ -99,6 +103,11 @@ export function parseSidecar(raw: string): TemplateSidecar | null {
     // file dari folder template. Tanpa isSafeFilename, sidecar bisa nyuruh baca file mana
     // pun di disk lalu naik ke PocketBase sebagai "frame".
     if (typeof o.frame === 'string' && isSafeFilename(o.frame)) out.frame = o.frame
+    const printLayout = parseTemplatePrintLayout(o.print_layout)
+    if (typeof o.print_frame === 'string' && isSafeFilename(o.print_frame) && printLayout) {
+      out.print_frame = o.print_frame
+      out.print_layout = printLayout
+    }
     if (typeof o.input_field === 'object' && o.input_field !== null && !Array.isArray(o.input_field)) {
       const label = (o.input_field as Record<string, unknown>).label
       if (typeof label === 'string' && label.trim().length > 0) {

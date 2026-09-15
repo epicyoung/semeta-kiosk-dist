@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import Moveable from 'react-moveable'
 import type { Template, PrintSize } from '@/lib/types'
-import { CANVAS_4R_PORTRAIT, CANVAS_4R_LANDSCAPE, PANEL_2R_STRIP, layoutSlots, canvasForPrintSize } from '@/lib/print-layout'
+import { CANVAS_4R_PORTRAIT, CANVAS_4R_LANDSCAPE, PANEL_2R_STRIP, layoutSlots, canvasForPrintSize, cardTwoUpSlots, CARD_MM, type CardAnchor } from '@/lib/print-layout'
 
 type Slot = { x: number; y: number; w: number; h: number; r?: number }
 type Props = {
@@ -146,6 +146,24 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
     setTarget(null)
   }
 
+  // Preset kartu 54×85mm 2-up (Original + AI) — ukuran baku kartu event, dipasang sekali
+  // oleh operator. Angkanya dihitung di print-layout.ts (pure + dites), BUKAN di sini:
+  // slot yang meleset = foto kepotong di kertas, dan itu baru ketahuan pas udah nyetak.
+  // Cuma buat 4R landscape; di ukuran lain tombolnya disabled karena dua kartu 638px
+  // ga muat berdampingan di kanvas 1200px-lebar.
+  //
+  // Dua mode, dua alat potong yang beda:
+  //   corner = mepet pojok kiri-atas, cuma 3 potongan. Foto sengaja luber keluar kanvas
+  //            di sisi kiri+atas — WAJIB printer borderless.
+  //   center = ke-center, 5 potongan, aman di printer apa pun.
+  const canCardPreset = size === '4R_LANDSCAPE'
+  const applyCardPreset = (anchor: CardAnchor) => {
+    if (!canCardPreset) return
+    setSlots(cardTwoUpSlots(editDims, anchor))
+    setSelectedSlotIndex(null)
+    setTarget(null)
+  }
+
   const clearSelection = () => {
     setSelectedSlotIndex(null)
     setTarget(null)
@@ -245,6 +263,32 @@ export function LayoutDesigner({ template, onSave, onClose }: Props) {
             <polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
           </svg>
           Reset
+        </button>
+        <button
+          onClick={() => applyCardPreset('corner')}
+          disabled={!canCardPreset}
+          style={pillBtn(false, false, !canCardPreset)}
+          title={canCardPreset
+            ? `Dua kartu ${CARD_MM.w}×${CARD_MM.h}mm mepet pojok kiri-atas — cuma 3 potongan. Butuh printer borderless.`
+            : 'Cuma buat 4R Landscape'}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="2" y="2" width="8" height="14" rx="1" /><rect x="10" y="2" width="8" height="14" rx="1" />
+          </svg>
+          Kartu {CARD_MM.w}×{CARD_MM.h} · Pojok
+        </button>
+        <button
+          onClick={() => applyCardPreset('center')}
+          disabled={!canCardPreset}
+          style={pillBtn(false, false, !canCardPreset)}
+          title={canCardPreset
+            ? `Dua kartu ${CARD_MM.w}×${CARD_MM.h}mm di tengah — 5 potongan, aman di printer apa pun.`
+            : 'Cuma buat 4R Landscape'}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="5" width="7" height="14" rx="1" /><rect x="14" y="5" width="7" height="14" rx="1" />
+          </svg>
+          Kartu {CARD_MM.w}×{CARD_MM.h} · Tengah
         </button>
 
         <button disabled={selectedSlotIndex === null} onClick={() => chooseShotRatio(3 / 2)} aria-pressed={shotRatio === 3 / 2} style={pillBtn(shotRatio === 3 / 2, false, selectedSlotIndex === null)}>

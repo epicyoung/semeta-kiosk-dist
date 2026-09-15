@@ -1,4 +1,5 @@
 import type { Frame, PrintSize, Template } from './types'
+import { parseTemplatePrintLayout } from './template-print'
 
 const TIMEOUT_MS = 3000
 // ponytail: fetch template pakai timeout longgar — thumbnail banyak/gede bikin 3s putus di tengah (cuma sebagian kedetek)
@@ -90,6 +91,9 @@ export function mapPbTemplate(pbUrl: string, item: Record<string, unknown>): Tem
     shot_count: Number(item.shot_count) > 0 ? Math.min(6, Math.trunc(Number(item.shot_count))) : null,
     print_size: (['4R_PORTRAIT', '4R_LANDSCAPE', '2R_STRIP', 'A4_PORTRAIT', 'A4_LANDSCAPE', 'A3_PORTRAIT', 'A3_LANDSCAPE'] as const).includes(String(item.print_size) as PrintSize) ? (item.print_size as PrintSize) : null,
     overlay_url: overlay ? `${pbUrl}/api/files/templates/${String(item.id)}/${overlay}` : null,
+    print_overlay_url: typeof item.print_overlay === 'string' && item.print_overlay
+      ? `${pbUrl}/api/files/templates/${String(item.id)}/${item.print_overlay}` : null,
+    print_layout: parseTemplatePrintLayout(item.print_layout),
     // Engine 'api' — unset di PB = null/[] (template lain gak kesentuh sama sekali).
     api_model: (item.api_model as string) || null,
     reference_urls: refs.map(f => `${pbUrl}/api/files/templates/${String(item.id)}/${f}`),

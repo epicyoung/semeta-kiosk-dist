@@ -14,7 +14,8 @@ import { printPhoto, printNative, preparePrintImage } from "@/lib/print";
 import { compositeFrame } from "@/lib/frame-composite";
 import { burnWatermark } from "@/lib/watermark-canvas";
 import { to2UpSheet, composePrintLayout, compose2UpSheet, type SlotTransform } from "@/lib/print-layout";
-import { buildStripPool, stripSlotCount } from "@/lib/strip-pool";
+import { buildStripPool, stripSlotCount, resolve4rOverlay } from "@/lib/strip-pool";
+import { templatePrintSelection } from "@/lib/template-print";
 import { StripComposer } from "@/components/ui/StripComposer";
 import type { StripSource } from "@/lib/strip-pool";
 import { uploadAsset, blobUrlToDataUrl, uploadLocalFile, resizeDataUrl } from "@/lib/upload";
@@ -602,9 +603,23 @@ export function PreviewScreen({
         : [],
     [state],
   );
+  const templatePrint = templatePrintSelection(stripPool, config.templates, activeResult.aiUrl);
+  const composerPool = templatePrint?.pool ?? stripPool;
+  const printTemplateFor = (sources: StripSource[]) => {
+    const source = sources.find(p => p.kind === "ai");
+    return source
+      ? config.templates.find(t => t.id === source.templateId && t.print_overlay_url && t.print_layout)
+      : templatePrint?.template;
+  };
   const stripSlots = stripSlotCount(config.ai_strip_slots, stripPool.length);
+  // 4R berdiri SENDIRI, ga nebeng saklar 2-Strip. Dulu `canStrip` cuma ngecek stripSlots,
+  // jadi matiin 2-Strip (ai_strip_slots = 0) ikut ngilangin tombolnya — dan 4R jadi ga bisa
+  // diakses sama sekali. Operator kepaksa nyalain 2-Strip yang ga dia jual cuma buat nyampe
+  // ke 4R. Dua mode, dua saklar.
+  const can4r = (config.enable_4r ?? true) && stripPool.length > 0;
   // Print session (non-AI) udah punya jalur 2R sendiri lewat template — jangan dobel.
-  const canStrip = config.enable_print && !isPrintSession && stripSlots > 0;
+  const canStrip =
+    config.enable_print && !isPrintSession && (stripSlots > 0 || can4r);
 
   async function doStripPrint(
     picked: { source: StripSource; transform: SlotTransform }[],
@@ -614,30 +629,34 @@ export function PreviewScreen({
     setStripError(false);
     try {
       const is4R = mode === "4R_LANDSCAPE";
-      const isPortrait4R = is4R && config.ai_4r_orientation === "PORTRAIT";
+      const selectedPrintTemplate = printTemplateFor(picked.map(p => p.source));
+      const orientation = selectedPrintTemplate?.print_layout?.orientation ?? config.ai_4r_orientation;
+      const isPortrait4R = is4R && orientation === "PORTRAIT";
       const printSize = is4R ? (isPortrait4R ? "4R_PORTRAIT" : "4R_LANDSCAPE") : "2R_STRIP";
 
-      const sheet = await composePrintLayout(
-        picked.map((p) => p.source.cleanUrl),
-        {
-          print_size: printSize,
-          overlay_url: is4R
-            ? (config.ai_4r_overlay_url || null)
-            : (config.ai_strip_overlay_url || null),
-          layout_config: null,
-        },
-        picked.map((p) => p.transform),
-        is4R ? config.ai_4r_layout : undefined,
-      );
-      const display = licensed || config.bypassed ? sheet : await burnWatermark(sheet);
-
       if (is4R) {
+        // Frame 4R ngikut TEMPLATE foto yang dipilih, bukan cuma setting global: satu sesi
+        // bisa punya beberapa template dengan frame beda (Shell A merah / B kuning) dan
+        // operator cuma bisa naro satu file di Settings. Dua template beda frame di satu
+        // lembar = ga ada jawaban bener, jadi ditolak di sini daripada nyetak frame salah.
+        const overlayByTemplate = Object.fromEntries(
+          config.templates.map((t) => [t.id, t.print_overlay_url]),
+        );
+        const { url: overlay4r, conflict } = resolve4rOverlay(
+          picked.map((p) => p.source),
+          overlayByTemplate,
+          selectedPrintTemplate?.print_overlay_url ?? config.ai_4r_overlay_url,
+        );
+        if (conflict) {
+          setStripError(true);
+          return;
+        }
         const sheet = await composePrintLayout(
           picked.map((p) => p.source.cleanUrl),
           {
             print_size: printSize,
-            overlay_url: config.ai_4r_overlay_url || null,
-            layout_config: config.ai_4r_custom_slots || null,
+            overlay_url: overlay4r,
+            layout_config: selectedPrintTemplate?.print_layout ?? config.ai_4r_custom_slots ?? null,
           },
           picked.map((p) => p.transform),
           config.ai_4r_layout,
@@ -2565,17 +2584,27 @@ export function PreviewScreen({
 
       {stripOpen && (
         <StripComposer
-          pool={stripPool}
+          key={activeResult.aiUrl}
+          pool={composerPool}
+          startIn4r={!!templatePrint}
           slots={stripSlots}
           printing={stripPrinting}
           error={stripError}
           overlayUrl={config.ai_strip_overlay_url}
           overlayRightUrl={config.ai_strip_overlay_right_url}
-          overlay4rUrl={config.ai_4r_overlay_url}
+          overlay4rUrl={templatePrint?.template.print_overlay_url ?? config.ai_4r_overlay_url}
+          resolve4rOverlayFor={(sources) =>
+            resolve4rOverlay(
+              sources,
+              Object.fromEntries(config.templates.map((t) => [t.id, t.print_overlay_url])),
+              printTemplateFor(sources)?.print_overlay_url ?? config.ai_4r_overlay_url,
+            ).url
+          }
           customSlots={config.ai_strip_custom_slots}
-          custom4rSlots={config.ai_4r_custom_slots}
+          resolve4rLayoutFor={(sources) => printTemplateFor(sources)?.print_layout ?? null}
+          custom4rSlots={templatePrint?.template.print_layout ?? config.ai_4r_custom_slots}
           ai4rLayout={config.ai_4r_layout}
-          ai4rOrientation={config.ai_4r_orientation}
+          ai4rOrientation={templatePrint?.template.print_layout?.orientation ?? config.ai_4r_orientation}
           require4rOverlay={config.require_4r_overlay ?? true}
           enable4r={config.enable_4r ?? true}
           onCancel={() => setStripOpen(false)}

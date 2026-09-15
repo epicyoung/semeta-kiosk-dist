@@ -6,7 +6,9 @@ import { useT } from '@/lib/i18n'
 import { TouchButton } from './TouchButton'
 import type { Ai4RLayout, Ai4ROrientation } from '@/lib/types'
 import type { StripSource } from '@/lib/strip-pool'
+import { autoFillSlots } from '@/lib/strip-pool'
 import { composerSlotCount, type SlotTransform } from '@/lib/print-layout'
+import type { TemplatePrintLayout } from '@/lib/template-print'
 
 type PrintLayoutMode = '2R_STRIP' | '4R_LANDSCAPE'
 
@@ -18,6 +20,13 @@ type Props = {
   overlayUrl?: string | null
   overlayRightUrl?: string | null
   overlay4rUrl?: string | null
+  /** Frame 4R buat susunan yang LAGI dipilih. Dilempar dari pemanggil (bukan dihitung di
+   *  sini) supaya preview dan hasil cetak baca aturan yang sama persis — frame per-template
+   *  bikin jawabannya beda-beda tergantung slot mana yang keisi. `undefined` = pakai
+   *  overlay4rUrl apa adanya (kelakuan lama). */
+  resolve4rOverlayFor?: (picked: StripSource[]) => string | null
+  resolve4rLayoutFor?: (picked: StripSource[]) => TemplatePrintLayout | null
+  startIn4r?: boolean
   customSlots?: { slots: { x: number; y: number; w: number; h: number; r?: number }[] } | null
   custom4rSlots?: { slots: { x: number; y: number; w: number; h: number; r?: number }[] } | null
   ai4rLayout?: Ai4RLayout
@@ -39,21 +48,51 @@ export function StripComposer({
   overlayUrl,
   overlayRightUrl,
   overlay4rUrl,
+  resolve4rOverlayFor,
+  resolve4rLayoutFor,
+  startIn4r = false,
   customSlots,
-  custom4rSlots,
+  custom4rSlots: defaultCustom4rSlots,
   ai4rLayout = 'GRID_4',
-  ai4rOrientation = 'LANDSCAPE',
+  ai4rOrientation: defaultAi4rOrientation = 'LANDSCAPE',
   require4rOverlay = false,
   enable4r = true,
   onCancel,
   onConfirm,
 }: Props) {
   const t = useT()
-  const [mode, setMode] = useState<PrintLayoutMode>('2R_STRIP')
+  // `slots` = jatah 2-Strip (dari ai_strip_slots). 0 ⇒ operator matiin 2-Strip, jadi
+  // composer harus kebuka langsung di 4R — bukan mendarat di tab kosong yang ga dia jual.
+  const strip2Enabled = slots > 0
+  const [mode, setMode] = useState<PrintLayoutMode>(
+    strip2Enabled && !startIn4r ? '2R_STRIP' : '4R_LANDSCAPE',
+  )
   // Array PANJANG TETAP sepanjang jumlah slot, `null` = slot kosong. Dulu ini array padat
   // yang di-splice pas hapus, jadi buang slot 1 bikin isi 2/3/4 naik semua — foto pindah
   // tempat sendiri padahal tamu cuma mau ngosongin satu. Index = slot, titik.
-  const [picked, setPicked] = useState<(string | null)[]>(() => Array(slots).fill(null))
+  // Slot keisi duluan (kiri Ori, kanan AI) supaya operator tinggal Print — dua tap per tamu
+  // itu mahal pas antre. Ini cuma NILAI AWAL: drag/zoom/ganti foto jalan seperti biasa,
+  // jadi yang komposisinya kurang pas tetep bisa dibenerin sebelum kecetak.
+  // Panjangnya ikut slot TERBANYAK dari dua mode, bukan `slots` (jatah 2-Strip): kalau
+  // 2-Strip mati `slots` itu 0, dan array kosong bikin 4R kebuka tanpa slot sama sekali.
+  const initialSlotCount = Math.max(
+    slots,
+    composerSlotCount('4R_LANDSCAPE', {
+      slots,
+      ai4rLayout,
+      custom4rSlotCount: defaultCustom4rSlots?.slots?.length,
+    }),
+  )
+  const [picked, setPicked] = useState<(string | null)[]>(
+    () => autoFillSlots(pool, initialSlotCount),
+  )
+  const selectedSources = picked.flatMap(id => {
+    const source = pool.find(p => p.id === id)
+    return source ? [source] : []
+  })
+  const templateLayout = resolve4rLayoutFor?.(selectedSources)
+  const custom4rSlots = templateLayout ?? defaultCustom4rSlots
+  const ai4rOrientation = templateLayout?.orientation ?? defaultAi4rOrientation
   // 'cover' = default: foto NGISI PENUH slot, sisi yang lebih dipotong. Dulu default-nya
   // 'width' — foto pas di lebar tapi nyisain pita transparan atas/bawah (atau kiri/kanan
   // pas di-flip) tiap kali rasio slot ga sama persis sama rasio foto. Slot custom dari
@@ -107,7 +146,18 @@ export function StripComposer({
     })
 
   const activeSlots = slotCountFor(mode)
-  const activeOverlay = is4R ? overlay4rUrl : overlayUrl
+  // Frame 4R ngikut isi slot: template beda punya frame beda, jadi jawabannya berubah tiap
+  // tamu naro/ganti foto. Dihitung ulang tiap render (murah — cuma lookup) supaya yang
+  // keliatan di preview SAMA dengan yang bakal kecetak.
+  const picked4rSources = is4R && resolve4rOverlayFor
+    ? picked.slice(0, activeSlots).flatMap(id => {
+        const s = id ? pool.find(p => p.id === id) : undefined
+        return s ? [s] : []
+      })
+    : []
+  const activeOverlay = is4R
+    ? (resolve4rOverlayFor ? resolve4rOverlayFor(picked4rSources) : overlay4rUrl)
+    : overlayUrl
 
   const [isSingleStripOverlay, setIsSingleStripOverlay] = useState(false)
 
@@ -135,7 +185,7 @@ export function StripComposer({
     ? `Custom (${customSlots!.slots.length} Slot)`
     : `${slots} Slot Strip`
 
-  const fourRLocked = require4rOverlay && !overlay4rUrl
+  const fourRLocked = require4rOverlay && !(is4R ? activeOverlay : overlay4rUrl)
   // Slice ke activeSlots: entri yang lagi kesembunyiin (mode kecil) JANGAN dibaca "kepakai" —
   // kartunya harus bisa dipilih lagi buat slot yang keliatan, bukan nampilin badge nomor
   // slot yang ga ada di layar.
@@ -148,23 +198,46 @@ export function StripComposer({
   const handleModeSwitch = (nextMode: PrintLayoutMode) => {
     if (printing || nextMode === mode) return
     if (nextMode === '4R_LANDSCAPE' && (fourRLocked || !enable4r)) return
+    if (nextMode === '2R_STRIP' && !strip2Enabled) return
     setMode(nextMode)
     // Array-nya dipanjangin ke MAX dua mode, ga dipotong ke mode tujuan. Pindah ke layout
     // yang slotnya lebih sedikit cuma NYEMBUNYIIN kelebihannya (semua pembaca udah slice ke
     // activeSlots); balik lagi ke layout gede, pilihan tamu utuh. Kalau dipotong beneran,
     // bolak-balik tab = pilihan ilang permanen tanpa ada yang ngasih tau.
     const keep = Math.max(slotCountFor(mode), slotCountFor(nextMode))
-    setPicked(Array.from({ length: keep }, (_, i) => picked[i] ?? null))
+    const kept = Array.from({ length: keep }, (_, i) => picked[i] ?? null)
+    // Mode tujuan bisa punya slot LEBIH BANYAK dari yang tadi keisi (mis. 2-Strip 1 slot →
+    // 4R 2 kartu): slot baru itu bakal kosong dan tombol Print mati padahal tamu ga ngapa2in.
+    // Diisi otomatis pakai foto yang belum kepakai, dengan aturan sekali-pakai yang sama.
+    const target = slotCountFor(nextMode)
+    const used = new Set(kept.slice(0, target).filter(Boolean) as string[])
+    const spare = autoFillSlots(pool.filter(p => !used.has(p.id)), target)
+      .filter((id): id is string => id !== null)
+    let s = 0
+    for (let i = 0; i < target; i++) {
+      if (kept[i] === null && s < spare.length) kept[i] = spare[s++]
+    }
+    setPicked(kept)
   }
 
   const fill = (id: string) => {
     if (printing || slotOf(id) >= 0) return
-    const at = picked.slice(0, activeSlots).findIndex(p => p === null)
+    let at = picked.slice(0, activeSlots).findIndex(p => p === null)
+    if (at < 0) {
+      const source = pool.find(p => p.id === id)
+      at = picked.slice(0, activeSlots).findIndex(p => pool.find(s => s.id === p)?.kind === source?.kind)
+      if (at < 0) at = activeSlot ?? activeSlots - 1
+    }
     if (at < 0) return
     const next = [...picked]
     next[at] = id
     setPicked(next)
     setActiveSlot(at)
+    setTransforms(prev => {
+      const nextTransforms = { ...prev }
+      delete nextTransforms[at]
+      return nextTransforms
+    })
   }
 
   const clear = (i: number) => {
@@ -444,7 +517,7 @@ export function StripComposer({
   }
 
   const confirm = () => {
-    if (printing || !isFull) return
+    if (printing || !isFull || (is4R && fourRLocked)) return
     onConfirm(picked.slice(0, activeSlots).map((id, i) => ({ source: pool.find(p => p.id === id)!, transform: getTransform(i) })), mode)
   }
 
@@ -469,8 +542,11 @@ export function StripComposer({
             {` · ${layoutName}`}
           </p>
 
-          {/* 4R mati ⇒ switcher ilang total. Tab tunggal bukan pilihan, cuma bikin bingung. */}
-          {enable4r && <div className="mt-4 flex items-center justify-center">
+          {/* Switcher cuma muncul kalau BEBERAPA mode beneran kepake. 4R mati ⇒ ilang
+              (kelakuan lama). 2-Strip mati (slots = 0) ⇒ ikut ilang juga: operator yang ga
+              jual 2-Strip ga usah dikasih tab kosong yang ga bisa diapa-apain. Tab tunggal
+              bukan pilihan, cuma bikin bingung. */}
+          {enable4r && strip2Enabled && <div className="mt-4 flex items-center justify-center">
             <div style={{ display: 'flex', background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(12px)', borderRadius: 10, padding: 3, gap: 3 }}>
               {([
                 { key: '2R_STRIP', label: 'Layout', locked: false },
@@ -515,7 +591,7 @@ export function StripComposer({
               style={{
                 ['--paper-w' as string]: is4R ? (isPortrait4R ? 2 : 3) : 2,
                 ['--paper-h' as string]: is4R ? (isPortrait4R ? 3 : 2) : 3,
-                background: '#0a0a0a',
+                background: '#ffffff',
                 boxShadow: '0 24px 60px rgba(0,0,0,0.65)',
               }}
             >
@@ -551,10 +627,12 @@ export function StripComposer({
                     </div>
                   )}
 
-                  {/* Layer 2: Overlay Frame 4R (z-20) */}
-                  {overlay4rUrl && (
+                  {/* Layer 2: Overlay Frame 4R (z-20) — activeOverlay, BUKAN overlay4rUrl:
+                      frame ngikut template foto yang lagi kepilih, dan preview harus sama
+                      persis sama yang kecetak. */}
+                  {activeOverlay && (
                     <img
-                      src={overlay4rUrl}
+                      src={activeOverlay}
                       alt="Overlay 4R"
                       className="absolute inset-0 z-20 h-full w-full object-contain pointer-events-none"
                     />
@@ -685,7 +763,7 @@ export function StripComposer({
                     // bisa mundur ke artboard. Kartu ini yang dia tunjuk, di sini juga
                     // batalnya.
                     onClick={() => (used ? clear(at) : fill(src.id))}
-                    disabled={(!used && isFull) || printing}
+                    disabled={printing}
                     aria-pressed={used}
                     title={used ? (t('strip_slot_clear') as string) : undefined}
                     // draggable=false: browser bawaannya nge-drag <img> jadi ghost image,
@@ -700,8 +778,8 @@ export function StripComposer({
                       // Kepilih = redup TAPI jangan seredup yang mati. Dulu 0.4 sama-sama
                       // dipakai buat "udah dipakai" dan bacaan "ga bisa diapa-apain";
                       // sekarang dia bisa ditekan, jadi harus kelihatan hidup.
-                      opacity: used ? 0.75 : isFull ? 0.4 : 1,
-                      cursor: !used && isFull ? 'default' : 'pointer',
+                      opacity: used ? 0.75 : 1,
+                      cursor: 'pointer',
                     }}
                   >
                     <img src={src.thumbUrl} alt="" draggable={false} className="h-full w-full object-cover pointer-events-none" />
@@ -746,7 +824,7 @@ export function StripComposer({
             </TouchButton>
             <TouchButton
               onClick={confirm}
-              disabled={!isFull || printing}
+              disabled={!isFull || printing || (is4R && fourRLocked)}
               className="flex-1"
             >
               {printing

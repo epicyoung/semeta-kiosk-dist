@@ -106,7 +106,7 @@ const en: Translations = {
   preview_btn_email: 'Email',
   strip_title: 'Build your strip',
   strip_hint: 'Tap a photo to fill the next slot',
-  strip_hint_full: 'Strip full — tap a slot to take one back out',
+  strip_hint_full: 'Ready to print — tap another photo to replace your choice',
   strip_slot_empty: 'Empty slot',
   strip_slot_clear: 'Take this photo back out',
   strip_label_original: 'Original',

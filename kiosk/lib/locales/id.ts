@@ -107,7 +107,7 @@ const id: Translations = {
   preview_btn_email: 'Email',
   strip_title: 'Susun strip kamu',
   strip_hint: 'Ketuk foto untuk mengisi slot berikutnya',
-  strip_hint_full: 'Strip penuh — ketuk slot untuk mengeluarkan lagi',
+  strip_hint_full: 'Siap dicetak — ketuk foto alternatif untuk mengganti pilihan',
   strip_slot_empty: 'Slot kosong',
   strip_slot_clear: 'Keluarkan foto ini',
   strip_label_original: 'Asli',
