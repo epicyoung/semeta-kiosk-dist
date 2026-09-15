@@ -5,7 +5,7 @@ import { CameraAutofocus, AUTOFOCUS_ENABLED } from '@/components/ui/CameraAutofo
 import { CameraIndicator } from '@/components/ui/CameraIndicator'
 import { TouchButton } from '@/components/ui/TouchButton'
 import { PrintLayoutPreview } from '@/components/ui/PrintLayoutPreview'
-import { stopCamera, triggerCanonCapture, rotateDataUrl } from '@/lib/camera'
+import { stopCamera, triggerCanonCapture, triggerSonyCapture, rotateDataUrl } from '@/lib/camera'
 import { rotatedSize } from '@/components/screens/LiveViewScreen'
 import { layoutSlots } from '@/lib/print-layout'
 import type { KioskAction, KioskState } from '@/lib/types'
@@ -24,6 +24,9 @@ const ROT_KEY = 'semeta.cameraRotation'
 export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSeconds }: Props) {
   const t = useT()
   const isCanon = cameraSource === 'canon'
+  // Sony lewat gphoto2 (PC Remote). Kamera ga bisa PC Remote + UVC barengan, jadi ga ada
+  // live view sama sekali di mode ini — layarnya jadi framing guide, bukan preview.
+  const isSony = cameraSource === 'sony'
   const containerRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
 
@@ -35,6 +38,9 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
   const [rotation, setRotation] = useState(0)
   const [containerDims, setContainerDims] = useState<{ w: number; h: number } | null>(null)
   const [pendingShot, setPendingShot] = useState<string | null>(null)
+  // Pesan gphoto2 ditampilkan apa adanya: route udah nerjemahin jadi instruksi konkret
+  // ("mode PC Remote", "killall PTPCamera"). Ditelan diam-diam = operator nebak-nebak.
+  const [sonyError, setSonyError] = useState<string | null>(null)
 
   const target = state.template.shot_count ?? 4
   const confirmedCount = state.shots.length
@@ -43,7 +49,9 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
 
   const [capturing, setCapturing] = useState(false)
   const canon = useCanonLive(isCanon && !done && !isReviewingPending, capturing)
-  const cameraReady = isCanon ? canon.ready : webcamReady
+  // Sony: ga ada stream buat ditunggu — tombol Capture harus langsung aktif, kalau enggak
+  // operator kejebak nunggu 'ready' yang ga akan pernah datang.
+  const cameraReady = isSony ? true : isCanon ? canon.ready : webcamReady
 
   useEffect(() => {
     try {
@@ -71,7 +79,7 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
   }, [])
 
   useEffect(() => {
-    if (isCanon) return
+    if (isCanon || isSony) return
     const el = videoRef.current
     if (!el) return
     let cancelled = false
@@ -85,7 +93,7 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
       })
       .catch(() => { if (!cancelled) setCameraError(true) })
     return () => { cancelled = true; stopCamera(el) }
-  }, [retry, isCanon])
+  }, [retry, isCanon, isSony])
 
   const retryCamera = useCallback(() => {
     setCameraError(false)
@@ -137,6 +145,14 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
       setCapturing(true)
       try { return await rotateDataUrl(await triggerCanonCapture(canon.owner()), rotation) }
       catch { setCameraError(true); return null }
+      finally { setCapturing(false) }
+    }
+
+    if (isSony) {
+      setCapturing(true)
+      setSonyError(null)
+      try { return await rotateDataUrl(await triggerSonyCapture(), rotation) }
+      catch (e) { setSonyError(e instanceof Error ? e.message : 'Capture gagal'); return null }
       finally { setCapturing(false) }
     }
 
@@ -243,6 +259,23 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
               isCanon ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={canon.src} alt="" className="absolute top-1/2 left-1/2 max-w-none max-h-none" style={liveStyle} />
+              ) : isSony ? (
+                // PC Remote ga nyediain live view. Daripada <video> hitam yang bikin operator
+                // ngira kamera rusak, panel ini bilang terus terang: framing lewat LCD kamera.
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
+                  <div style={{ fontSize: 34, opacity: 0.85 }}>📷</div>
+                  <p style={{ fontSize: 'var(--text-sm)', color: 'var(--fg)', letterSpacing: '0.04em' }}>
+                    Sony — full resolution
+                  </p>
+                  <p style={{ fontSize: 'var(--text-xs)', color: 'var(--fg-muted)', lineHeight: 1.6, maxWidth: 320 }}>
+                    Framing lewat LCD kamera. Tekan Capture buat jepret.
+                  </p>
+                  {sonyError && (
+                    <p style={{ fontSize: 'var(--text-xs)', color: '#fca5a5', lineHeight: 1.6, maxWidth: 340, marginTop: 4 }}>
+                      {sonyError}
+                    </p>
+                  )}
+                </div>
               ) : (
                 <video
                   ref={videoRef}

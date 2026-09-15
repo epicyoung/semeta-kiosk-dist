@@ -25,6 +25,20 @@ export async function triggerCanonCapture(owner: string): Promise<string> {
   return dataUrl as string
 }
 
+// Sony (ZV-E1 dkk) via gphoto2 di macOS/Linux — padanan triggerCanonCapture buat mesin
+// non-Windows. Ga ada owner/lock kayak Canon: gphoto2 ga punya webserver yang dipakai
+// bareng, jadi serialisasi cukup di route (satu shutter sekali jalan).
+export async function triggerSonyCapture(): Promise<string> {
+  const res = await fetch('/api/sony-capture', { method: 'POST' })
+  if (!res.ok) {
+    const { error } = await res.json().catch(() => ({ error: `capture ${res.status}` }))
+    throw new Error(error ?? `capture ${res.status}`)
+  }
+  const { dataUrl } = await res.json()
+  if (!dataUrl) throw new Error('capture: no image')
+  return dataUrl as string
+}
+
 // Quarter-turn (90/270) swap w↔h; 0/180 keep. Pure — testable tanpa DOM.
 export function rotatedCanvasSize(w: number, h: number, deg: number): { w: number; h: number } {
   return deg === 90 || deg === 270 ? { w: h, h: w } : { w, h }

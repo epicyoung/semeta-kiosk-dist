@@ -28,6 +28,8 @@ const ENGINE_OPTS: { value: EngineKey; label: string; soon?: boolean }[] = [
 const CAMERA_OPTS = [
   { value: 'webcam', label: 'Webcam (getUserMedia)' },
   { value: 'canon',  label: 'Canon (digiCamControl)' },
+  // macOS/Linux — Windows ga punya gphoto2. Full-res, tanpa live view (PC Remote).
+  { value: 'sony',   label: 'Sony (gphoto2, no live view)' },
 ]
 // Stylize (face_server) — opsi asli dari GET :8000/capabilities, ini cuma label map.
 const COMFY_FAMILY_LABELS: Record<string, string> = { sd15: 'SD 1.5', sdxl: 'SDXL', flux: 'Flux' }
