@@ -98,6 +98,43 @@ export function clampVariants(n: unknown): number {
   return Math.min(4, Math.max(1, Math.floor(n)))
 }
 
+/** Model Fal yang setara sama model Google — jalan keluar pas Gemini ngantri di tengah event.
+ *
+ *  Komentar di IMAGE_MODELS udah lama bilang Fal itu "jalan keluar kalau Gemini lagi rewel",
+ *  tapi sebelum ini ga ada SATU baris kode pun yang pernah ngambil jalan keluar itu: urutan
+ *  daftar di-rank murni dari HPP, dan reconcileSelection selalu jatuh ke avail[0] yang selalu
+ *  Google. Waktu Google lemot di lapangan, satu-satunya cara pindah = operator nyetel manual.
+ *
+ *  Peta ini yang bikin fallback-nya bisa otomatis. Sengaja per-model (bukan "pokoknya Fal
+ *  pertama"): Pro→Pro, NB2→NB2, biar karakter hasilnya ga berubah di tengah event. Lite &
+ *  legacy ga ada padanannya di Fal ⇒ ga di-map, mending tetep di Google daripada diem-diem
+ *  naik kelas ke model yang beda harga & beda hasil. */
+const FAL_EQUIVALENT: Partial<Record<ImageModelId, ImageModelId>> = {
+  'nano-banana-pro-google': 'nano-banana-pro',
+  'nano-banana-2-google': 'nano-banana-2',
+}
+
+/** Key engine Fal padanan buat SATU key engine Google. null = ga ada jalan keluar.
+ *
+ *  Masuk-keluarnya key registry (bukan pasangan model+resolusi) karena yang dipegang
+ *  ProcessingScreen emang cuma key — config kiosk ga nyimpen image_costs, itu cuma mampir di
+ *  layar Settings. Resolusi Google-nya sengaja DIBUANG: endpoint /edit Fal ga punya param
+ *  resolusi, jadi Pro 4K dan Pro 1K dua-duanya jatuh ke key Fal yang sama.
+ *
+ *  ROUTING ONLY. Kalau key hasil peta ini ga kedaftar/ga enabled, Worker fail-closed (400/403)
+ *  dan tamu dapet layar gagal — sama persis kayak kalau fallback-nya ga ada sama sekali.
+ *  Ga ada token kepotong buat key yang ditolak. Pure — dites. */
+export function falFallbackKey(engineKey: string): string | null {
+  for (const [google, fal] of Object.entries(FAL_EQUIVALENT)) {
+    const alt = ENGINE_KEYS[fal as ImageModelId]?.['-']
+    if (!alt) continue
+    // Semua resolusi model Google ini nunjuk ke satu key Fal yang sama.
+    const keys = Object.values(ENGINE_KEYS[google as ImageModelId] ?? {})
+    if (keys.includes(engineKey)) return alt
+  }
+  return null
+}
+
 /** Pilihan tersimpan + daftar yang enabled sekarang → pilihan yang SAH sekarang.
  *
  *  Kenapa perlu: admin bisa matiin engine kapan aja, sementara config kiosk nyimpen pilihan

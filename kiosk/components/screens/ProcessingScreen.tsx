@@ -11,7 +11,9 @@ import { compositeFrame } from '@/lib/frame-composite'
 import { composePrintLayout, to2UpSheet } from '@/lib/print-layout'
 import { useT } from '@/lib/i18n'
 import { finalizeLocal, localCopies } from '@/lib/local-finalize'
-import { buildApiEditRequest } from '@/lib/api-engine'
+import { buildApiEditRequest, type ApiEditRequest } from '@/lib/api-engine'
+import { falFallbackKey } from '@/lib/image-engines'
+import { createFinalizeGuard } from '@/lib/finalize-guard'
 
 // ponytail: dev mock — set false kalau backend nyata siap
 const MOCK = false
@@ -205,12 +207,16 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
     return { id: `tmpl-${t.id}`, url: t.overlay_url, name: t.name }
   }
 
-  const finalizedRef = useRef(false)
+  // Izin finalize dipegang per-RUN generate, bukan per-mount. Alasan lengkapnya di
+  // lib/finalize-guard.ts — singkatnya: ref selamat dari re-render, jadi dia juga selamat
+  // dari re-run effect tanpa unmount, dan dulu itu bikin foto tamu A nyampe ke tamu B.
+  const guardRef = useRef(createFinalizeGuard())
+  const guard = guardRef.current
+
   const finalizeOnce: typeof finalizeLocal = async (...args) => {
-    if (finalizedRef.current) return null // sesi ini udah di-finalize → run kedua no-op
-    finalizedRef.current = true
+    if (!guard.claim()) return null // run ini udah di-finalize → panggilan kedua no-op
     const base = await finalizeLocal(...args)
-    if (!base) finalizedRef.current = false // finalize GAGAL → buka lagi biar retry beneran bisa
+    if (!base) guard.release() // finalize GAGAL → buka lagi biar retry beneran bisa
     return base
   }
 
@@ -218,14 +224,13 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
   // seq sendiri (file & entri microsite kepisah), tapi guard-nya sama: sekali per sesi.
   // Tanpa ini, effect yang jalan 2x bikin 4 variasi jadi 8 file — bug bf04ca4 versi kali empat.
   const finalizeAllOnce = async (pairs: { original: string; ai: string }[]): Promise<(string | null)[]> => {
-    if (finalizedRef.current) return pairs.map(() => null)
-    finalizedRef.current = true
+    if (!guard.claim()) return pairs.map(() => null)
     const bases: (string | null)[] = []
     for (const p of pairs) {
       bases.push(await finalizeLocal(eventName, p.original, p.ai,
         (err) => onUploadFailed?.({ stage: 'finalize', error: String(err).slice(0, 300) })))
     }
-    if (bases.every(b => !b)) finalizedRef.current = false // semua gagal → retry beneran boleh jalan
+    if (bases.every(b => !b)) guard.release() // semua gagal → retry beneran boleh jalan
     return bases
   }
 
@@ -240,6 +245,11 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
 
   useEffect(() => {
     if (timedOut) return // #error preview — jangan generate
+
+    // Satu run effect = satu izin finalize. Kenapa ini WAJIB ada di sini (bukan di cleanup,
+    // bukan cuma pas mount): lib/finalize-guard.ts.
+    guard.beginRun()
+
     const interval = setInterval(() => setCopyIndex(i => (i + 1) % copy.length), 4_000)
     const genStart = performance.now() // processing duration for the log (performance.now = clock-safe)
 
@@ -454,8 +464,10 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
       })
       return { edit, selfieBase64 }
     }
-    prepareApiPayload()
-      .then(({ edit, selfieBase64 }) => fetch('/api/generate', {
+    // Satu percobaan generate pakai key engine tertentu. Dipisah jadi fungsi biar jalur
+    // fallback bisa manggil ulang dengan key lain TANPA nyalin body request-nya.
+    const postGenerate = (engineKey: string, edit: ApiEditRequest | null, selfieBase64: string) =>
+      fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -467,11 +479,35 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
           // model, resolusi, jumlah variasi & harga tetap diputus server dari registry-nya.
           // num_images cuma nyusul kalau image_engine kekirim — di jalur lama jumlahnya
           // milik payload_json Supabase, dan ngirimnya malah bikin Worker bingung sumbernya.
-          ...(imageEngine ? { image_engine: imageEngine, num_images: imageVariants } : {}),
+          ...(engineKey ? { image_engine: engineKey, num_images: imageVariants } : {}),
           ...(edit ?? {}),
         }),
         signal: controller.signal,
-      }))
+      })
+
+    prepareApiPayload()
+      .then(async ({ edit, selfieBase64 }) => {
+        const res = await postGenerate(imageEngine, edit, selfieBase64)
+        if (res.ok) return res
+
+        // Google nolak/ngadat → coba padanan Fal SEKALI sebelum nyerah.
+        //
+        // Ini yang dulu ga ada: urutan model di-rank dari HPP, dan pas Gemini ngantri di
+        // tengah event satu-satunya jalan keluar = operator nyetel manual di Settings sambil
+        // tamu ngantri. Retry di sini cuma jalan buat kegagalan dari SISI GOOGLE (5xx/429).
+        // 4xx selain 429 = permintaannya yang salah (prompt kepanjangan, referensi ditolak) —
+        // ngulang ke Fal cuma mindahin kegagalan yang sama sambil bakar token kedua.
+        const worthRetry = res.status === 429 || res.status >= 500
+        const altKey = imageEngine ? falFallbackKey(imageEngine) : null
+        if (!worthRetry || !altKey) return res
+
+        lap('google gagal, coba fal', { status: res.status, from: imageEngine, to: altKey })
+        onUploadFailed?.({ stage: 'generate_fallback', status: res.status, from: imageEngine, to: altKey })
+        const alt = await postGenerate(altKey, edit, selfieBase64)
+        // Fal ikut gagal → balikin respons Fal; pesan errornya lebih relevan buat operator
+        // daripada error Google yang udah ketinggalan satu percobaan.
+        return alt
+      })
       .then(async (res) => {
         dispatch({ type: 'SET_PROGRESS', progress: 90 })
         // Ini lap paling penting: selisih dari 'payload siap' = murni waktu Worker + Google.
@@ -486,8 +522,26 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
 
         // Sequential, HARAM Promise.all: tiap localCopies bikin canvas full-res buat burn
         // watermark — empat sekaligus bikin mesin lapangan mepet memori.
+        //
+        // Per-item try/catch, BUKAN satu throw buat sebatch. Worker udah sengaja nyimpen hasil
+        // parsial (google-provider.ts: "tamu ga boleh pulang tangan kosong") — kalau di sini
+        // satu URL busuk bikin seluruh .then lompat ke .catch, desain itu dibatalin di client:
+        // tamu liat layar gagal padahal 3 foto bagus ada dan token UDAH kepotong server-side.
         const locals: { raw: string; original: string; ai: string }[] = []
-        for (const u of list) locals.push({ raw: u, ...(await localCopies(state.imageUrl, u, licensed)) })
+        const localFails: string[] = []
+        for (const u of list) {
+          try {
+            locals.push({ raw: u, ...(await localCopies(state.imageUrl, u, licensed)) })
+          } catch (e) {
+            localFails.push(String(e).slice(0, 120))
+          }
+        }
+        // Nol hasil layak = emang ga ada barang buat dikirim → error screen (kelakuan lama).
+        if (locals.length === 0) throw new Error(`semua variasi gagal diproses: ${localFails.join(' | ')}`)
+        if (localFails.length > 0) {
+          console.error('[generate] variasi gagal diproses (lanjut dgn sisanya):', localFails)
+          onUploadFailed?.({ stage: 'localCopies', failed: localFails.length, total: list.length, errors: localFails })
+        }
         dispatch({ type: 'SET_PROGRESS', progress: 100 })
         // Sengaja sesudah loop, bukan per-item: yang dicari total ongkos burn watermark buat
         // N variasi — itu yang naik linear dan bikin 4 variasi kerasa lebih berat dari 2.

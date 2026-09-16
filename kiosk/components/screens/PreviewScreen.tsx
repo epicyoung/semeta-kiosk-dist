@@ -421,11 +421,43 @@ export function PreviewScreen({
     return () => { alive = false; };
   }, []);
 
-  // Syarat tombol muncul: lagi zoom satu foto, face_server hidup, DAN foto ini punya sourceUrl
-  // (foto asli tamu). Jalur engine 'api' selalu nyimpen sourceUrl; jalur print_local enggak,
-  // dan di situ swap ulang emang ga masuk akal.
+  // Index yang mau di-refine. Multi = foto yang lagi di-zoom; SINGLE = satu-satunya foto (0).
+  //
+  // Dulu syaratnya `zoomIndex !== null`, dan itu mustahil kepenuhan di jalur single: zoom cuma
+  // bisa dinyalain dengan nge-tap sel grid 4-up, sementara grid-nya sendiri cuma render kalau
+  // allResults.length > 1. Hasil tunggal engine 'api' ga punya sel buat di-tap ⇒ zoomIndex
+  // nyangkut null selamanya ⇒ tombol Edit Wajah ga pernah nongol, padahal sourceUrl/rawAiUrl/
+  // face_server semuanya siap. Operator nyetel variants 2 baru tombolnya muncul — fiturnya ada,
+  // pintunya yang ilang.
+  const refineIndex = multiResults ? zoomIndex : 0;
+
+  // Daftar yang jadi bahan Edit Wajah. SENGAJA bukan activeResult: bentuk fallback-nya
+  // (baris ~218) sengaja longgar buat display dan ga bawa templateId, sementara REPLACE_RESULTS
+  // nyimpen daftar ini balik ke state sebagai SwapResult[] — templateId-nya kepake buat
+  // print/upload di hilir. Jadi single dirakit ulang dari state, lengkap, bukan di-cast.
+  // templateId ikut dijaga: SwapResult mewajibkannya (kepake buat print/upload di hilir),
+  // sementara di state dia opsional. Tanpa dia, mending tombolnya ga usah muncul daripada
+  // nyimpen balik daftar yang bolong.
+  const refinePool: SwapResult[] | null = multiResults
+    ? multiResults
+    : state.rawAiUrl && state.sourceUrl && state.templateId
+      ? [{
+          templateId: state.templateId,
+          aiUrl: state.aiUrl,
+          originalUrl: state.originalUrl,
+          sourceUrl: state.sourceUrl,
+          rawAiUrl: state.rawAiUrl,
+          base: state.base,
+          processingSec: state.processingSec,
+        }]
+      : null;
+
+  // Syarat tombol muncul: ada foto yang jadi target, face_server hidup, DAN foto itu punya
+  // sourceUrl (foto asli tamu). Jalur engine 'api' selalu nyimpen sourceUrl; jalur print_local
+  // enggak, dan di situ swap ulang emang ga masuk akal.
   const canRefine =
-    zoomIndex !== null &&
+    refineIndex !== null &&
+    !!refinePool &&
     swapReady === true &&
     !!displayResult.sourceUrl &&
     !!displayResult.rawAiUrl &&
@@ -450,9 +482,12 @@ export function PreviewScreen({
   const resultsKey = (state.allResults ?? []).map((r) => r.aiUrl).join("|");
 
   const runRefine = async (mapping: (number | null)[]) => {
-    if (zoomIndex === null || !multiResults) return;
-    const target = multiResults[zoomIndex];
-    if (!target.sourceUrl || !target.rawAiUrl) return;
+    // Single (multiResults null) tetep jalan: daftarnya dirakit dari activeResult, index 0.
+    // refineResult/applyResults di bawah ga peduli daftarnya panjang berapa — REPLACE_RESULTS
+    // nerima array 1 elemen apa adanya, dan resultIndex 0 emang udah yang kepilih.
+    if (refineIndex === null || !refinePool) return;
+    const target = refinePool[refineIndex];
+    if (!target?.sourceUrl || !target.rawAiUrl) return;
     setRemapOpen(false);
     setRefining(true);
     setRefineError(false);
@@ -462,15 +497,15 @@ export function PreviewScreen({
       const swapped = await swapFace(target.rawAiUrl, target.sourceUrl, () => {}, mapping);
       // Watermark ikut aturan yang sama kayak seluruh layar ini (licensed/bypassed = bersih).
       const ai = licensed || config.bypassed ? swapped : await burnWatermark(swapped);
-      const { results, previous } = refineResult(multiResults, zoomIndex, {
+      const { results, previous } = refineResult(refinePool, refineIndex, {
         aiUrl: ai,
         // originalUrl (foto asli tamu) ga ikut berubah — yang di-swap cuma sisi AI-nya.
         originalUrl: target.originalUrl,
         rawAiUrl: swapped,
       });
       if (!previous) return;
-      setUndoState({ index: zoomIndex, prev: previous });
-      applyResults(results, zoomIndex);
+      setUndoState({ index: refineIndex, prev: previous });
+      applyResults(results, refineIndex);
     } catch {
       // Gagal = foto lama UTUH. Tamu tetep bisa lanjut print/QR pakai hasil AI aslinya.
       setRefineError(true);
@@ -507,8 +542,9 @@ export function PreviewScreen({
   };
 
   const undoRefine = () => {
-    if (!undoState || !multiResults) return;
-    const restored = multiResults.map((r, i) => (i === undoState.index ? undoState.prev : r));
+    if (!undoState || !refinePool) return;
+    // Pool yang sama kayak runRefine — single ga punya multiResults tapi tetep boleh undo.
+    const restored = refinePool.map((r, i) => (i === undoState.index ? undoState.prev : r));
     applyResults(restored, undoState.index); // pulihin DULU, baru keluar
     exitZoom();
   };
@@ -1388,7 +1424,7 @@ export function PreviewScreen({
                       </div>
                     )}
                     {/* Edit Face — dipindah ke kanan atas (top-3 right-3) kotak icon edit biar tengah bersih buat tab [PHOTO] [VIDEO] */}
-                    {zoomIndex !== null && !showOriginal && (canRefine || refining || undoState) && (
+                    {refineIndex !== null && !showOriginal && (canRefine || refining || undoState) && (
                       <div
                         className="absolute top-3 right-3 flex items-center gap-2"
                         style={{ zIndex: 41 }}
@@ -1398,7 +1434,7 @@ export function PreviewScreen({
                           <div style={{ ...refineChip, color: "#fff" }}>
                             {t("remap_working") as string}
                           </div>
-                        ) : undoState && undoState.index === zoomIndex ? (
+                        ) : undoState && undoState.index === refineIndex ? (
                           <>
                             <button onClick={undoRefine} style={{ ...refineChip, color: "var(--fg-muted)" }}>
                               {t("remap_undo") as string}
@@ -1437,7 +1473,7 @@ export function PreviewScreen({
                         ) : null}
                       </div>
                     )}
-                    {refineError && zoomIndex !== null && (
+                    {refineError && refineIndex !== null && (
                       <div
                         className="absolute top-14 inset-x-0 flex justify-center"
                         style={{ zIndex: 40 }}
@@ -1812,7 +1848,7 @@ export function PreviewScreen({
         )}
 
         {/* Expanded chooser panel (for multi-result print/video selection) */}
-        {remapOpen && zoomIndex !== null && displayResult.rawAiUrl && displayResult.sourceUrl && (
+        {remapOpen && refineIndex !== null && displayResult.rawAiUrl && displayResult.sourceUrl && (
           <FaceRemapPanel
             aiUrl={displayResult.rawAiUrl}
             selfieUrl={displayResult.sourceUrl}
