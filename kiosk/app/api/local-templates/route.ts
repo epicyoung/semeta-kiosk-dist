@@ -1,8 +1,10 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { localDb } from '@/lib/local-db'
+import { assertLocalRead } from '@/lib/local-request'
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    assertLocalRead(req)
     const templates = localDb.getTemplates()
     return NextResponse.json({ templates })
   } catch (e) {

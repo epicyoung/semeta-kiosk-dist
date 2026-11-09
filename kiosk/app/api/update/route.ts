@@ -1,8 +1,10 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import path from 'path'
 import { getVersionInfo } from '@/lib/version'
+import { assertLocalMutation, assertLocalRead } from '@/lib/local-request'
+import { requireOperator } from '@/lib/operator-auth'
 
 const exec = promisify(execFile)
 export const runtime = 'nodejs'
@@ -12,7 +14,8 @@ export const dynamic = 'force-dynamic'
 const REPO_ROOT = path.resolve(process.cwd(), '..')
 
 // GET → cheap, read-only version check (local vs remote hash).
-export async function GET() {
+export async function GET(req: NextRequest) {
+  try { assertLocalRead(req) } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : 'Ditolak' }, { status: 403 }) }
   const info = await getVersionInfo()
   return NextResponse.json(info)
 }
@@ -21,7 +24,13 @@ export async function GET() {
 // fast-forwards cleanly; if someone HAS edited tracked files, pull fails SAFE
 // (no merge, no corruption) and we report it instead of forcing.
 // pb_data is gitignored → NEVER touched by pull. Templates/frames Budi uploaded stay put.
-export async function POST() {
+export async function POST(req: NextRequest) {
+  try {
+    assertLocalMutation(req)
+    requireOperator(req)
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Ditolak' }, { status: 403 })
+  }
   try {
     // Guard: must be a git clone, not an extracted archive.
     const before = await getVersionInfo()
@@ -29,6 +38,24 @@ export async function POST() {
       return NextResponse.json(
         { ok: false, error: 'not-git', message: 'Bukan git clone — update otomatis tidak tersedia. Install ulang dari bundle terbaru.' },
         { status: 400 },
+      )
+    }
+
+    // Remote harus repo resmi — cegah pull dari origin yang diganti (supply-chain).
+    const expectedOrigin = (process.env.SEMETA_UPDATE_ORIGIN || 'https://github.com/epicyoung/semeta.git').replace(/\.git$/, '')
+    try {
+      const { stdout } = await exec('git', ['remote', 'get-url', 'origin'], { cwd: REPO_ROOT, timeout: 10_000 })
+      const actualOrigin = String(stdout).trim().replace(/\.git$/, '')
+      if (!actualOrigin || actualOrigin !== expectedOrigin) {
+        return NextResponse.json(
+          { ok: false, error: 'untrusted-origin', message: 'Remote git bukan repo resmi. Update dibatalkan.' },
+          { status: 403 },
+        )
+      }
+    } catch {
+      return NextResponse.json(
+        { ok: false, error: 'origin-check-failed', message: 'Gagal membaca remote git. Update dibatalkan.' },
+        { status: 500 },
       )
     }
 

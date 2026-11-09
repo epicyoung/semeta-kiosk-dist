@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { localDb } from '@/lib/local-db'
 import { reasonForStatus } from '@/lib/license'
+import { assertLocalMutation } from '@/lib/local-request'
 
 export async function POST(req: NextRequest) {
+  try { assertLocalMutation(req) } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : 'Ditolak' }, { status: 403 }) }
+  // NO ACTIVATION: sama kayak checkLicenseGate — launcher offline set flag ini biar
+  // heartbeat client ga pernah ngelock walau .env.local masih nyantol NEXT_PUBLIC_WORKER_URL.
+  if (process.env.SEMETA_OFFLINE === '1')
+    return NextResponse.json({ status: 'bypassed', licensed: true, remaining_sec: 0 })
   const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL
   const secret = localDb.getSecret()
   if (!workerUrl || !secret)

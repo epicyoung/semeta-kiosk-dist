@@ -7,6 +7,15 @@
 Mode yang dipakai: **Photo Print (non-AI)**. Tidak ada AI lokal, tidak ada
 PocketBase, tidak ada face_server. Cuma Next.js + kamera + printer.
 
+> **No activation code.** Launcher (`LAUNCHER-MACOS.command`) set
+> `SEMETA_OFFLINE=1` → kiosk jalan **licensed (bersih, no watermark)** dan tidak
+> pernah nge-lock, tanpa Worker / secret / kode apa pun. Tidak ada langkah
+> aktivasi di mana pun.
+
+> **Kamera yang didukung lewat gphoto2 (Jalur A):** Canon EOS, Sony A7 series
+> (A73 = ILCE-7M3), Sony ZV-E1, dan sebagian besar DSLR/mirrorless lain yang
+> gphoto2 kenal. Semua pakai satu opsi Camera Source yang sama — bukan webcam.
+
 ---
 
 ## 0. Konteks yang harus dipahami sebelum mulai
@@ -96,9 +105,17 @@ Tutup kiosk: `Ctrl+C` di jendela Terminal tempat launcher jalan.
 
 ### 3a. Siapkan kamera
 
-Di ZV-E1: **Menu → Setup → USB → USB Connection Mode → PC Remote**
+Atur mode USB kamera ke **PC Remote** (bukan Mass Storage, bukan USB Streaming /
+webcam). Lokasi menu beda per merek:
 
-Colok USB-C ke Mac. Nyalakan kamera.
+- **Sony ZV-E1** → Menu → Setup → USB → USB Connection Mode → PC Remote
+- **Sony A73 (ILCE-7M3)** → Menu → Setup (icon kunci pas) → USB Connection → PC Remote
+- **Canon EOS** → Menu → Setup (kuning) → Communication → USB → *PC connection* (model
+  EOS R baru biasanya otomatis saat dipasang; kalau kamera muncul sebagai drive,
+  cari opsi "Computer / MTP" dan pastikan bukan Mass Storage)
+
+Colok USB ke Mac. Nyalakan kamera. Inti satu: kamera harus muncul sebagai **PC Remote /
+tether**, bukan drive penyimpanan, bukan webcam.
 
 ### 3b. Bersihkan perebut USB
 
@@ -149,7 +166,7 @@ Apa pun jalurnya, set dulu: **Engine Mode → Photo Print (non-AI)**
 
 ### 4a. Jalur A (gphoto2 berhasil)
 
-**Settings → Camera Source → `Sony (gphoto2, no live view)`**
+**Settings → Camera Source → `Canon / Sony (gphoto2, PC Remote)`**
 
 Selesai. Tombol Capture di kiosk akan memicu shutter kamera dan menarik file
 full-res langsung. Layar preview menampilkan panel info, bukan live view — itu

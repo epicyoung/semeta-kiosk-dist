@@ -32,6 +32,29 @@ export function GlassShell({ screenKey, direction, children, config, onLogoClick
   ])
   const [gridDebug, setGridDebug] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // PIN operator: Settings ga boleh kebuka cuma karena tamu nyolek gear.
+  const [pinOpen, setPinOpen] = useState(false)
+  const [pin, setPin] = useState('')
+  const [pinError, setPinError] = useState('')
+  const [pinBusy, setPinBusy] = useState(false)
+  const submitPin = async () => {
+    if (pinBusy) return
+    setPinBusy(true); setPinError('')
+    try {
+      const res = await fetch('/api/operator-auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin }),
+      })
+      if (!res.ok) { setPinError('PIN salah'); return }
+      setPinOpen(false)
+      setSettingsOpen(true)
+    } catch {
+      setPinError('Gagal verifikasi')
+    } finally {
+      setPinBusy(false)
+    }
+  }
   const [localConfig, setLocalConfig] = useState(config)
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'ok' | 'err'>('idle')
   const [syncPhase, setSyncPhase] = useState<SyncPhase | null>(null)
@@ -221,7 +244,11 @@ export function GlassShell({ screenKey, direction, children, config, onLogoClick
 
             {/* Gear icon — top left, opacity 50% */}
             <button
-              onClick={() => setSettingsOpen(v => !v)}
+              onClick={() => {
+                if (settingsOpen) { setSettingsOpen(false); return }
+                if (localConfig.operator_pin_required === false) { setSettingsOpen(true); return }
+                setPin(''); setPinError(''); setPinOpen(true)
+              }}
               style={{
                 position: 'absolute', top: 14, left: 14, zIndex: 30,
                 width: 32, height: 32, borderRadius: 'var(--radius-glass)', border: 'none',
@@ -330,6 +357,30 @@ export function GlassShell({ screenKey, direction, children, config, onLogoClick
               phase={syncPhase}
               onClose={() => { setSyncPhase(null); setSyncStatus('idle') }}
             />
+
+            {/* PIN gate — Settings cuma kebuka setelah operator masuk PIN. */}
+            {pinOpen && (
+              <div style={{ position: 'absolute', inset: 0, zIndex: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }}>
+                <div style={{ width: 'min(360px, 88%)', padding: 24, borderRadius: 'var(--radius-glass)', background: 'rgba(18,8,60,0.96)', border: '1px solid rgba(255,255,255,0.18)', textAlign: 'center' }}>
+                  <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 500, marginBottom: 8 }}>PIN Operator</h2>
+                  <p style={{ fontSize: 'var(--text-sm)', color: 'var(--fg-muted)', marginBottom: 16 }}>Masukkan PIN buat buka Settings.</p>
+                  <input
+                    autoFocus
+                    type="password"
+                    inputMode="numeric"
+                    value={pin}
+                    onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 12))}
+                    onKeyDown={e => { if (e.key === 'Enter') submitPin() }}
+                    style={{ width: '100%', padding: '12px 14px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.08)', color: '#fff', fontSize: 'var(--text-lg)', textAlign: 'center', letterSpacing: '0.4em', marginBottom: 12 }}
+                  />
+                  {pinError && <p style={{ color: '#fca5a5', fontSize: 'var(--text-xs)', marginBottom: 12 }}>{pinError}</p>}
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <TouchButton onClick={() => setPinOpen(false)} className="flex-1">Batal</TouchButton>
+                    <TouchButton onClick={submitPin} disabled={pinBusy || pin.length < 4} className="flex-1">{pinBusy ? '…' : 'Buka'}</TouchButton>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Settings panel — slide in dari kanan */}
             <SettingsPanel

@@ -567,6 +567,7 @@ export function ProcessingScreen({ state, dispatch, generationSource, eventName,
         // Total sampai preview kebuka. Kalau lompatnya jauh dari 'frame selesai', berarti
         // yang makan waktu video provider — bukan jalur foto sama sekali.
         lap('SELESAI', { video: videoUrl ? 'ya' : 'ga' })
+        if (controller.signal.aborted) return // unmount/RESET/timeout — jangan dispatch ke sesi tamu lain
         dispatch({
           type: 'SHOW_PREVIEW', aiUrl: r0.aiUrl, originalUrl: r0.originalUrl,
           allResults: results.length > 1 ? results : undefined,

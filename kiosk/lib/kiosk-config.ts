@@ -2,7 +2,7 @@ import type { KioskConfig } from './types'
 import { localDb } from './local-db'
 import { fetchPocketBaseFrames, fetchPocketBaseTemplates } from './pocketbase'
 import { fetchSpindonesiaTemplates } from './spindonesia'
-import { reasonForStatus, withinGrace, offlineLicensedFresh, type LockReason } from './license'
+import { reasonForStatus, workerVerdict, offlineVerdict, type LockReason, type WorkerBody } from './license'
 import { COUNTDOWN_DEFAULT } from './countdown'
 
 export type LicenseGate =
@@ -12,6 +12,11 @@ export type LicenseGate =
 // License gate — dipanggil di page.tsx (server) sebelum render. Worker = otoritas.
 // Dev (no worker URL) = jalan penuh. Worker jawab non-200 = lock. Offline = grace 12 jam.
 export async function checkLicenseGate(): Promise<LicenseGate> {
+  // Offline Photo Print build (launcher macOS/Linux set SEMETA_OFFLINE=1) — eksplisit
+  // NO ACTIVATION: full access, licensed (bersih, no watermark), nol panggilan Worker,
+  // nol lock. Guard ini DI ATAS workerUrl/secret biar .env.local nyasar pun ga nge-lock.
+  if (process.env.SEMETA_OFFLINE === '1')
+    return { ok: true, remaining_sec: 0, licensed: true, bypassed: true }
   const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL
   const secret = localDb.getSecret()
   // Dev mode: belum disetup buat licensing → jalan penuh tanpa lock.
@@ -32,39 +37,52 @@ export async function checkLicenseGate(): Promise<LicenseGate> {
       if (res.status === 404) {
         // Freeware body bawa identity + force_lock (worker no-session branch).
         const fw = await res.json().catch(() => ({} as Record<string, unknown>))
+        const verdict = workerVerdict(fw as WorkerBody, 404)
         // Admin bisa takeover kiosk freeware → force_lock menang walau belum ada sewa.
-        if (fw.force_locked === true) return { ok: false, reason: 'force_locked', message: (fw.lock_message as string) ?? undefined }
+        if (verdict.kind === 'locked')
+          return { ok: false, reason: verdict.reason, message: verdict.message }
         return { ok: true, remaining_sec: 0, licensed: false, video_unlocked: fw.video_unlocked === true, kiosk_name: fw.kiosk_name as string | undefined, kiosk_no: fw.kiosk_no as number | undefined }
       }
       return { ok: false, reason: reasonForStatus(res.status) }
     }
 
     const data = await res.json()
-    if (data.status === 'bypassed' || data.bypassed) return { ok: true, remaining_sec: 0, licensed: true, bypassed: true }
-    if (data.force_locked === true) return { ok: false, reason: 'force_locked', message: data.lock_message ?? undefined }
-
-    const remaining = typeof data.remaining_sec === 'number' ? data.remaining_sec : 0
-    // Prefer the worker's verdict; fall back to deriving it (same rule) for workers deployed
-    // before the `licensed` field existed — otherwise a live rental would falsely watermark.
-    const licensed = typeof data.licensed === 'boolean'
-      ? data.licensed
-      : data.status === 'ACTIVE' && remaining > 0
-    localDb.saveLicense({ session_id: data.session_id ?? '', remaining_sec: remaining, lastOkAt: Date.now() })
-    return {
-      ok: true, remaining_sec: remaining, licensed,
-      video_unlocked: data.video_unlocked === true,
-      kiosk_name: data.kiosk_name, kiosk_no: data.kiosk_no,
-      pause_quota_sec: typeof data.pause_quota_sec === 'number' ? data.pause_quota_sec : undefined,
-      pause_used_sec: typeof data.pause_used_sec === 'number' ? data.pause_used_sec : undefined,
+    const verdict = workerVerdict(data, 200)
+    switch (verdict.kind) {
+      case 'bypassed':
+        return { ok: true, remaining_sec: 0, licensed: true, bypassed: true }
+      case 'locked':
+        // 200 + force_locked — takeover admin menang walau sewa aktif.
+        return { ok: false, reason: verdict.reason, message: verdict.message }
+      case 'freeware': {
+        // Kelakuan lama: record lisensi TETAP disimpan walau verdict freeware —
+        // lastOkAt jadi dasar grace 12 jam buat offline berikutnya. remaining_sec
+        // ikut dikembalikan (sesi PAUSED kirim licensed:false + sisa nyata → countdown
+        // tetap ke-seed 300, bukan 0).
+        const remaining = typeof data.remaining_sec === 'number' ? data.remaining_sec : 0
+        localDb.saveLicense({ session_id: data.session_id ?? '', remaining_sec: remaining, lastOkAt: Date.now() })
+        return { ok: true, remaining_sec: remaining, licensed: false,
+          video_unlocked: data.video_unlocked === true,
+          kiosk_name: data.kiosk_name, kiosk_no: data.kiosk_no }
+      }
+      case 'licensed':
+        localDb.saveLicense({ session_id: data.session_id ?? '', remaining_sec: verdict.remaining_sec, lastOkAt: Date.now() })
+        return {
+          ok: true, remaining_sec: verdict.remaining_sec, licensed: true,
+          video_unlocked: data.video_unlocked === true,
+          kiosk_name: data.kiosk_name, kiosk_no: data.kiosk_no,
+          pause_quota_sec: typeof data.pause_quota_sec === 'number' ? data.pause_quota_sec : undefined,
+          pause_used_sec: typeof data.pause_used_sec === 'number' ? data.pause_used_sec : undefined,
+        }
     }
   } catch {
-    // Offline: sudah pernah aktivasi + masih dalam 12 jam → jalan pakai sisa lokal. Kalau tidak → lock.
-    const rec = localDb.getLicense()
-    // Lock gate: 12h grace (don't brick on a wifi blip). Watermark: tighter freshness —
-    // stale cache → licensed:false so we don't give clean photos away unverified.
-    if (withinGrace(rec, Date.now()))
-      return { ok: true, remaining_sec: rec!.remaining_sec, licensed: offlineLicensedFresh(rec, Date.now()) }
-    return { ok: false, reason: rec ? 'needs_reconfirm' : 'needs_activation' }
+    // Offline: sudah pernah aktivasi + masih dalam 12 jam → jalan pakai sisa lokal.
+    // Lock gate: 12h grace. Watermark: freshness 1 jam — stale cache → licensed:false
+    // biar foto bersih ga dibagi gratis tanpa verifikasi.
+    const verdict = offlineVerdict(localDb.getLicense(), Date.now())
+    if (verdict.kind === 'grace')
+      return { ok: true, remaining_sec: verdict.remaining_sec, licensed: verdict.watermark_clean }
+    return { ok: false, reason: verdict.reason }
   }
 }
 
@@ -79,7 +97,7 @@ const FALLBACK: KioskConfig = {
   // Video = opt-in super admin (bakar token). Default TERKUNCI — kebuka cuma dari
   // handshake (video_unlocked, di-overwrite page.tsx) atau godmode.
   enable_video: false,
-  enable_gallery: false,
+  enable_gallery: true,
   countdown_seconds: COUNTDOWN_DEFAULT,
   template_source: 'pocketbase',
   pocketbase_url: 'http://localhost:8090',

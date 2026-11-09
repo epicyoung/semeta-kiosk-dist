@@ -1,5 +1,7 @@
 import fs from 'fs'
 import path from 'path'
+import { localDb } from './local-db'
+import { atomicWrite } from './disk-store'
 
 /** "Fun Run!" → "fun-run"; empty/symbol-only input → "event" */
 export function slugify(name: string): string {
@@ -58,13 +60,7 @@ export function reactionsDirPath(): string {
 }
 
 function getDataDir(): string {
-  const CONFIG_PATH = path.join(process.cwd(), 'semeta.config.json')
-  const DEFAULT_DIR = 'C:/semeta'
-  try {
-    const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'))
-    if (cfg.template_local) return path.resolve(cfg.template_local)
-  } catch {}
-  return path.resolve(process.env.TEMPLATE_LOCAL ?? DEFAULT_DIR)
+  return localDb.getTemplateLocal()
 }
 
 /** Absolute path to an event's output folder: <dataDir>/event/<eventFolder>/ */
@@ -77,7 +73,12 @@ export function eventDirPath(eventFolder: string): string {
  * persisting it to disk so numbers never repeat across restarts.
  */
 export function nextSeq(eventFolder: string): number {
-  const eventDir = eventDirPath(eventFolder)
+  return reserveSequence(eventDirPath(eventFolder))
+}
+
+/** Synchronous reservation shared by capture and import in the single kiosk process.
+ *  reservationId = idempotency key: retry dari job yang sama ga pernah alokasi nomor baru. */
+export function reserveSequence(eventDir: string, reservationId?: string): number {
   const seqFile = path.join(eventDir, 'seq.json')
 
   let content: string
@@ -89,7 +90,7 @@ export function nextSeq(eventFolder: string): number {
     // event, tiap QR nunjuk foto -001 dan file R2 ketimpa foto tamu sebelumnya.
     if ((err as NodeJS.ErrnoException)?.code !== 'ENOENT') throw err
     fs.mkdirSync(eventDir, { recursive: true })
-    fs.writeFileSync(seqFile, JSON.stringify({ seq: 1 }, null, 2))
+    atomicWrite(seqFile, JSON.stringify({ seq: 1, reservations: reservationId ? { [reservationId]: 1 } : {} }, null, 2))
     return 1
   }
 
@@ -99,7 +100,9 @@ export function nextSeq(eventFolder: string): number {
     throw new Error(`seq.json rusak di ${seqFile}: seq=${JSON.stringify(data?.seq)}`)
   }
 
+  if (reservationId && typeof data.reservations?.[reservationId] === 'number') return data.reservations[reservationId]
   const next = data.seq + 1
-  fs.writeFileSync(seqFile, JSON.stringify({ seq: next }, null, 2))
+  if (next > 99_999_999) throw new Error('Nomor sesi habis')
+  atomicWrite(seqFile, JSON.stringify({ seq: next, reservations: { ...data.reservations, ...(reservationId ? { [reservationId]: next } : {}) } }, null, 2))
   return next
 }

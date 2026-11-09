@@ -4,35 +4,41 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { eventFolder, eventDirPath, videoFilename } from '@/lib/event'
+import { assertLocalMutation, boundedBytes } from '@/lib/local-request'
+import { assertPublicHttpUrlResolved } from '@/lib/outbound-url'
+import { assertWithinDir, isSafeToken } from '@/lib/safe-path'
+
+const MAX_VIDEO_BYTES = 200 * 1024 * 1024
+const MAX_OVERLAY_BYTES = 20 * 1024 * 1024
 
 // POST { video_url, overlay_png?, event_name, seq }
-// Download mp4 dari FAL → ffmpeg letterbox ke 2:3 (bar item atas/bawah kalau 16:9) → burn
-// overlay PNG (frame + QR, transparan) → simpan lokal. Return path final.
+// Download mp4 dari FAL â†’ ffmpeg letterbox ke 2:3 (bar item atas/bawah kalau 16:9) â†’ burn
+// overlay PNG (frame + QR, transparan) â†’ simpan lokal. Return path final.
 //
-// ffmpeg = binary bundled (bukan npm dep) — panggil via spawn absolute path biar Kiosk
+// ffmpeg = binary bundled (bukan npm dep) â€” panggil via spawn absolute path biar Kiosk
 // PORTABLE: taruh ffmpeg.exe di kiosk/bin/, colok ke Mini PC manapun, langsung jalan tanpa
-// install / setting PATH manual di lapangan. Resolusi: FFMPEG_PATH env → bundled bin/ →
+// install / setting PATH manual di lapangan. Resolusi: FFMPEG_PATH env â†’ bundled bin/ â†’
 // PATH 'ffmpeg' (fallback dev). Gagal apa pun = 500, caller (Preview) fallback ke video mentah.
 //
 // Target 2:3 = 1080x1620 (portrait strip). Video sumber di-scale muat lebar/tinggi lalu di-pad
-// hitam → aspect apa pun jadi 2:3 clean, ga ke-crop (spec: item2 aja, yg penting clean).
+// hitam â†’ aspect apa pun jadi 2:3 clean, ga ke-crop (spec: item2 aja, yg penting clean).
 const OUT_W = 1080
 const OUT_H = 1620
 
-// Pure — bikin argv ffmpeg buat letterbox 2:3 (+overlay opsional). Diekspor buat di-test tanpa
-// nge-spawn ffmpeg beneran. scale decrease + pad = aspect apa pun → 2:3 clean, zero crop.
+// Pure â€” bikin argv ffmpeg buat letterbox 2:3 (+overlay opsional). Diekspor buat di-test tanpa
+// nge-spawn ffmpeg beneran. scale decrease + pad = aspect apa pun â†’ 2:3 clean, zero crop.
 export function buildFfmpegArgs(inMp4: string, outPath: string, overlayPng: string | null): string[] {
   // FULL WIDTH (FIT WIDTH): Scale lebar ke 1080, tinggi ngikut proporsional.
   // - Kalau hasil tinggi < 1620 (horizontal): pad hitam atas bawah ("atas bawah item").
   // - Kalau hasil tinggi > 1620 (vertical 9:16): crop atas bawah ("atas bawah ke potong").
   // SATU template literal, TANPA concat '+' dan TANPA komentar sebaris di tengahnya.
-  // Bentuk lama (`a` + // komentar \n `b` + …) ke-mangle minifier build produksi: potongan
+  // Bentuk lama (`a` + // komentar \n `b` + â€¦) ke-mangle minifier build produksi: potongan
   // sesudah tiap komentar KEBUANG, chain jadi "scale=1080pad=1080:max(ih\,1620crop=1080:1620"
-  // → ffmpeg "No option name" → /api/finalize-video 500 → video ga ke-save & ga ke-upload,
+  // â†’ ffmpeg "No option name" â†’ /api/finalize-video 500 â†’ video ga ke-save & ga ke-upload,
   // padahal dev (unminified) jalan mulus. Jangan pecah lagi jadi concat.
   //   scale : lebar fixed 1080, tinggi proporsional genap (-2)
-  //   pad   : kalau hasilnya lebih pendek dari 1620 → bar hitam atas-bawah
-  //   crop  : kalau kepanjangan (9:16) → potong atas-bawah, center
+  //   pad   : kalau hasilnya lebih pendek dari 1620 â†’ bar hitam atas-bawah
+  //   crop  : kalau kepanjangan (9:16) â†’ potong atas-bawah, center
   const padChain = `scale=${OUT_W}:-2,pad=${OUT_W}:max(ih\\,${OUT_H}):(ow-iw)/2:(oh-ih)/2:black,crop=${OUT_W}:${OUT_H}`
   if (overlayPng) {
     return [
@@ -40,11 +46,11 @@ export function buildFfmpegArgs(inMp4: string, outPath: string, overlayPng: stri
       '-filter_complex',
       `[0:v]${padChain}[bg];[1:v]scale=${OUT_W}:${OUT_H}[ov];[bg][ov]overlay=0:0[v]`,
       // -map WAJIB di jalur filter_complex. Tanpa itu ffmpeg milih stream sendiri dan audio
-      // input KEBUANG — '-c:a copy' jadi mubazir karena ga ada audio yang kepetakan. Provider
+      // input KEBUANG â€” '-c:a copy' jadi mubazir karena ga ada audio yang kepetakan. Provider
       // yang audionya nyala (LTX native) bakal keluar bisu, dan kita tetep bayar penuh.
       '-map', '[v]',
       // '?' = opsional: provider yang audionya mati (VEO/KLING generate_audio:false) ga punya
-      // stream 0:a sama sekali → tanpa '?' ffmpeg exit 1 dan SELURUH finalize gagal.
+      // stream 0:a sama sekali â†’ tanpa '?' ffmpeg exit 1 dan SELURUH finalize gagal.
       '-map', '0:a?',
       '-c:a', 'copy', '-movflags', '+faststart', outPath,
     ]
@@ -53,7 +59,7 @@ export function buildFfmpegArgs(inMp4: string, outPath: string, overlayPng: stri
   return ['-y', '-i', inMp4, '-vf', padChain, '-c:a', 'copy', '-movflags', '+faststart', outPath]
 }
 
-// Kandidat lokasi ffmpeg.exe bundled — dicek berurutan, yang pertama ada dipakai.
+// Kandidat lokasi ffmpeg.exe bundled â€” dicek berurutan, yang pertama ada dipakai.
 // process.cwd() = root project di dev/next start; sesuai Electron migration, prod nanti bisa
 // override lewat FFMPEG_PATH (process.cwd() ga reliable di Electron packaged).
 function bundledCandidates(): string[] {
@@ -65,7 +71,7 @@ function bundledCandidates(): string[] {
 }
 
 // Resolusi ffmpeg: 1) FFMPEG_PATH (override eksplisit, menang selalu) 2) bundled bin/
-// 3) 'ffmpeg' dari PATH (fallback dev). Pure-ish (baca env+fs) → di-test lewat resolveFfmpeg.
+// 3) 'ffmpeg' dari PATH (fallback dev). Pure-ish (baca env+fs) â†’ di-test lewat resolveFfmpeg.
 export function resolveFfmpeg(
   env: string | undefined,
   candidates: string[],
@@ -81,9 +87,11 @@ function ffmpegBin(): string {
 }
 
 async function download(url: string, dest: string): Promise<void> {
-  const res = await fetch(url)
+  // Caller-controlled URL: wajib https publik + redirect mati + ukuran dibatasi.
+  const target = await assertPublicHttpUrlResolved(url)
+  const res = await fetch(target, { redirect: 'error', signal: AbortSignal.timeout(120_000) })
   if (!res.ok) throw new Error(`download ${res.status}`)
-  const buf = Buffer.from(await res.arrayBuffer())
+  const buf = Buffer.from(await boundedBytes(res, MAX_VIDEO_BYTES))
   fs.writeFileSync(dest, buf)
 }
 
@@ -102,6 +110,15 @@ export async function POST(req: NextRequest) {
   if (typeof video_url !== 'string' || typeof event_name !== 'string' || typeof seq !== 'string') {
     return NextResponse.json({ error: 'video_url, event_name, seq required' }, { status: 400 })
   }
+  // seq masuk filename: tolak separator/dot-segment sebelum path.join.
+  if (!isSafeToken(seq, 128)) {
+    return NextResponse.json({ error: 'seq tidak valid' }, { status: 400 })
+  }
+  try {
+    assertLocalMutation(req)
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Ditolak' }, { status: 403 })
+  }
 
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'semeta-vid-'))
   const inMp4 = path.join(tmp, 'in.mp4')
@@ -109,6 +126,7 @@ export async function POST(req: NextRequest) {
   const dir = eventDirPath(eventFolder(event_name))
   fs.mkdirSync(dir, { recursive: true })
   const outPath = path.join(dir, videoFilename(event_name, seq))
+  assertWithinDir(outPath, dir)
 
   try {
     await download(video_url, inMp4)
@@ -116,10 +134,12 @@ export async function POST(req: NextRequest) {
     const hasOverlay = typeof overlay_png === 'string' && overlay_png.length > 0
     if (hasOverlay) {
       const b64 = overlay_png.includes(',') ? overlay_png.split(',')[1] : overlay_png
-      fs.writeFileSync(overlayPng, Buffer.from(b64, 'base64'))
+      const overlayBytes = Buffer.from(b64, 'base64')
+      if (overlayBytes.byteLength > MAX_OVERLAY_BYTES) throw new Error('overlay terlalu besar')
+      fs.writeFileSync(overlayPng, overlayBytes)
     }
     await runFfmpeg(buildFfmpegArgs(inMp4, outPath, hasOverlay ? overlayPng : null))
-    // Return mp4 bytes langsung → Preview bikin blob URL buat <video>. File tetep ke-save ke
+    // Return mp4 bytes langsung â†’ Preview bikin blob URL buat <video>. File tetep ke-save ke
     // disk (arsip). Hemat 1 route static-server. Path final ada di header buat debug/log.
     const bytes = fs.readFileSync(outPath)
     return new NextResponse(bytes, {

@@ -197,7 +197,8 @@ export type KioskConfig = {
   licensed?: boolean     // server verdict: session aktif + belum expired
   bypassed?: boolean     // true = godmode — timer/pause/watermark unlimited
   has_secret?: boolean   // secret tersimpan di config
-  secret_hint?: string   // full secret — dikirim ke Settings panel untuk masking + reveal client-side
+  secret_hint?: string   // MASK saja (server-side) — secret asli tidak pernah ke browser
+  operator_pin_required?: boolean // Settings panel minta PIN operator dulu
   lock_message?: string  // custom message dari admin saat force_locked
   locale?: Locale
 }

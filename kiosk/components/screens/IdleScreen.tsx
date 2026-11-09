@@ -12,7 +12,7 @@ const CATEGORIES = [
   { id: 'gptimg',  label: 'GPTIMG2',     img: '/sample%20(5).jpg' },
 ]
 
-export function IdleScreen({ dispatch, isPaused }: { dispatch: Dispatch<KioskAction>; isPaused?: boolean }) {
+export function IdleScreen({ dispatch, isPaused, onBrowse }: { dispatch: Dispatch<KioskAction>; isPaused?: boolean; onBrowse?: () => void }) {
   const t = useT()
   return (
     <div className="screen-split screen-split--lowtitle flex flex-col w-full h-full overflow-hidden">
@@ -44,6 +44,7 @@ export function IdleScreen({ dispatch, isPaused }: { dispatch: Dispatch<KioskAct
       </div>
 
       <div className="screen-actions shrink-0 p-5">
+        {onBrowse && <TouchButton className="w-full" onClick={onBrowse} style={{ marginBottom: 12, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.25)' }}>Browse Foto · QR &amp; Cetak Ulang</TouchButton>}
         <TouchButton 
           className="w-full" 
           onClick={() => dispatch({ type: 'START' })}

@@ -1,11 +1,14 @@
 ﻿import { NextResponse } from 'next/server'
+import { assertLocalRead } from '@/lib/local-request'
 import { dcc, validateDccExe } from '@/lib/dcc-runtime'
+import { assertLocalMutation } from '@/lib/local-request'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: Request) {
   try {
+  try { assertLocalMutation(req) } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : 'Ditolak' }, { status: 403 }) }
     const { owner, action, exe, stamp } = await req.json()
     if (typeof owner !== 'string' || !/^[a-zA-Z0-9-]{1,80}$/.test(owner)) return NextResponse.json({ error: 'Invalid camera session' }, { status: 400 })
     let status
@@ -27,6 +30,7 @@ export async function POST(req: Request) {
 }
 
 export async function GET(req: Request) {
+  try { assertLocalRead(req) } catch (e) { return NextResponse.json({ phase: 'error', message: e instanceof Error ? e.message : 'Ditolak' }, { status: 403 }) }
   const url = new URL(req.url)
   if (url.searchParams.has('status')) return NextResponse.json(dcc.snapshot(), { headers: { 'Cache-Control': 'no-store' } })
   const { frame, status } = await dcc.frame(url.searchParams.get('owner') ?? '')

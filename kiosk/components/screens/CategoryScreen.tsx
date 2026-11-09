@@ -1,5 +1,5 @@
 'use client'
-import { useState, type Dispatch } from 'react'
+import { useEffect, useRef, useState, type Dispatch } from 'react'
 import { TouchButton } from '@/components/ui/TouchButton'
 import { PinBadge } from '@/components/ui/PinBadge'
 import type { KioskAction, KioskState, Template } from '@/lib/types'
@@ -15,11 +15,13 @@ type Props = {
   licensed: boolean
 }
 
-const skipToPreview = async (imageUrl: string, dispatch: Dispatch<KioskAction>, eventName: string, licensed: boolean, setSkipping: (v: boolean) => void) => {
+const skipToPreview = async (imageUrl: string, dispatch: Dispatch<KioskAction>, eventName: string, licensed: boolean, setSkipping: (v: boolean) => void, signal: AbortSignal) => {
   setSkipping(true)
   try {
     const local = await localCopies(imageUrl, imageUrl, licensed)
     const base = await finalizeLocal(eventName, local.original, local.ai)
+    // Unmount/RESET = tamu udah pindah — jangan buka preview sesi basi di sesi tamu lain.
+    if (signal.aborted) return
     dispatch({ type: 'SHOW_PREVIEW', aiUrl: local.ai, originalUrl: local.original, sourceUrl: imageUrl, rawAiUrl: imageUrl, base: base ?? undefined })
   } finally {
     setSkipping(false)
@@ -30,6 +32,10 @@ export function CategoryScreen({ state, dispatch, templates, eventName, licensed
   const t = useT()
   const [selected, setSelected] = useState<string | null>(null)
   const [skipping, setSkipping] = useState(false)
+  // Skip adalah jalur async tanpa AbortController bawaan — abort di sini pas unmount
+  // biar closure basi gak bisa dispatch ke sesi tamu berikutnya.
+  const skipAbortRef = useRef(new AbortController())
+  useEffect(() => () => skipAbortRef.current.abort(), [])
 
   const counts = templates.reduce<Record<string, number>>((acc, tmpl) => {
     acc[tmpl.category] = (acc[tmpl.category] ?? 0) + 1
@@ -90,7 +96,7 @@ export function CategoryScreen({ state, dispatch, templates, eventName, licensed
         <TouchButton variant="secondary" onClick={() => dispatch({ type: 'BACK' })} className="flex-1" disabled={skipping}>
           {t('nav_back') as string}
         </TouchButton>
-        <TouchButton variant="secondary" onClick={() => skipToPreview(state.imageUrl, dispatch, eventName, licensed, setSkipping)} className="flex-1" disabled={skipping}>
+        <TouchButton variant="secondary" onClick={() => skipToPreview(state.imageUrl, dispatch, eventName, licensed, setSkipping, skipAbortRef.current.signal)} className="flex-1" disabled={skipping}>
           {skipping ? '...' : (t('category_skip') as string)}
         </TouchButton>
         <TouchButton

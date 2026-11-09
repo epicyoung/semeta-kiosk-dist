@@ -8,79 +8,14 @@ import { enabledModels, costFor, reconcileSelection, totalCostFor, clampVariants
 import { useT } from '@/lib/i18n'
 import { COUNTDOWN_DEFAULT } from '@/lib/countdown'
 import type { Translations } from '@/lib/locales/types'
-
-type TFn = (key: keyof Translations) => Translations[keyof Translations]
-type EngineKey = 'faceswap_local' | 'fullbody_local' | 'print_local' | 'faceswap_api' | 'fullbody_api'
+import { ENGINE_OPTS, CAMERA_OPTS, COMFY_FAMILY_LABELS, COMFY_CONTROLNET_LABELS, COMFY_SAMPLER_OPTS, COMFY_SCHEDULER_OPTS, COMFY_CFG_OPTS, COMFY_STEPS_OPTS, COMFY_CN_STRENGTH_OPTS, COMFY_CONTROLNET_STRENGTH, VIDEO_PROVIDER_OPTS, type EngineKey } from './settings/settings-constants'
+import { AccordionGroup, Row, RowHint, Toggle, Sel, TextInput, StatusBadge, type PbStatus } from './settings/settings-primitives'
 
 import { GalleryPanel } from './GalleryPanel'
 import { LocalTemplateManager } from './LocalTemplateManager'
 import { VideoPromptManager } from './VideoPromptManager'
 import { LayoutDesigner } from './LayoutDesigner'
 import { DccConnectionTest } from './DccConnectionTest'
-
-const ENGINE_OPTS: { value: EngineKey; label: string; soon?: boolean }[] = [
-  { value: 'faceswap_local', label: 'Faceswap (LOCAL)' },
-  { value: 'fullbody_local', label: 'Fullbody (LOCAL)' }, // = engine comfy stylize via face_server
-  { value: 'print_local',    label: 'Photo Print (non-AI)' }, // photobooth klasik: overlay PNG + N shot, nol token
-  { value: 'faceswap_api',   label: 'Faceswap (API) — soon',  soon: true },
-  { value: 'fullbody_api',   label: 'Fullbody (API)' },
-]
-const CAMERA_OPTS = [
-  { value: 'webcam', label: 'Webcam (getUserMedia)' },
-  { value: 'canon',  label: 'Canon (digiCamControl)' },
-  // macOS/Linux — Windows ga punya gphoto2. Full-res, tanpa live view (PC Remote).
-  { value: 'sony',   label: 'Sony (gphoto2, no live view)' },
-]
-// Stylize (face_server) — opsi asli dari GET :8000/capabilities, ini cuma label map.
-const COMFY_FAMILY_LABELS: Record<string, string> = { sd15: 'SD 1.5', sdxl: 'SDXL', flux: 'Flux' }
-const COMFY_CONTROLNET_LABELS: Record<string, string> = { canny: 'Canny (lines/outline)', depth: 'Depth (3D depth)', off: 'Off' }
-// Sampler/scheduler — value '' = default per family. Allowlist sinkron sama comfy_client.py.
-const COMFY_SAMPLER_OPTS = [
-  { value: '',                label: 'Default (per family)' },
-  { value: 'dpmpp_2m',        label: 'DPM++ 2M' },
-  { value: 'dpmpp_2m_sde',    label: 'DPM++ 2M SDE' },
-  { value: 'dpmpp_sde',       label: 'DPM++ SDE' },
-  { value: 'euler',           label: 'Euler' },
-  { value: 'euler_ancestral', label: 'Euler a' },
-  { value: 'ddim',            label: 'DDIM' },
-  { value: 'uni_pc',          label: 'UniPC' },
-]
-const COMFY_SCHEDULER_OPTS = [
-  { value: '',            label: 'Default (per family)' },
-  { value: 'karras',      label: 'Karras' },
-  { value: 'normal',      label: 'Normal' },
-  { value: 'simple',      label: 'Simple' },
-  { value: 'sgm_uniform', label: 'SGM Uniform' },
-  { value: 'exponential', label: 'Exponential' },
-]
-// CFG override — '' = default per family (sd15/sdxl 7). Server clamp 1-12, flux dikunci 1.0.
-const COMFY_CFG_OPTS = [
-  { value: '', label: 'Default (per family)' },
-  ...['3', '4', '5', '6', '7', '8', '9', '10'].map(v => ({ value: v, label: v })),
-]
-// Steps override — semua "aman", beda cuma speed vs detail halus. '' = default (sd15/sdxl 30).
-// Server clamp 15-30, flux dikunci 20.
-const COMFY_STEPS_OPTS = [
-  { value: '', label: 'Default (per family)' },
-  ...['15', '20', '25', '30'].map(v => ({ value: v, label: v })),
-]
-// ControlNet strength override — '' = default 0.8. Server clamp 0.3-1.0.
-const COMFY_CN_STRENGTH_OPTS = [
-  { value: '', label: 'Default (0.8)' },
-  ...['0.3', '0.5', '0.6', '0.7', '0.8', '0.9', '1.0'].map(v => ({ value: v, label: v })),
-]
-const COMFY_CONTROLNET_STRENGTH = 0.8 // fixed di face_server — hanya buat recipe line
-// Video engine (img2vid) providers — semua lewat FAL, bedanya endpoint FAL per provider (Worker).
-// HAPPYHORSE sengaja gak masuk list: OFF permanen (HPP mahal). Kalau mau balik, tambah di sini
-// + isi harga di DEFAULT_VIDEO_COSTS + enable di /dashboard/settings. Server tetap gate via RPC.
-// 3 tier doang (build B): Murah/Medium/Mahal. Sisanya (Vidu/Veo/WAN/Kling/HappyHorse) di-off dari
-// UI — endpoint-nya masih di worker (video-provider.ts) kalau suatu saat mau dibalikin. Harga token
-// di-append otomatis di map bawah (videoProviderOpts).
-const VIDEO_PROVIDER_OPTS: { value: VideoProvider; label: string }[] = [
-  { value: 'LTX',      label: 'Budget — LTX 2.3'       },
-  { value: 'PIXVERSE', label: 'Standard — PixVerse V6' },
-  { value: 'SEEDANCE', label: 'Premium — Seedance Fast' },
-]
 
 type StylizeCaps = {
   stylize: boolean
@@ -102,8 +37,6 @@ const pbActionBtn: React.CSSProperties = {
   cursor: 'pointer', whiteSpace: 'nowrap', transition: 'background 0.2s',
 }
 
-type PbStatus = 'idle' | 'checking' | 'connected' | 'offline'
-
 function formatSecret(raw: string): string {
   const clean = raw.toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, 16)
   return clean.replace(/(.{4})(?=.)/g, '$1-')
@@ -119,116 +52,6 @@ type Props = {
   onRefreshTemplates?: (templates: Template[]) => void
   onQuickSync?: () => void
   onRebuild?: () => void
-}
-
-// ── Accordion group ──────────────────────────────────────────────────────────
-function AccordionGroup({
-  id, icon, title, open, onToggle, children,
-}: {
-  id: string; icon: string; title: string; open: boolean; onToggle: (id: string) => void; children: React.ReactNode
-}) {
-  return (
-    <div style={{ marginTop: 8 }}>
-      <button
-        onClick={() => onToggle(id)}
-        style={{
-          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '15px 0', background: 'none', border: 'none',
-          borderBottom: open ? '1px solid rgba(124,58,237,0.35)' : '1px solid rgba(255,255,255,0.08)',
-          cursor: 'pointer', color: '#fff', textAlign: 'left',
-        }}
-      >
-        <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 18, lineHeight: 1 }}>{icon}</span>
-          <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, letterSpacing: '0.01em', color: open ? '#a78bfa' : '#fff' }}>{title}</span>
-        </span>
-        <span style={{
-          fontSize: 11, color: 'rgba(255,255,255,0.35)',
-          display: 'inline-block', transition: 'transform 0.2s',
-          transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
-        }}>▾</span>
-      </button>
-      {open && <div style={{ paddingTop: 4 }}>{children}</div>}
-    </div>
-  )
-}
-
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-      <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{label}</span>
-      {children}
-    </div>
-  )
-}
-
-// Row + footnote awam di bawah label — buat setting teknis (CFG/steps/ControlNet strength)
-// yang namanya sendiri gak cukup jelas buat operator non-teknis.
-function RowHint({ label, hint, children }: { label: string; hint: string; children: React.ReactNode }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 0', borderBottom: '1px solid rgba(255,255,255,0.06)', gap: 16 }}>
-      {/* maxWidth biar hint wrap sebelum nyentuh kontrol di kanan — teksnya utuh,
-          cuma pecah barisnya lebih awal. Tanpa ini dia manjang sampe mepet dropdown. */}
-      <div style={{ minWidth: 0, maxWidth: '58%' }}>
-        <span style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.75)' }}>{label}</span>
-        <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(255,255,255,0.3)', margin: '2px 0 0', lineHeight: 1.4 }}>{hint}</p>
-      </div>
-      <div style={{ flexShrink: 0 }}>{children}</div>
-    </div>
-  )
-}
-
-function Toggle({ on, onToggle, disabled = false }: { on: boolean; onToggle: () => void; disabled?: boolean }) {
-  return (
-    <button type="button" onClick={disabled ? undefined : onToggle} disabled={disabled} style={{ background: 'none', border: 'none', cursor: disabled ? 'not-allowed' : 'pointer', padding: 0, opacity: disabled ? 0.4 : 1 }}>
-      <div style={{ width: 44, height: 24, borderRadius: 12, background: on ? 'var(--brand)' : 'rgba(255,255,255,0.15)', position: 'relative', transition: 'background 0.2s' }}>
-        <div style={{ position: 'absolute', top: 3, left: on ? 23 : 3, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.3)' }} />
-      </div>
-    </button>
-  )
-}
-
-function Sel({ value, options, onChange }: { value: string; options: { value: string; label: string; soon?: boolean }[]; onChange: (v: string) => void }) {
-  return (
-    <select value={value} onChange={e => onChange(e.target.value)} style={{
-      background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.13)',
-      borderRadius: 'var(--radius-glass)', color: '#fff', fontSize: 'var(--text-sm)', padding: '6px 10px',
-      fontFamily: 'var(--font-ui)', cursor: 'pointer', outline: 'none', maxWidth: 220,
-    }}>
-      {options.map(o => <option key={o.value} value={o.value} disabled={o.soon} style={{ background: 'var(--bg)', color: o.soon ? 'rgba(255,255,255,0.3)' : '#fff' }}>{o.label}</option>)}
-    </select>
-  )
-}
-
-function TextInput({ value, onChange, placeholder, mono }: { value: string; onChange: (v: string) => void; placeholder?: string; mono?: boolean }) {
-  return (
-    <input
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      placeholder={placeholder}
-      style={{
-        background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.13)',
-        borderRadius: 'var(--radius-glass)', color: '#fff', fontSize: mono ? 'var(--text-xs)' : 'var(--text-sm)', padding: '7px 12px',
-        fontFamily: 'var(--font-ui)',
-        // maxWidth, BUKAN width tetap — samain sama Sel biar input & dropdown
-        // sejajar lebarnya. width:220 dulu bikin input selalu penuh walau isinya pendek.
-        outline: 'none', width: '100%', maxWidth: 220, boxSizing: 'border-box', textAlign: 'right',
-      }}
-    />
-  )
-}
-
-function StatusBadge({ status, t }: { status: PbStatus; t: TFn }) {
-  const map: Record<PbStatus, { dot: string; label: string }> = {
-    idle:      { dot: 'rgba(255,255,255,0.2)', label: '—' },
-    checking:  { dot: '#f0c040',               label: t('set_badge_checking') as string },
-    connected: { dot: '#a3be8c',               label: t('set_badge_connected') as string },
-    offline:   { dot: '#ff6b6b',               label: t('set_badge_offline') as string },
-  }
-  const { dot, label } = map[status]
-  return (
-    <span style={{ fontSize: 'var(--text-xs)', fontFamily: 'var(--font-ui)', color: dot }}>{label}</span>
-  )
 }
 
 export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, resume, onRefreshTemplates, onQuickSync, onRebuild }: Props) {
@@ -266,7 +89,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   const [ai4rCustomSlots, setAi4rCustomSlots] = useState<{ slots: { x: number; y: number; w: number; h: number; r?: number }[] } | null>(config.ai_4r_custom_slots || null)
   const [showStripDesigner, setShowStripDesigner] = useState(false)
   const [show4rDesigner, setShow4rDesigner] = useState(false)
-  const [require4rOverlay, setRequire4rOverlay] = useState(config.require_4r_overlay ?? true)
+  const [require4rOverlay, setRequire4rOverlay] = useState(config.require_4r_overlay ?? false)
   const stripOverlayInputRef = useRef<HTMLInputElement>(null)
   const ai4rOverlayInputRef = useRef<HTMLInputElement>(null)
   const [stripOverlayUploading, setStripOverlayUploading] = useState(false)
@@ -449,7 +272,6 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   const [secretSaved,     setSecretSaved]     = useState(false)
   const [secretSaving,    setSecretSaving]    = useState(false)
   const [secretEditing,   setSecretEditing]   = useState(false)
-  const [secretRevealed,  setSecretRevealed]  = useState(false)
   // Auto-verify sesudah simpan secret: re-handshake → hijau/amber/merah, hijau auto-restart.
   const [verify,          setVerify]          = useState<'idle'|'checking'|'valid'|'expired'|'invalid'|'offline'>('idle')
   const [restartIn,       setRestartIn]       = useState<number | null>(null)
@@ -464,7 +286,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   const [engineStatus,    setEngineStatus]    = useState<PbStatus>('idle')
   const [workerStatus,    setWorkerStatus]    = useState<PbStatus>('idle') // API mode: Worker connectivity
   const [cameraStatus,    setCameraStatus]    = useState<PbStatus>('idle')
-  const [pbCreds,         setPbCreds]         = useState<{ email: string; password: string } | null>(null)
+  const [pbCredsConfigured, setPbCredsConfigured] = useState(false)
   const [updateState,     setUpdateState]     = useState<'idle'|'checking'|'available'|'uptodate'|'pulling'|'ok'|'err'>('idle')
   const [restarting,      setRestarting]      = useState(false)
   const [version,         setVersion]         = useState<{ current: string | null; isGit: boolean; label: string | null }>({ current: null, isGit: true, label: null })
@@ -501,7 +323,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
   }
 
   useEffect(() => {
-    fetch('/api/pb-credentials').then(r => r.json()).then(setPbCreds).catch(() => null)
+    fetch('/api/pb-credentials').then(r => r.json()).then(d => setPbCredsConfigured(!!d?.configured)).catch(() => null)
   }, [])
 
   useEffect(() => {
@@ -789,7 +611,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
       })
       if (!res.ok) return
       setSecretSaved(true)
-      onConfigSaved?.({ has_secret: true, secret_hint: secret.trim() })
+      onConfigSaved?.({ has_secret: true, secret_hint: '••••••••' })
       setSecret('')
       // Auto-verify — ga usah pencet refresh manual.
       setVerify('checking')
@@ -1850,18 +1672,10 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                         {t('set_fetch_idle') as string}
                       </button>
                     </div>
-                    {pbCreds && (pbCreds.email || pbCreds.password) && (
-                      <div style={{
-                        marginTop: 10, padding: '10px 12px', borderRadius: 'var(--radius-glass)',
-                        background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)',
-                        display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '5px 14px', alignItems: 'baseline',
-                        fontFamily: 'var(--font-ui)', fontSize: 'var(--text-2xs)',
-                      }}>
-                        <span style={{ color: 'rgba(255,255,255,0.4)' }}>user</span>
-                        <span style={{ color: 'rgba(255,255,255,0.7)', wordBreak: 'break-all' }}>{pbCreds.email}</span>
-                        <span style={{ color: 'rgba(255,255,255,0.4)' }}>pass</span>
-                        <span style={{ color: 'rgba(255,255,255,0.7)', wordBreak: 'break-all' }}>{pbCreds.password}</span>
-                      </div>
+                    {pbCredsConfigured && (
+                      <p style={{ fontSize: 'var(--text-2xs)', color: 'rgba(167,243,208,0.7)', marginTop: 10 }}>
+                        PocketBase credentials tersimpan di server.
+                      </p>
                     )}
                   </div>
                   <div style={{ padding: '10px 0 6px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
@@ -2007,7 +1821,7 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                     </span>
                   </div>
                 </div>
-                {!secretEditing ? (
+                {config.bypassed ? null : !secretEditing ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
                     <span style={{
                       flex: 1, background: 'rgba(255,255,255,0.06)',
@@ -2020,30 +1834,10 @@ export function SettingsPanel({ open, onClose, config, onConfigSaved, pause, res
                       fontFamily: 'var(--font-ui)', letterSpacing: '0.12em', userSelect: 'none',
                     }}>
                       {config.has_secret && config.secret_hint
-                        ? secretRevealed && !config.bypassed
-                          ? config.secret_hint
-                          : (h => h.length > 4 ? h.slice(0, 4) + h.slice(4).replace(/[^-]/g, '*') : h.replace(/./g, '*'))(config.secret_hint)
+                        ? config.secret_hint
                         : t('set_secret_placeholder_empty') as string}
                     </span>
-                    {/* Tombol reveal (mata) disembunyiin pas GODMODE — god key JANGAN pernah keintip. */}
-                    {config.has_secret && config.secret_hint && !config.bypassed && (
-                      <button
-                        onMouseDown={() => setSecretRevealed(true)}
-                        onMouseUp={() => setSecretRevealed(false)}
-                        onMouseLeave={() => setSecretRevealed(false)}
-                        onTouchStart={() => setSecretRevealed(true)}
-                        onTouchEnd={() => setSecretRevealed(false)}
-                        title={t('set_secret_hold_reveal') as string}
-                        style={{
-                          padding: '8px 10px', borderRadius: 'var(--radius-glass)', border: '1px solid rgba(255,255,255,0.15)',
-                          background: secretRevealed ? 'rgba(124,58,237,0.2)' : 'transparent',
-                          color: secretRevealed ? '#a78bfa' : 'rgba(255,255,255,0.4)',
-                          fontSize: 'var(--text-base)', cursor: 'pointer', lineHeight: 1, userSelect: 'none',
-                        }}
-                      >
-                        {secretRevealed ? '🙈' : '👁'}
-                      </button>
-                    )}
+                    {/* Secret TIDAK pernah dikirim utuh ke browser. Server cuma kirim mask. */}
                     <button onClick={() => { setSecret(''); setSecretEditing(true); setSecretSaved(false); }} style={{
                       padding: '8px 16px', borderRadius: 'var(--radius-glass)', border: '1px solid rgba(255,255,255,0.15)',
                       background: 'transparent', color: 'rgba(255,255,255,0.6)', fontSize: 'var(--text-xs)',

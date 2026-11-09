@@ -3,6 +3,7 @@ import { print, getPrinters } from 'pdf-to-printer'
 import { writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { assertLocalMutation } from '@/lib/local-request'
 
 export const runtime = 'nodejs'
 
@@ -13,11 +14,16 @@ export const runtime = 'nodejs'
 //   RX1-4R    → paper 4x6
 // Aplikasi tinggal milih nama string. Nol DEVMODE hacking.
 //
-// ponytail: nama queue hardcoded — pindah ke semeta.config.json kalau ada kiosk
-// yang printernya beda nama.
-const PRINTERS: Record<string, string> = { strip2: 'RX1-STRIP', print4r: 'RX1-4R' }
+// Nama queue kini env-overridable (PRINTER_STRIP / PRINTER_4R). Default FALLBACK tetap
+// RX1-STRIP / RX1-4R persis kayak dulu, jadi kalau env kosong di venue sistem jalan 100%
+// tanpa ubah setup. Override cuma buat kiosk yang printernya beda nama.
+const PRINTERS: Record<string, string> = {
+  strip2: process.env.PRINTER_STRIP ?? 'RX1-STRIP',
+  print4r: process.env.PRINTER_4R ?? 'RX1-4R',
+}
 
 export async function POST(req: Request) {
+  try { assertLocalMutation(req) } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : 'Ditolak' }, { status: 403 }) }
   let body: { mode?: string; image?: string; copies?: number }
   try {
     body = await req.json()
@@ -31,6 +37,10 @@ export async function POST(req: Request) {
   if (!body.image?.startsWith('data:image/')) {
     return NextResponse.json({ error: 'bad image' }, { status: 400 })
   }
+  // Cap payload: tanpa ini caller bisa dorong base64 raksasa ke spooler/temp disk.
+  if (body.image.length > 60_000_000) {
+    return NextResponse.json({ error: 'image too large' }, { status: 413 })
+  }
 
   // Queue belum ke-install → 404 supaya caller jatuh ke window.print(). Tanpa cek ini
   // SumatraPDF exit 0 tanpa nyetak apa-apa: "print ga keluar", gejala paling mahal di lapangan.
@@ -42,9 +52,13 @@ export async function POST(req: Request) {
   const copies = Math.min(20, Math.max(1, Math.trunc(body.copies ?? 1) || 1))
   const file = join(tmpdir(), `booth-${Date.now()}.jpg`)
   await writeFile(file, Buffer.from(body.image.split(',')[1] ?? '', 'base64'))
-  // SumatraPDF (di-bundle pdf-to-printer) telan JPEG langsung — ga perlu dibungkus PDF.
-  await print(file, { printer, copies })
-  // ponytail: temp file dibiarin, Windows sapu %TEMP% sendiri. Tambah unlink kalau
-  // booth jalan berminggu-minggu tanpa restart.
+  try {
+    // SumatraPDF (di-bundle pdf-to-printer) telan JPEG langsung — ga perlu dibungkus PDF.
+    await print(file, { printer, copies })
+  } finally {
+    // Buang temp setelah spooler selesai; booth bisa jalan berhari-hari.
+    const { unlink } = await import('node:fs/promises')
+    await unlink(file).catch(() => {})
+  }
   return NextResponse.json({ ok: true })
 }

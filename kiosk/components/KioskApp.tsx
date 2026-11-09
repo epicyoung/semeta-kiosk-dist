@@ -23,6 +23,8 @@ import type { KioskConfig, KioskState } from '@/lib/types'
 import { SPINDONESIA_CATEGORY } from '@/lib/spindonesia-category'
 import { useOrientedFrames } from '@/lib/frames'
 import { isVideoUnlocked } from '@/lib/video'
+import { FastMode } from '@/components/ui/FastMode'
+import { GalleryPanel } from '@/components/ui/GalleryPanel'
 
 const SCREEN_ORDER: KioskState['screen'][] = [
   'idle', 'consent', 'liveview', 'category', 'template', 'multicapture', 'faceassign', 'processing', 'framechooser', 'preview',
@@ -72,6 +74,7 @@ export function KioskApp({ config: initialConfig }: { config: KioskConfig }) {
   // Reactive config — Settings save (via GlassShell onConfigChange) meng-update di sini juga,
   // jadi screen (max_templates, magic catcher, dll) langsung berubah TANPA reload halaman.
   const [config, setConfig] = useState(initialConfig)
+  const [guestGalleryOpen, setGuestGalleryOpen] = useState(false)
   // config.templates sudah di-prepend spindonesia (cloud, pinned) di fetchKioskConfig.
   // Simpan subset spindonesia biar pas Settings re-fetch (PB lokal only) tetep di-prepend.
   const spindonesiaPinned = useRef(config.templates.filter(t => t.category === SPINDONESIA_CATEGORY))
@@ -114,11 +117,9 @@ export function KioskApp({ config: initialConfig }: { config: KioskConfig }) {
   const visitorId = useRef<string | null>(null)
   const retakeCount = useRef(0)
   const processingStartMs = useRef<number | null>(null)
-  // secret_hint is the kiosk secret passed from the server component — safe, already in config
-  const secret = useRef(config.secret_hint ?? '')
-
+  // Secret kiosk tetap di server: log lewat /api/log-visitor (same-origin).
   const log = useCallback((event_type: string, metadata: Record<string, unknown> = {}) =>
-    logVisitorEvent(event_type, { visitor_id: visitorId.current, event_name: config.event_name, ...metadata }, secret.current), [config.event_name])
+    logVisitorEvent(event_type, { visitor_id: visitorId.current, event_name: config.event_name, ...metadata }), [config.event_name])
 
   // useCallback: identity stabil antar re-render countdown billing (1 Hz di sesi berbayar).
   // Tanpa ini, timer InactivityReset (dep: dispatch) ke-restart tiap detik → failsafe mati,
@@ -257,7 +258,7 @@ export function KioskApp({ config: initialConfig }: { config: KioskConfig }) {
 
   const screen = (() => {
     switch (state.screen) {
-      case 'idle':        return <IdleScreen dispatch={wrappedDispatch} isPaused={isPaused} />
+      case 'idle':        return <IdleScreen dispatch={wrappedDispatch} isPaused={isPaused} onBrowse={config.enable_gallery ? () => setGuestGalleryOpen(true) : undefined} />
       case 'consent':     return <ConsentScreen dispatch={wrappedDispatch} />
       case 'liveview':    return <LiveViewScreen state={state} dispatch={wrappedDispatch} cameraSource={config.camera_source} originalCaptures={config.original_captures} countdownSeconds={config.countdown_seconds} />
       case 'category':    return <CategoryScreen state={state} dispatch={wrappedDispatch} templates={templates} eventName={config.event_name} licensed={config.licensed ?? false} />
@@ -277,10 +278,13 @@ export function KioskApp({ config: initialConfig }: { config: KioskConfig }) {
   })()
 
   return (
+    <FastMode eventName={config.event_name}>
     <InactivityReset screen={state.screen} dispatch={wrappedDispatch}>
       <GlassShell screenKey={state.screen} direction={direction.current} config={config} onLogoClick={state.screen !== 'idle' ? () => wrappedDispatch({ type: 'RESET' }) : undefined} pause={pause} resume={resume} onRefreshTemplates={(t) => setTemplates(modeFilter(withPin(t)))} onConfigChange={(updated) => setConfig(c => ({ ...c, ...updated }))}>
         {licensingEnabled(config) && isExpired ? <ExpiredScreen /> : screen}
       </GlassShell>
     </InactivityReset>
+    {guestGalleryOpen && <GalleryPanel guest eventName={config.event_name} onClose={() => setGuestGalleryOpen(false)} />}
+    </FastMode>
   )
 }

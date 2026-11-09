@@ -14,8 +14,12 @@ set -u
 cd "$(dirname "$0")"
 ROOT="$(pwd)"
 
+# NO ACTIVATION CODE — build offline Photo Print. Flag ini bikin kiosk jalan licensed
+# (bersih, no watermark) dan ga pernah nge-lock, tanpa Worker, tanpa secret, tanpa kode.
+export SEMETA_OFFLINE=1
+
 printf '\n\033[38;2;255;64;153m  SEMETA — Photo Print (macOS)\033[0m\n'
-printf '\033[90m  Spindonesia x Epicyoung AI Pro Booth\033[0m\n\n'
+printf '\033[90m  Spindonesia x Epicyoung AI Pro Booth  [no activation]\033[0m\n\n'
 
 # Folder data. Windows pakai C:/semeta; di Mac ga ada drive C: jadi kita arahkan
 # ke home. getDataDir() di kiosk/lib/event.ts baca env ini, jadi nol edit kode.

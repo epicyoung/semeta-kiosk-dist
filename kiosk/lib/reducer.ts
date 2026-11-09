@@ -121,6 +121,10 @@ export function kioskReducer(state: KioskState, action: KioskAction): KioskState
     }
 
     case 'SHOW_PREVIEW':
+      // Late result guard: sah HANYA dari processing (generate selesai) atau category
+      // (tombol Skip). Dari layar lain = hasil async basi — tamu udah RESET/lock, atau
+      // hasil guest A nyasar ke sesi guest B (kelas bug yang sama dengan finalize-guard).
+      if (state.screen !== 'processing' && state.screen !== 'category') return state
       // direct (Photo Print): overlay udah dibakar di composite — skip framechooser yang
       // auto-preselect frame (bakal numpuk PNG kedua di print+upload). selectedFrame null.
       if (action.direct)

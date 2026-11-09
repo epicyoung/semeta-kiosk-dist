@@ -8,6 +8,7 @@
 //    Sekarang: tunggu img.decode() (cap 10s), lalu print() SELALU dipanggil.
 
 import type { PrintSize } from './types'
+import type { GalleryVariant } from './gallery'
 
 const FRAME_ID = 'semeta-print-frame'
 const DECODE_TIMEOUT_MS = 10_000 // decode nyangkut 10s → print aja, halaman telat lebih baik daripada ga keluar
@@ -110,6 +111,48 @@ export async function printNative(url: string, copies: number, mode: 'strip2' | 
   } catch {
     return false
   }
+}
+
+/** Shared initial/reprint delivery. An uncertain native failure must never auto-submit a second job. */
+export async function printSavedPhoto(input: {
+  url: string; copies: number; printSize?: PrintSize; recipe: GalleryVariant['recipe'];
+  sheetUrl?: string; fit?: 'cover' | 'contain'
+}): Promise<'printer' | 'dialog'> {
+  let image = await toDataUrl(input.url)
+  if (input.fit === 'contain') {
+    const source = new Image()
+    source.src = image
+    await source.decode()
+    const landscape = input.printSize === '4R_LANDSCAPE'
+    const canvas = document.createElement('canvas')
+    // Match the Windows 4R raster (print-layout CANVAS_4R_*) so the cover step cannot crop the original.
+    canvas.width = landscape ? 1800 : 1200
+    canvas.height = landscape ? 1200 : 1800
+    const context = canvas.getContext('2d')
+    if (!context) throw new Error('Canvas cetak tidak tersedia')
+    context.fillStyle = '#fff'; context.fillRect(0, 0, canvas.width, canvas.height)
+    const scale = Math.min(canvas.width / source.naturalWidth, canvas.height / source.naturalHeight)
+    const w = source.naturalWidth * scale, h = source.naturalHeight * scale
+    context.drawImage(source, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h)
+    image = canvas.toDataURL('image/jpeg', 1)
+  }
+  const iso = input.printSize?.startsWith('A')
+  const strip = input.recipe === 'single_strip'
+  if (!iso) {
+    let response: Response
+    try {
+      response = await fetch('/api/print', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: strip ? 'strip2' : 'print4r', image, copies: input.copies }) })
+    } catch { throw new Error('Status pengiriman tidak diketahui. Periksa antrean printer sebelum mencoba lagi.') }
+    if (response.ok) return 'printer'
+    if (![404, 409, 501].includes(response.status)) throw new Error('Pengiriman print gagal. Periksa antrean printer sebelum mencoba lagi.')
+  }
+  if (strip) {
+    if (!input.sheetUrl) throw new Error('Lembar strip tersimpan tidak tersedia; pilih hasil lembar 2-up')
+    image = await toDataUrl(input.sheetUrl)
+  }
+  await printPhoto(image, input.copies, strip ? '4R_PORTRAIT' : input.printSize)
+  return 'dialog'
 }
 
 /** Foto 4R, 2R, A4, atau A3; kertas ikut orientasi & ukuran cetak foto.

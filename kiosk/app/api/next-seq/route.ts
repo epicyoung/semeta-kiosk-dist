@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { eventFolder, nextSeq, padSeq } from '@/lib/event'
+import { assertLocalMutation } from '@/lib/local-request'
 
 /** POST { event_name } → { seq, paddedSeq, eventFolder }. Persistent counter per event. */
 export async function POST(req: NextRequest) {
+  try { assertLocalMutation(req) } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : 'Ditolak' }, { status: 403 }) }
   const { event_name } = await req.json()
   if (typeof event_name !== 'string' || !event_name.trim()) {
     return NextResponse.json({ error: 'event_name required' }, { status: 400 })

@@ -44,6 +44,40 @@ export function rotatedCanvasSize(w: number, h: number, deg: number): { w: numbe
   return deg === 90 || deg === 270 ? { w: h, h: w } : { w, h }
 }
 
+/** Ukuran natural sebuah dataURL/URL. 0×0 kalau gagal decode (pemanggil fallback). */
+export function imageSize(url: string): Promise<{ w: number; h: number }> {
+  return new Promise(resolve => {
+    const img = new Image()
+    img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight })
+    img.onerror = () => resolve({ w: 0, h: 0 })
+    img.src = url
+  })
+}
+
+/**
+ * Snapshot frame live view yang LAGI tampil → JPEG kecil. Dipakai buat nampilin
+ * "foto udah keambil" seketika pas shutter ditekan: transfer full-res dari DSLR
+ * butuh 1-2s, dan selama itu layar ga boleh kosong/beku tanpa tanda apa-apa.
+ * Rotasi ikut nilai yang sama dengan capture biar hasil sementaranya ga miring.
+ */
+export function snapshotFromImage(el: HTMLImageElement | null, deg = 0): { url: string; w: number; h: number } | null {
+  if (!el) return null
+  const srcW = el.naturalWidth || el.width
+  const srcH = el.naturalHeight || el.height
+  if (!srcW || !srcH) return null
+  try {
+    const { w, h } = rotatedCanvasSize(srcW, srcH, deg)
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    const ctx = canvas.getContext('2d')!
+    ctx.translate(w / 2, h / 2)
+    ctx.rotate((deg * Math.PI) / 180)
+    ctx.drawImage(el, -srcW / 2, -srcH / 2)
+    return { url: canvas.toDataURL('image/jpeg', 0.85), w, h }
+  } catch { return null }
+}
+
 // Rotate dataURL image by 0/90/180/270 via canvas. Canon capture balik dataURL JADI (bukan
 // video frame) → rotasi CSS live preview ga ke-apply ke hasil. Ini yang bikin DSLR bisa diputer
 // kayak webcam.

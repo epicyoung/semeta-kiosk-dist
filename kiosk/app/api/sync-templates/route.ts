@@ -5,6 +5,8 @@ import sharp from 'sharp'
 import { computeTargetHeight, computeTargetWidth, computeCropTop, computeCropLeft, HEADROOM_RATIO } from '@/lib/crop'
 import { parseSidecar, type TemplateSidecar } from '@/lib/template-sidecar'
 import { hasPlaceholder } from '@/lib/prompt-input'
+import { assertLocalMutation } from '@/lib/local-request'
+import { requireOperator } from '@/lib/operator-auth'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -324,6 +326,14 @@ async function deleteTemplate(token: string, id: string): Promise<boolean> {
 
 export async function POST(req: Request) {
   const rebuild = new URL(req.url).searchParams.get('rebuild') === '1'
+  try {
+    assertLocalMutation(req)
+    // Quick sync aman tanpa PIN (cuma import folder lokal); rebuild = hapus semua
+    // template → wajib operator.
+    if (rebuild) requireOperator(req)
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : 'Ditolak' }, { status: 403 })
+  }
   const encoder = new TextEncoder()
   const stream = new ReadableStream({
     async start(controller) {

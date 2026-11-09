@@ -4,7 +4,7 @@ import { useCanonLive } from '@/lib/use-canon-live'
 import { CameraAutofocus, AUTOFOCUS_ENABLED } from '@/components/ui/CameraAutofocus'
 import { CameraIndicator } from '@/components/ui/CameraIndicator'
 import { TouchButton } from '@/components/ui/TouchButton'
-import { stopCamera, triggerCanonCapture, rotateDataUrl } from '@/lib/camera'
+import { stopCamera, triggerCanonCapture, rotateDataUrl, imageSize, snapshotFromImage } from '@/lib/camera'
 import type { KioskAction, KioskState } from '@/lib/types'
 import { useT } from '@/lib/i18n'
 import { countdownTicks, COUNTDOWN_TICK_MS } from '@/lib/countdown'
@@ -30,6 +30,7 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures, count
   const maxShots = originalCaptures ?? 1
   const containerRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const liveImgRef = useRef<HTMLImageElement>(null)
 
   const [webcamReady, setCameraReady] = useState(false)
   const [cameraError, setCameraError] = useState(false)
@@ -37,6 +38,13 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures, count
   const [countdown, setCountdown] = useState<number | null>(null)
   const [flash, setFlash] = useState(false)
   const [captured, setCaptured] = useState<string | null>(null)
+  // Frame live view yang dibekukan pas shutter ditekan. Muncul SEKETIKA (0 ms),
+  // nunggu transfer full-res DSLR 1-2 detik di belakangnya. Bukan hasil final —
+  // cuma biar mata tamu langsung dapat "cekrek", bukan layar diam.
+  const [optimistic, setOptimistic] = useState<string | null>(null)
+  // Ukuran foto hasil jepret → kotak preview snap ke rasio ASLI foto (bukan 16:9).
+  // Inilah yang bikin review ga ke-crop sebelum masuk frame final.
+  const [capturedDims, setCapturedDims] = useState<{ w: number; h: number } | null>(null)
   const [shots, setShots] = useState<string[]>([])
   // null = capture webcam (box ikut rotasi). Di-set pas Browse → box snap 2:3/3:2 ikut orientasi foto.
   const [browseAspect, setBrowseAspect] = useState<'portrait' | 'landscape' | null>(null)
@@ -76,7 +84,9 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures, count
   }, [])
 
   const [capturing, setCapturing] = useState(false)
-  const canon = useCanonLive(isCanon && !captured, capturing)
+  // `active` sengaja TETAP nyala pas foto udah keambil: sesi DCC ga di-close/open
+  // ulang (~1 detik). Efeknya "Ulang foto" langsung dapet live view lagi.
+  const canon = useCanonLive(isCanon, capturing || !!captured || !!optimistic)
   const cameraReady = isCanon ? canon.ready : webcamReady
 
   useEffect(() => {
@@ -137,16 +147,26 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures, count
       await new Promise(r => setTimeout(r, COUNTDOWN_TICK_MS))
     }
     setCountdown(null)
+    // Flash + snapshot dilepas BARENGAN dengan perintah shutter. Dulu ada
+    // `await 200ms` sebelum capture dipanggil — itu bagian dari delay yang kerasa
+    // "ga langsung cekrek". Sekarang klik kamera jalan duluan, efek visual nyusul.
     setFlash(true)
-    await new Promise(r => setTimeout(r, 200))
-    setFlash(false)
+    setTimeout(() => setFlash(false), 160)
+    const snap = isCanon ? snapshotFromImage(liveImgRef.current, rotation) : null
+    setOptimistic(snap?.url ?? null)
+    setCapturedDims(snap ? { w: snap.w, h: snap.h } : null)
     let url: string | null = null
     if (isCanon) {
       // DSLR full-res dari backend, lalu rotate ikut tombol (sama kayak webcam) — DSLR ga bisa
       // diputer fisik, jadi rotasi di canvas. deg 0 = passthrough.
       setCapturing(true)
-      try { url = await rotateDataUrl(await triggerCanonCapture(canon.owner()), rotation) }
-      catch { setCameraError(true) }
+      try {
+        url = await rotateDataUrl(await triggerCanonCapture(canon.owner()), rotation)
+        // Ukur di belakang layar — jangan nahan tombol Next demi 20ms decode.
+        const shot = url
+        void imageSize(shot).then(d => { if (d.w) setCapturedDims(d) })
+      }
+      catch { setOptimistic(null); setCameraError(true) }
       finally { setCapturing(false) }
     } else {
       const video = videoRef.current
@@ -162,9 +182,11 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures, count
         ctx.rotate((rotation * Math.PI) / 180)
         ctx.drawImage(video, -vw / 2, -vh / 2)
         url = canvas.toDataURL('image/jpeg', 0.92)
+        setCapturedDims({ w, h })
       }
     }
 
+    setOptimistic(null)
     if (url) {
       setBrowseAspect(null)
       setCaptured(url)
@@ -180,8 +202,8 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures, count
       const url = ev.target?.result as string
       // Ukur orientasi foto → box snap ke 2:3 (portrait) / 3:2 (landscape) biar ngisi penuh tanpa bar
       const img = new Image()
-      img.onload = () => { setBrowseAspect(img.naturalHeight >= img.naturalWidth ? 'portrait' : 'landscape'); setCaptured(url); setShots(prev => [...prev, url]) }
-      img.onerror = () => { setBrowseAspect(null); setCaptured(url); setShots(prev => [...prev, url]) } // gagal ukur → fallback box rotasi
+      img.onload = () => { setCapturedDims({ w: img.naturalWidth, h: img.naturalHeight }); setBrowseAspect(img.naturalHeight >= img.naturalWidth ? 'portrait' : 'landscape'); setCaptured(url); setShots(prev => [...prev, url]) }
+      img.onerror = () => { setCapturedDims(null); setBrowseAspect(null); setCaptured(url); setShots(prev => [...prev, url]) } // gagal ukur → fallback box rotasi
       img.src = url
     }
     reader.readAsDataURL(file)
@@ -191,7 +213,11 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures, count
   const handleRetakeLast = () => {
     setShots(prev => {
       const next = prev.slice(0, -1)
-      setCaptured(next.length > 0 ? next[next.length - 1] : null)
+      const last = next.length > 0 ? next[next.length - 1] : null
+      setCaptured(last)
+      setOptimistic(null)
+      if (last) void imageSize(last).then(d => { if (d.w) setCapturedDims(d) })
+      else setCapturedDims(null)
       return next
     })
   }
@@ -205,16 +231,20 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures, count
   }
 
   const quarter = rotation === 90 || rotation === 270
-  // Box aspect: foto Browse → snap 2:3/3:2 ikut orientasinya; else ikut rotasi kamera (live/capture webcam)
-  const boxClass =
-    browseAspect === 'portrait' ? 'aspect-[2/3] w-[500px] max-w-full max-h-full h-auto' // ikut box kamera portrait, ga full-height
-    : browseAspect === 'landscape' ? 'aspect-[3/2] w-full h-auto max-w-full max-h-full'
-    : quarter ? 'aspect-[9/16] w-[500px] max-w-full max-h-full h-auto'
-    : 'aspect-video w-full max-w-full h-auto max-h-full'
+  // Rasio kotak preview = rasio FOTO-nya, bukan tebakan 16:9 / slot cetak. Ini yang
+  // bikin hasil jepretan 3:2 ga ke-crop di layar review sebelum masuk frame final.
+  // Prioritas: foto yang udah diukur → orientasi Browse → default per sumber kamera.
+  const mediaAspect = capturedDims
+    ? { w: capturedDims.w, h: capturedDims.h }
+    : browseAspect === 'portrait' ? { w: 2, h: 3 }
+    : browseAspect === 'landscape' ? { w: 3, h: 2 }
+    : isCanon
+      ? (quarter ? { w: 2, h: 3 } : { w: 3, h: 2 })     // DSLR: sensor 3:2
+      : (quarter ? { w: 9, h: 16 } : { w: 16, h: 9 })   // webcam: 16:9
 
   // Style live-feed dipakai bareng <video> (webcam) & <img> MJPEG (canon) — sumber beda, layout sama.
   const liveStyle: CSSProperties = {
-    display: captured ? 'none' : 'block',
+    display: captured || optimistic ? 'none' : 'block',
     width: quarter ? (containerDims ? `${containerDims.h}px` : '100vh') : '100%',
     height: quarter ? (containerDims ? `${containerDims.w}px` : '100vw') : '100%',
     objectFit: 'cover',
@@ -236,17 +266,23 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures, count
       </div>
 
       <div className="screen-content">
-        <div className="flex-1 min-h-0 flex items-center justify-center p-5">
+        <div className="flex-1 min-h-0 capture-stage flex items-center justify-center p-5">
         <div
           ref={containerRef}
-          className={`relative overflow-hidden rounded-2xl shadow-2xl ring-1 ring-white/10 ${boxClass}`}
-          style={{ background: '#000' }}
+          className="relative overflow-hidden rounded-2xl shadow-2xl ring-1 ring-white/10 capture-media"
+          style={{ background: '#000', '--media-w': mediaAspect.w, '--media-h': mediaAspect.h } as CSSProperties}
         >
           {/* CUMA video/live yang muter — overlay di bawah ini sibling, jadi tetep tegak.
               Canon: MJPEG <img> dari digiCamControl. Webcam: getUserMedia <video>. */}
           {isCanon ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={canon.src} alt="" className="absolute top-1/2 left-1/2 max-w-none max-h-none" style={liveStyle} />
+            <img
+              ref={liveImgRef}
+              src={canon.src}
+              alt=""
+              className="absolute top-1/2 left-1/2 max-w-none max-h-none"
+              style={liveStyle}
+            />
           ) : (
             <video
               ref={videoRef}
@@ -256,10 +292,13 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures, count
             />
           )}
 
-          {/* Box udah nge-snap ke orientasi foto → object-cover ngisi penuh (frame look), crop minimal, ga ada bar */}
-          {captured && <img src={captured} alt="captured" className="absolute inset-0 w-full h-full object-cover" />}
+          {/* Box udah nge-snap ke rasio FOTO → object-contain = nol crop, dua orientasi. */}
+          {(captured || optimistic) && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={(captured ?? optimistic) as string} alt="captured" className="absolute inset-0 w-full h-full object-contain" />
+          )}
 
-          {!cameraReady && !canon.focusing && !cameraError && !captured && !countdown && (
+          {!cameraReady && !canon.focusing && !cameraError && !captured && !optimistic && !countdown && (
             <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ background: '#000' }}>
               <div style={{ width: 36, height: 36, border: '2px solid rgba(255,255,255,0.15)', borderTopColor: 'var(--fg)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
               <p style={{ fontSize: 'var(--text-xs)', letterSpacing: '0.2em', color: 'var(--fg-muted)', marginTop: 16, textTransform: 'uppercase' }}>{t('liveview_loading_camera') as string}</p>
@@ -295,7 +334,7 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures, count
           {flash && <div className="absolute inset-0 bg-white z-20" />}
 
           {/* Tombol ROTATE (+ refresh LV khusus Canon) — cuma pas kamera live, mati pas countdown */}
-          {(cameraReady || isCanon) && !captured && (
+          {(cameraReady || isCanon) && !captured && !optimistic && (
             <div className="absolute inset-0 flex items-start justify-end p-4" style={{ zIndex: 30, pointerEvents: 'none' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, pointerEvents: 'auto' }}>
                 <button
@@ -377,6 +416,8 @@ export function LiveViewScreen({ dispatch, cameraSource, originalCaptures, count
                     if (i < shots.length) {
                       setShots(prev => prev.slice(0, i))
                       setCaptured(null)
+                      setOptimistic(null)
+                      setCapturedDims(null)
                     }
                   }}
                   style={{

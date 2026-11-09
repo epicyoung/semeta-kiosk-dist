@@ -799,11 +799,15 @@ h1, .h1-glow { letter-spacing: -0.02em; }
 }
 
 /* ── Preview media box ────────────────────────────────────────────────────────
-   Box 2:3, fit-to-height kayak kamera LiveView — foto utuh, ga ke-crop lebar.
-   Portrait: width-driven (min 576 / 100%). Landscape: height-driven, lebar ngikut. */
+   Rasio kotak = rasio FOTO yang lagi tampil (var dari PreviewScreen). Default
+   2:3 kalau dimensi belum kebaca. Portrait: width-driven. Landscape: dual-bound
+   via container query → foto landscape ga ke-crop jadi kotak 2:3. */
+.preview-stage {
+  container-type: size;
+}
 .preview-media {
   position: relative;
-  aspect-ratio: 2 / 3;
+  aspect-ratio: var(--native-ratio, var(--native-w, 2) / var(--native-h, 3));
   width: min(540px, 100%);
   max-height: 100%;
   flex-shrink: 0;
@@ -814,15 +818,16 @@ h1, .h1-glow { letter-spacing: -0.02em; }
 @media (orientation: landscape) {
   .preview-media {
     width: auto;
-    height: 100%;
+    height: min(100cqh, calc(100cqw * var(--native-h, 3) / var(--native-w, 2)));
     max-width: 100%;
+    max-height: 100%;
   }
 }
 
 /* Original-mismatch: box ikut aspect asli foto (var dari PreviewScreen).
    Media query landscape TETAP pegang kendali axis — jangan pindahin sizing ke inline style. */
 .preview-media--native {
-  aspect-ratio: var(--native-ratio, 2 / 3);
+  aspect-ratio: var(--native-ratio, var(--native-w, 2) / var(--native-h, 3));
   width: min(920px, 100%);
   height: auto;
   max-height: 100%;
@@ -830,9 +835,22 @@ h1, .h1-glow { letter-spacing: -0.02em; }
 @media (orientation: landscape) {
   .preview-media--native {
     width: auto;
-    height: 100%;
+    height: min(100cqh, calc(100cqw * var(--native-h, 3) / var(--native-w, 2)));
     max-width: 100%;
+    max-height: 100%;
   }
+}
+
+/* ── Capture media box (LiveView + MultiCapture) ─────────────────────────────
+   Kotak live/review HARUS ikut rasio FOTO, bukan rasio slot cetak atau tebakan
+   16:9. Rumus: lebar = min(100% kolom, 100% tinggi × rasio). */
+.capture-stage { container-type: size; }
+.capture-media {
+  aspect-ratio: var(--media-w, 3) / var(--media-h, 2);
+  width: min(100%, calc(100cqh * var(--media-w, 3) / var(--media-h, 2)));
+  max-width: 100%;
+  max-height: 100%;
+  flex-shrink: 0;
 }
 
 /* ── Preview expand panels (print / email takeover) ─────────────────────────── */

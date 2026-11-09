@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
  * Silent on error (offline-safe). First ping fires immediately on mount.
  */
 import type { LockReason } from './license'
+import { workerVerdict, verdictForce } from './license'
 
 export function useHeartbeat(
   onResult: (sec: number, forceLocked: boolean, lockReason?: LockReason, lockMessage?: string) => void,
@@ -24,23 +25,23 @@ export function useHeartbeat(
         // Worker MENJAWAB non-200 (status 4xx) = verdict lisensi → lock. 503 = offline (callback decide grace).
         if (!res.ok) {
           if (res.status === 503) { onResultRef.current(-1, false, undefined); return } // offline sentinel
-          const data = await res.json().catch(() => ({}))
-          onResultRef.current(0, false, (data.reason as LockReason) ?? 'needs_activation')
+          const verdict = workerVerdict(await res.json().catch(() => ({})), res.status)
+          onResultRef.current(0, false, verdict.kind === 'locked' ? verdict.reason : 'needs_activation')
           return
         }
         const data = await res.json()
+        const verdict = workerVerdict(data, res.status)
         // ponytail: bypassed = dev mode, skip refill
-        if (data.status === 'bypassed' || data.bypassed) return
+        if (verdict.kind === 'bypassed') return
         // freeware = 404 upstream (no active session) → jalan + watermark, bukan lock.
         // Kecuali admin force-lock: takeover menang walau tanpa sewa.
+        const { force_locked: force, lock_message: lockMsg } = verdictForce(verdict)
         if (data.freeware) {
-          const lockMsg = data.force_locked === true ? (data.lock_message as string | undefined) : undefined
-          onResultRef.current(0, data.force_locked === true, undefined, lockMsg)
+          onResultRef.current(0, force, undefined, lockMsg)
           return
         }
         if (typeof data.remaining_sec === 'number') {
-          const lockMsg = data.force_locked === true ? (data.lock_message as string | undefined) : undefined
-          onResultRef.current(data.remaining_sec, data.force_locked === true, undefined, lockMsg)
+          onResultRef.current(data.remaining_sec, force, undefined, lockMsg)
         }
       } catch {
         // fetch ke route Next sendiri gagal (jarang) — treat sebagai offline

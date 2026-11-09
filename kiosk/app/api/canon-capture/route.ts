@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
-import { stripExif } from '@/lib/jpeg-exif'
+import { prepareCapture } from '@/lib/photo-resolution'
 import { dcc, dccFetch } from '@/lib/dcc-runtime'
+import { assertLocalMutation } from '@/lib/local-request'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -78,10 +79,9 @@ async function capturePhoto() {
     if (latest && latest.mtimeMs > before) {
       const buf = await readStable(latest.file)
       if (buf) {
-        // EXIF dibuang DI SINI (bukan di browser): imageOrientation:'none' udah dicabut Chrome,
-        // fallback-nya diam-diam apply EXIF Orientation → capture portrait keputer dobel vs live.
-        // Tanpa EXIF, decode browser = pixel mentah → rotasi kiosk satu-satunya kebenaran.
-        const clean = stripExif(buf)
+        // Auto-orient (apply EXIF Orientation) lalu buang metadata: foto selalu tegak dengan
+        // dimensi portrait/landscape yang bener, tanpa browser double-rotate. Samain kayak Sony.
+        const clean = await prepareCapture(buf)
         return NextResponse.json({ dataUrl: `data:image/jpeg;base64,${clean.toString('base64')}`, file: path.basename(latest.file) })
       }
     }
@@ -96,6 +96,7 @@ async function capturePhoto() {
 
 export async function POST(req: Request) {
   try {
+  try { assertLocalMutation(req) } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : 'Ditolak' }, { status: 403 }) }
     const { owner } = await req.json()
     if (typeof owner !== 'string') return NextResponse.json({ error: 'Sesi kamera tidak valid' }, { status: 400 })
     return await dcc.capture(owner, capturePhoto)

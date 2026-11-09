@@ -1,9 +1,10 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { execFile } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
-import { stripExif } from '@/lib/jpeg-exif'
+import { prepareSonyCapture } from '@/lib/photo-resolution'
+import { assertLocalMutation } from '@/lib/local-request'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -85,10 +86,22 @@ async function capturePhoto(): Promise<Ok | Err> {
     const buf = fs.readFileSync(file)
     if (buf.length === 0) return { ok: false, error: 'File kosong dari kamera', status: 502 }
 
-    // EXIF dibuang server-side — alasan sama persis dgn canon-capture: Chrome udah nyabut
-    // imageOrientation:'none', fallback-nya apply EXIF Orientation diam-diam → capture keputer
-    // dobel vs live view. Tanpa EXIF, rotasi kiosk jadi satu-satunya kebenaran.
-    return { ok: true, buf: stripExif(buf) }
+    // VALIDASI JPEG — kalau kamera di mode RAW (Sony ARW / Canon CR3) gphoto2 tetep download
+    // file-nya tapi browser ga bisa decode → pesan cryptic "The source image could not be decoded".
+    // Cek magic SOI (FFD8) di sini biar operator dapet instruksi jelas, bukan nebak.
+    if (buf[0] !== 0xff || buf[1] !== 0xd8) {
+      return {
+        ok: false,
+        error: 'Kamera ngeluarin file non-JPEG — kemungkinan mode RAW masih aktif. Harap matikan RAW dan set kualitas gambar ke JPEG/Fine di kamera, lalu coba lagi.',
+        status: 502,
+      }
+    }
+
+    // Auto-orient via sharp baca EXIF Orientation → hasil SELALU tegak, apa pun orientasi
+    // kamera / nilai rotasi manual yang nyangkut. sharp mereset tag Orientation. Samain
+    // kayak Mac: ga ada lagi rotasi manual yang gampang ilang pas restart booth.
+    const oriented = await prepareSonyCapture(buf)
+    return { ok: true, buf: oriented }
   } finally {
     // Foto asli tetap ada di kartu kamera; tmp ini cuma jalur transit.
     try { fs.rmSync(dir, { recursive: true, force: true }) } catch {}
@@ -99,7 +112,9 @@ async function capturePhoto(): Promise<Ok | Err> {
 // kena "Could not claim the USB device" dan capture gagal tanpa sebab yang jelas.
 let inFlight: Promise<Ok | Err> | null = null
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  try { assertLocalMutation(req) } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : 'Ditolak' }, { status: 403 }) }
+
   if (inFlight) return NextResponse.json({ error: 'Capture lain masih jalan' }, { status: 409 })
   inFlight = capturePhoto()
   try {

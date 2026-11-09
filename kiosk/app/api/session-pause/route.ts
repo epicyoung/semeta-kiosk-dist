@@ -1,7 +1,10 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { localDb } from '@/lib/local-db'
+import { assertLocalMutation } from '@/lib/local-request'
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  try { assertLocalMutation(req) } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : 'Ditolak' }, { status: 403 }) }
+
   const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL
   const secret = localDb.getSecret()
   if (!workerUrl || !secret)

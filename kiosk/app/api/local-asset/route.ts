@@ -3,8 +3,10 @@ import { localDb } from '@/lib/local-db'
 import { isSafeAssetFilename } from '@/lib/local-asset-guard'
 import fs from 'fs'
 import path from 'path'
+import { assertLocalRead } from '@/lib/local-request'
 
 export async function GET(req: NextRequest) {
+  assertLocalRead(req)
   const file = req.nextUrl.searchParams.get('file')
   if (!isSafeAssetFilename(file)) {
     return NextResponse.json({ error: 'Invalid file parameter' }, { status: 400 })

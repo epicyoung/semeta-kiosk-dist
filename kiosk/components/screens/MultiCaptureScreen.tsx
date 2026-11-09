@@ -5,7 +5,7 @@ import { CameraAutofocus, AUTOFOCUS_ENABLED } from '@/components/ui/CameraAutofo
 import { CameraIndicator } from '@/components/ui/CameraIndicator'
 import { TouchButton } from '@/components/ui/TouchButton'
 import { PrintLayoutPreview } from '@/components/ui/PrintLayoutPreview'
-import { stopCamera, triggerCanonCapture, triggerSonyCapture, rotateDataUrl } from '@/lib/camera'
+import { stopCamera, triggerCanonCapture, triggerSonyCapture, rotateDataUrl, imageSize, snapshotFromImage } from '@/lib/camera'
 import { rotatedSize } from '@/components/screens/LiveViewScreen'
 import { layoutSlots } from '@/lib/print-layout'
 import type { KioskAction, KioskState } from '@/lib/types'
@@ -29,6 +29,7 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
   const isSony = cameraSource === 'sony'
   const containerRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const liveImgRef = useRef<HTMLImageElement>(null)
 
   const [webcamReady, setCameraReady] = useState(false)
   const [cameraError, setCameraError] = useState(false)
@@ -38,6 +39,10 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
   const [rotation, setRotation] = useState(0)
   const [containerDims, setContainerDims] = useState<{ w: number; h: number } | null>(null)
   const [pendingShot, setPendingShot] = useState<string | null>(null)
+  // Frame live yang dibekukan pas shutter → feedback instan selagi full-res ditransfer.
+  const [optimistic, setOptimistic] = useState<string | null>(null)
+  // Rasio foto yang lagi di-review → kotak ikut foto, bukan ikut slot cetak.
+  const [pendingDims, setPendingDims] = useState<{ w: number; h: number } | null>(null)
   // Pesan gphoto2 ditampilkan apa adanya: route udah nerjemahin jadi instruksi konkret
   // ("mode PC Remote", "killall PTPCamera"). Ditelan diam-diam = operator nebak-nebak.
   const [sonyError, setSonyError] = useState<string | null>(null)
@@ -48,7 +53,9 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
   const isReviewingPending = pendingShot !== null
 
   const [capturing, setCapturing] = useState(false)
-  const canon = useCanonLive(isCanon && !done && !isReviewingPending, capturing)
+  // Tetap "active" selama review shot: sesi DCC ga di-close/open ulang tiap Accept.
+  // Live view cuma dipause, jadi shot berikutnya langsung bisa jepret.
+  const canon = useCanonLive(isCanon && !done, capturing || isReviewingPending)
   // Sony: ga ada stream buat ditunggu — tombol Capture harus langsung aktif, kalau enggak
   // operator kejebak nunggu 'ready' yang ga akan pernah datang.
   const cameraReady = isSony ? true : isCanon ? canon.ready : webcamReady
@@ -110,13 +117,18 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
       if (isCanon) {
         canon.reset()
         setCameraError(false)
+      } else if (isSony) {
+        // Sony/gphoto2: ga ada live view buat di-refresh, jadi "refresh" = lepasin USB
+        // yang dipegang PTPCamera + bunuh gphoto2 stuck. Capture berikutnya fresh.
+        try { await fetch('/api/sony-reset', { method: 'POST' }) } catch { /* offline aman */ }
+        setSonyError(null)
       } else {
         if (videoRef.current) stopCamera(videoRef.current)
         retryCamera()
       }
     } catch { /* polling / effect getUserMedia nyambung sendiri */ }
     finally { setTimeout(() => setLvResetting(false), 800) }
-  }, [isCanon, retryCamera, canon.reset])
+  }, [isCanon, isSony, retryCamera, canon.reset])
 
   const handleBrowse = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -124,7 +136,7 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
     const reader = new FileReader()
     reader.onload = (ev) => {
       const url = ev.target?.result as string
-      if (url) setPendingShot(url)
+      if (url) { setOptimistic(null); setPendingShot(url) }
     }
     reader.readAsDataURL(file)
     e.target.value = ''
@@ -137,14 +149,16 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
       await new Promise(r => setTimeout(r, COUNTDOWN_TICK_MS))
     }
     setCountdown(null)
+    // Flash + snapshot BARENGAN dengan shutter (dulu nunggu 200ms dulu = delay).
     setFlash(true)
-    await new Promise(r => setTimeout(r, 200))
-    setFlash(false)
+    setTimeout(() => setFlash(false), 160)
+    const snap = isCanon ? snapshotFromImage(liveImgRef.current, rotation) : null
+    if (snap) setOptimistic(snap.url)
 
     if (isCanon) {
       setCapturing(true)
       try { return await rotateDataUrl(await triggerCanonCapture(canon.owner()), rotation) }
-      catch { setCameraError(true); return null }
+      catch { setOptimistic(null); setCameraError(true); return null }
       finally { setCapturing(false) }
     }
 
@@ -174,10 +188,19 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
   const handleTriggerCapture = useCallback(async () => {
     if (capturing || countdown !== null || !cameraReady || done || isReviewingPending) return
     const url = await captureShot()
+    setOptimistic(null) // hasil full-res (atau gagal) nyampe → feedback sementara dilepas
     if (url) {
       setPendingShot(url)
     }
   }, [capturing, countdown, cameraReady, done, isReviewingPending, captureShot])
+
+  // Ukur rasio foto pending → kotak review snap ke foto (bukan slot 2:3 yang bikin crop).
+  useEffect(() => {
+    if (!pendingShot) { setPendingDims(null); return }
+    let live = true
+    void imageSize(pendingShot).then(d => { if (live && d.w) setPendingDims(d) })
+    return () => { live = false }
+  }, [pendingShot])
 
   const handleAcceptPending = () => {
     if (!pendingShot) return
@@ -208,22 +231,24 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
 
   const quarter = rotation === 90 || rotation === 270
   const printSize = state.template.print_size || '4R_PORTRAIT'
-  const isLandscapePrint = printSize === '4R_LANDSCAPE' || printSize === 'A4_LANDSCAPE' || printSize === 'A3_LANDSCAPE'
-  const isPrint = state.template.engine_type === 'print'
 
   const { canvas, slots } = layoutSlots(printSize, target, state.template.layout_config)
   const cellIsLandscape = slots[0] ? slots[0].w >= slots[0].h : true
 
-  // During review (done), match full paper aspect ratio.
-  // During single shot capture or preview (!done), match individual cell aspect ratio.
-  const activeIsLandscape = done ? isLandscapePrint : cellIsLandscape
-  const boxClass = activeIsLandscape
-    ? 'w-full max-w-full h-auto max-h-full'
-    : 'w-[500px] max-w-full max-h-full h-auto'
-  const activeAspect = done ? `${canvas.w} / ${canvas.h}` : (slots[0] ? `${slots[0].w} / ${slots[0].h}` : (cellIsLandscape ? '3 / 2' : '2 / 3'))
+  // Rasio kotak:
+  //   done            → rasio kertas penuh (layout preview)
+  //   review pending  → rasio FOTO yang barusan dijepret (biar ga ke-crop)
+  //   live capture    → rasio slot cetak (framing sesuai hasil akhir)
+  const mediaAspect = done
+    ? { w: canvas.w, h: canvas.h }
+    : isReviewingPending && pendingDims
+      ? { w: pendingDims.w, h: pendingDims.h }
+      : slots[0]
+        ? { w: slots[0].w, h: slots[0].h }
+        : (cellIsLandscape ? { w: 3, h: 2 } : { w: 2, h: 3 })
 
   const liveStyle: CSSProperties = {
-    display: (done || isReviewingPending) ? 'none' : 'block',
+    display: (done || isReviewingPending || !!optimistic) ? 'none' : 'block',
     width: quarter ? (containerDims ? `${containerDims.h}px` : '100vh') : '100%',
     height: quarter ? (containerDims ? `${containerDims.w}px` : '100vw') : '100%',
     objectFit: 'cover',
@@ -249,16 +274,22 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
       </div>
 
       <div className="screen-content">
-        <div className="flex-1 min-h-0 flex items-center justify-center p-5">
+        <div className="flex-1 min-h-0 capture-stage flex items-center justify-center p-5">
           <div
             ref={containerRef}
-            className={`relative overflow-hidden rounded-2xl shadow-2xl ring-1 ring-white/10 ${boxClass}`}
-            style={{ background: '#000', aspectRatio: activeAspect }}
+            className="relative overflow-hidden rounded-2xl shadow-2xl ring-1 ring-white/10 capture-media"
+            style={{ background: '#000', '--media-w': mediaAspect.w, '--media-h': mediaAspect.h } as CSSProperties}
           >
             {!done && !isReviewingPending && (
               isCanon ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={canon.src} alt="" className="absolute top-1/2 left-1/2 max-w-none max-h-none" style={liveStyle} />
+                <img
+                  ref={liveImgRef}
+                  src={canon.src}
+                  alt=""
+                  className="absolute top-1/2 left-1/2 max-w-none max-h-none"
+                  style={liveStyle}
+                />
               ) : isSony ? (
                 // PC Remote ga nyediain live view. Daripada <video> hitam yang bikin operator
                 // ngira kamera rusak, panel ini bilang terus terang: framing lewat LCD kamera.
@@ -286,13 +317,21 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
               )
             )}
 
+            {/* Feedback instan pas shutter: frame live dibekukan, jadi tamu langsung
+                liat "cekrek" walau transfer full-res DSLR masih jalan di belakang. */}
+            {!done && !isReviewingPending && optimistic && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={optimistic} alt="" className="absolute inset-0 w-full h-full object-contain" />
+            )}
+
             {!done && isReviewingPending && pendingShot && (
               <div className="absolute inset-0 flex items-center justify-center bg-black overflow-hidden">
+                {/* object-contain: ukuran kotak udah ikut rasio foto → nol crop. */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={pendingShot}
                   alt={`Preview Shot ${confirmedCount + 1}`}
-                  className="w-full h-full object-cover animate-fade-in"
+                  className="w-full h-full object-contain animate-fade-in"
                 />
               </div>
             )}
@@ -303,7 +342,7 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
               </div>
             )}
 
-            {!cameraReady && !canon.focusing && !cameraError && !done && !isReviewingPending && (
+            {!cameraReady && !canon.focusing && !cameraError && !done && !isReviewingPending && !optimistic && (
               <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ background: '#000' }}>
                 <div style={{ width: 36, height: 36, border: '2px solid rgba(255,255,255,0.15)', borderTopColor: 'var(--fg)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
                 <p style={{ fontSize: 'var(--text-xs)', letterSpacing: '0.2em', color: 'var(--fg-muted)', marginTop: 16, textTransform: 'uppercase' }}>{t('liveview_loading_camera') as string}</p>
@@ -333,7 +372,7 @@ export function MultiCaptureScreen({ state, dispatch, cameraSource, countdownSec
 
             {flash && <div className="absolute inset-0 bg-white z-20" />}
 
-            {(cameraReady || isCanon) && !done && !isReviewingPending && countdown === null && (
+            {(cameraReady || isCanon) && !done && !isReviewingPending && !optimistic && countdown === null && (
               <div className="absolute inset-0 flex items-start justify-end p-4" style={{ zIndex: 30, pointerEvents: 'none' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, pointerEvents: 'auto' }}>
                   <button

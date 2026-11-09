@@ -1311,13 +1311,16 @@ export function PreviewScreen({
               ‹
             </button>
           )}
+          <div className="preview-stage flex-1 min-h-0 h-full w-full flex items-center justify-center">
           <div
             ref={mediaBoxRef}
             className={`preview-media${shownNative ? " preview-media--native" : ""}`}
             style={
-              shownNative && shownDims
+              shownDims
                 ? ({
                     "--native-ratio": `${shownDims.w} / ${shownDims.h}`,
+                    "--native-w": shownDims.w,
+                    "--native-h": shownDims.h,
                   } as React.CSSProperties)
                 : undefined
             }
@@ -1788,6 +1791,7 @@ export function PreviewScreen({
                 </button>
               </div>
             )}
+          </div>
           </div>
           {activeTab === "photo" && isChoose && (
             <button
@@ -2641,7 +2645,7 @@ export function PreviewScreen({
           custom4rSlots={templatePrint?.template.print_layout ?? config.ai_4r_custom_slots}
           ai4rLayout={config.ai_4r_layout}
           ai4rOrientation={templatePrint?.template.print_layout?.orientation ?? config.ai_4r_orientation}
-          require4rOverlay={config.require_4r_overlay ?? true}
+          require4rOverlay={config.require_4r_overlay ?? false}
           enable4r={config.enable_4r ?? true}
           onCancel={() => setStripOpen(false)}
           onConfirm={doStripPrint}

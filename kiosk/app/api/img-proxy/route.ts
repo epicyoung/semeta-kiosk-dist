@@ -1,7 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { assertLocalRead, boundedBytes } from '@/lib/local-request'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+
+const MAX_PROXY_BYTES = 10 * 1024 * 1024
+const DEFAULT_POCKETBASE_PORT = '8090'
+
+function pocketbasePort(): string {
+  try {
+    const u = new URL(process.env.POCKETBASE_URL ?? '')
+    return u.port || (u.protocol === 'https:' ? '443' : '80')
+  } catch {
+    return DEFAULT_POCKETBASE_PORT
+  }
+}
 
 // Sedot gambar template (R2 custom-domain) SERVER-SIDE — server gak kena CORS.
 // Browser lalu fetch dari sini (same-origin) → nol CORS buat face detect + crop.
@@ -12,14 +25,21 @@ const ALLOWED_HOSTS = [
   'epic-young.com',
 ]
 function isAllowed(u: URL): boolean {
-  if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') return true // PB lokal
-  if (u.hostname.endsWith('.r2.dev') || u.hostname.endsWith('.r2.cloudflarestorage.com')) return true
-  if (u.hostname.endsWith('.fal.media') || u.hostname === 'fal.media') return true
-  if (u.hostname.endsWith('.fal.ai') || u.hostname === 'fal.ai') return true
-  return ALLOWED_HOSTS.includes(u.hostname)
+  const h = u.hostname.toLowerCase()
+  // PocketBase lokal: HANYA port 8090 + path /api/. Dulu any port = baca semua
+  // service loopback (kiosk API sendiri, sidecar kamera, dll).
+  if (h === 'localhost' || h === '127.0.0.1') {
+    return u.port === pocketbasePort() && u.pathname.startsWith('/api/')
+  }
+  if (h.endsWith('.localhost')) return false
+  if (h.endsWith('.r2.dev') || h.endsWith('.r2.cloudflarestorage.com')) return true
+  if (h.endsWith('.fal.media') || h === 'fal.media') return true
+  if (h.endsWith('.fal.ai') || h === 'fal.ai') return true
+  return ALLOWED_HOSTS.includes(h)
 }
 
 export async function GET(req: NextRequest) {
+  try { assertLocalRead(req) } catch (e) { return new NextResponse(e instanceof Error ? e.message : 'Ditolak', { status: 403 }) }
   const raw = req.nextUrl.searchParams.get('url')
   if (!raw) return new NextResponse('Missing url', { status: 400 })
 
@@ -29,14 +49,18 @@ export async function GET(req: NextRequest) {
   if (!isAllowed(target)) return new NextResponse('Host not allowed', { status: 403 })
 
   try {
-    const upstream = await fetch(target.toString(), { cache: 'no-store' })
+    const upstream = await fetch(target.toString(), {
+      cache: 'no-store',
+      redirect: 'error',
+      signal: AbortSignal.timeout(15_000),
+    })
     if (!upstream.ok) return new NextResponse('Upstream failed', { status: 502 })
-    const buf = await upstream.arrayBuffer()
-    return new NextResponse(buf, {
+    const buf = await boundedBytes(upstream, MAX_PROXY_BYTES)
+    return new NextResponse(Buffer.from(buf), {
       status: 200,
       headers: {
         'Content-Type': upstream.headers.get('content-type') ?? 'image/jpeg',
-        'Cache-Control': 'public, max-age=3600',
+        'Cache-Control': target.port === pocketbasePort() ? 'no-store' : 'public, max-age=3600',
       },
     })
   } catch {

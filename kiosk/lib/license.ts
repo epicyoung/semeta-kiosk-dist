@@ -42,3 +42,69 @@ export function offlineLicensedFresh(rec: LicenseRecord | null, now: number): bo
   const age = now - rec.lastOkAt
   return age < WM_CACHE_MAX_MS && age < rec.remaining_sec * 1000
 }
+
+// ── Satu sumber keputusan lisensi ───────────────────────────────────────────
+// Jawaban Worker punya bentuk yang sama di handshake (checkLicenseGate, page.tsx)
+// dan heartbeat runtime (billing.ts). Derivasi keputusannya dikunci DI SINI — pure,
+// no I/O — biar state lisensi cuma satu tempat buat dibaca (DX/agent experience).
+
+export type WorkerBody = {
+  status?: string
+  bypassed?: boolean
+  freeware?: boolean
+  force_locked?: boolean
+  lock_message?: string
+  licensed?: boolean
+  remaining_sec?: number
+}
+
+// force_locked = FLAG, bukan kind: dua call site memetakannya beda (handshake → lock
+// keras; heartbeat → refill + FORCE_LOCKED) tapi nilai refill tetap milik kind-nya.
+export type WorkerVerdict =
+  | { kind: 'bypassed' }
+  | { kind: 'licensed'; remaining_sec: number; force_locked: boolean; lock_message?: string }
+  | { kind: 'freeware'; force_locked: boolean; lock_message?: string }
+  | { kind: 'locked'; reason: LockReason; message?: string }
+
+export function workerVerdict(body: WorkerBody | null | undefined, status: number): WorkerVerdict {
+  const b = body ?? {}
+  const force = b.force_locked === true
+  const lockMessage = typeof b.lock_message === 'string' ? b.lock_message : undefined
+  const msg = lockMessage ? { lock_message: lockMessage } : {}
+  if (status === 200) {
+    if (b.status === 'bypassed' || b.bypassed) return { kind: 'bypassed' }
+    if (b.freeware) return { kind: 'freeware', force_locked: force, ...msg }
+    const remaining = typeof b.remaining_sec === 'number' ? b.remaining_sec : 0
+    // Prefer verdict Worker; fallback derive (aturan sama) buat Worker lama tanpa field licensed.
+    const licensed = typeof b.licensed === 'boolean'
+      ? b.licensed
+      : b.status === 'ACTIVE' && remaining > 0
+    if (licensed) return { kind: 'licensed', remaining_sec: remaining, force_locked: force, ...msg }
+    return { kind: 'freeware', force_locked: force, ...msg }
+  }
+  if (status === 404) {
+    // Admin bisa takeover kiosk freeware → force_lock menang walau belum ada sewa.
+    if (force) return { kind: 'locked', reason: 'force_locked', ...(lockMessage ? { message: lockMessage } : {}) }
+    return { kind: 'freeware', force_locked: false }
+  }
+  return { kind: 'locked', reason: reasonForStatus(status) }
+}
+
+/** Flag force-lock dari verdict apa pun (bypassed/locked tidak bawa flag). */
+export function verdictForce(v: WorkerVerdict): { force_locked: boolean; lock_message?: string } {
+  if (v.kind === 'licensed' || v.kind === 'freeware') {
+    return v.force_locked ? { force_locked: true, lock_message: v.lock_message } : { force_locked: false }
+  }
+  return { force_locked: false }
+}
+
+// Offline (network error / Worker unreachable): lock gate 12 jam, watermark gate 1 jam.
+export type OfflineVerdict =
+  | { kind: 'grace'; remaining_sec: number; watermark_clean: boolean }
+  | { kind: 'locked'; reason: 'needs_activation' | 'needs_reconfirm' }
+
+export function offlineVerdict(rec: LicenseRecord | null, now: number): OfflineVerdict {
+  if (withinGrace(rec, now))
+    return { kind: 'grace', remaining_sec: rec!.remaining_sec, watermark_clean: offlineLicensedFresh(rec, now) }
+  return { kind: 'locked', reason: rec ? 'needs_reconfirm' : 'needs_activation' }
+}

@@ -25,7 +25,11 @@ export default async function Page() {
   if (!gate.ok && gate.message) config.lock_message = gate.message
   const rawSecret = localDb.getSecret()
   config.has_secret = !!rawSecret
-  config.secret_hint = rawSecret || undefined
+  // SECURITY: secret TIDAK pernah dikirim utuh ke browser. Cukup mask buat display.
+  config.secret_hint = rawSecret
+    ? `${rawSecret.slice(0, 4)}${'•'.repeat(Math.max(4, Math.min(12, rawSecret.length - 4)))}`
+    : undefined
+  config.operator_pin_required = true
   return (
     <>
       <style>{`:root { --brand-fg: #ffffff; }`}</style>
